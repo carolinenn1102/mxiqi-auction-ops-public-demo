@@ -1,0 +1,11 @@
+{
+  "name": "送拍运营工作台",
+  "short_name": "送拍工作台",
+  "description": "拍品、佣金、物流和结算的本机数据工作台",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f3ee",
+  "theme_color": "#102735"
+}

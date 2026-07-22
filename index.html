@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="送拍运营工作台公开体验版：拍品、物流、结算与双表导出。">
   <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="theme-color" content="#102735">
   <title>送拍运营工作台 · 公开体验版</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
   <main class="app-shell">
@@ -16,17 +18,20 @@
         <button class="nav-item active" data-stage="all"><span>▦</span> 拍品工作台</button>
         <button class="nav-item" data-stage="pickup"><span>⌁</span> 物流取件</button>
         <button class="nav-item" data-stage="settlement"><span>¥</span> 结算复核</button>
+        <button class="nav-item" id="open-settings"><span>⚙</span> 佣金规则</button>
+        <button class="nav-item" id="open-backup"><span>⇩</span> 本地备份</button>
         <button class="nav-item" id="open-audit"><span>≡</span> 操作记录</button>
       </nav>
       <div class="sidebar-status">
         <div class="status-line"><span class="status-dot"></span> 公开体验环境</div>
         <div class="status-line"><span class="status-dot simulation"></span> 物流模拟模式</div>
+        <div class="status-line"><span class="status-dot offline"></span> <span id="offline-status">正在准备离线访问</span></div>
         <button id="reset-demo">恢复示例数据 →</button>
       </div>
     </aside>
 
     <section class="workspace">
-      <div class="demo-banner"><b>公开体验版</b><span>数据仅保存在当前浏览器，刷新不会丢失；清除浏览器数据后会重置。请勿录入真实隐私或接口密钥。</span></div>
+      <div class="demo-banner"><b>本机数据模式</b><span>记录会自动保存在这台设备；建议定期下载完整备份。已访问后可在短暂断网时继续打开。请勿录入真实接口密钥。</span></div>
       <header class="topbar">
         <div><p class="eyebrow">拍品 · 物流 · 结算</p><h1>送拍全流程工作台</h1></div>
         <div class="top-actions">
@@ -42,6 +47,24 @@
         <button class="metric-card warning" data-stage="missing"><span class="metric-label">待补资料</span><strong id="metric-missing">0</strong><small>影响表格完整性</small></button>
         <button class="metric-card accent" data-stage="pickup"><span class="metric-label">待取件</span><strong id="metric-pickup">0</strong><small>成交后待处理</small></button>
         <button class="metric-card" data-stage="settlement"><span class="metric-label">待结算</span><strong id="metric-settlement">0</strong><small id="metric-amount">成交额 ¥0</small></button>
+      </section>
+
+      <section class="settlement-summary" id="settlement-summary" hidden>
+        <div class="settlement-copy">
+          <p class="eyebrow">本批结算进度</p>
+          <h2><span id="settled-count">0</span> / <span id="sold-count">0</span> 条已结账</h2>
+          <div class="progress-track" aria-label="结算进度"><span id="settlement-progress"></span></div>
+          <p id="settlement-hint">全部成交记录确认结账后，即可导出结算表。</p>
+        </div>
+        <div class="settlement-totals">
+          <div><small>成交总额</small><b id="settlement-gross">¥0</b></div>
+          <div><small>佣金合计</small><b id="settlement-commission">¥0</b></div>
+          <div><small>应结金额</small><b id="settlement-payable">¥0</b></div>
+        </div>
+        <div class="settlement-actions">
+          <button class="btn secondary" id="batch-settle" hidden>将所选标为已结账</button>
+          <button class="btn primary" id="export-settlement" disabled>全部结账后导出</button>
+        </div>
       </section>
 
       <section class="data-panel">
@@ -83,10 +106,11 @@
           <label class="field"><span>盒子币编号</span><input name="coinBoxId"></label>
           <label class="field"><span>快递单号</span><input name="trackingNumber"></label>
           <label class="field"><span>是否收到</span><select name="received"><option>待确认</option><option>是</option><option>否</option></select></label>
-          <label class="field"><span>送拍佣金</span><input name="commissionAmount" type="number" min="0" step="0.01"></label>
-          <label class="field"><span>结款金额</span><input name="settlementAmount" type="number" min="0" step="0.01"></label>
-          <label class="field"><span>利润（不含邮费）</span><input name="profit" type="number" min="0" step="0.01"></label>
-          <label class="field"><span>适用优惠方案</span><input name="promotion"></label>
+          <label class="field"><span>客户生日月份</span><select name="birthdayMonth"><option value="">未设置</option><option value="1">1 月</option><option value="2">2 月</option><option value="3">3 月</option><option value="4">4 月</option><option value="5">5 月</option><option value="6">6 月</option><option value="7">7 月</option><option value="8">8 月</option><option value="9">9 月</option><option value="10">10 月</option><option value="11">11 月</option><option value="12">12 月</option></select></label>
+          <label class="field"><span>送拍佣金（自动）</span><input name="commissionAmount" type="number" readonly></label>
+          <label class="field"><span>结款金额（自动）</span><input name="settlementAmount" type="number" readonly></label>
+          <label class="field"><span>利润（自动）</span><input name="profit" type="number" readonly></label>
+          <label class="field"><span>适用优惠方案</span><input name="promotion" readonly></label>
           <label class="field"><span>结账说明</span><input name="settlementNote"></label>
           <label class="field switch-field"><span>结账状态</span><label><input name="settled" type="checkbox"> 已结账</label></label>
           <label class="field"><span>承运商</span><select name="carrierOverride"><option value="">自动判断</option><option value="sf">顺丰</option><option value="cainiao">菜鸟</option></select></label>
@@ -107,6 +131,24 @@
 
   <dialog id="audit-dialog" class="dialog">
     <form method="dialog"><header><h2>最近操作记录</h2><button class="icon-close" type="button" value="cancel" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body"><p class="modal-copy">仅记录当前浏览器中的体验操作。</p><div class="audit-list" id="audit-list"></div></div><footer><button class="btn primary" value="default">完成</button></footer></form>
+  </dialog>
+
+  <dialog id="settings-dialog" class="dialog">
+    <form method="dialog" id="settings-form"><header><div><p class="eyebrow">计算规则</p><h2>佣金与生日月优惠</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
+      <p class="modal-copy">默认规则应用于普通成交；客户生日月份与拍卖月份一致时，整个月自动改用生日月规则。已结账记录不会被重算。</p>
+      <section class="rule-card"><h3>默认送拍佣金</h3><div class="form-grid"><label class="field"><span>计算方式</span><select name="defaultCommissionType"><option value="percent">按成交价百分比</option><option value="fixed">每件固定金额</option></select></label><label class="field"><span>数值</span><input name="defaultCommissionValue" type="number" min="0" step="0.01" required></label></div><p class="rule-preview" id="default-rule-preview"></p></section>
+      <section class="rule-card"><h3>生日月优惠</h3><div class="form-grid"><label class="field"><span>计算方式</span><select name="birthdayCommissionType"><option value="percent">按成交价百分比</option><option value="fixed">每件固定金额</option></select></label><label class="field"><span>数值</span><input name="birthdayCommissionValue" type="number" min="0" step="0.01" required></label><label class="field wide"><span>优惠名称</span><input name="birthdayLabel" required></label></div><p class="rule-preview" id="birthday-rule-preview"></p></section>
+      <section class="rule-card"><h3>物流自动判断</h3><div class="form-grid"><label class="field wide"><span>最终价格达到此金额时默认顺丰</span><input name="sfThreshold" type="number" min="0" step="1" required></label></div></section>
+    </div><footer><button class="btn secondary" type="button" data-close-dialog>取消</button><button class="btn primary" value="default">保存并重算未结账记录</button></footer></form>
+  </dialog>
+
+  <dialog id="backup-dialog" class="dialog">
+    <form method="dialog"><header><div><p class="eyebrow">本地数据保障</p><h2>完整备份与恢复</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
+      <div class="backup-status"><span class="backup-shield">✓</span><div><b>当前数据自动保存在这台设备</b><p id="backup-summary">正在读取数据状态…</p></div></div>
+      <p class="modal-copy">备份文件包含拍品、佣金规则、客户生日月份和操作记录。即使更换网址，也可以用备份文件恢复。清理浏览器数据前务必先下载备份。</p>
+      <div class="backup-actions"><button class="btn primary" type="button" id="download-backup">下载完整备份</button><label class="btn secondary file-button">选择备份文件<input id="backup-file" type="file" accept="application/json,.json"></label><button class="btn secondary" type="button" id="restore-backup" disabled>恢复所选备份</button></div>
+      <p class="backup-file-name" id="backup-file-name">尚未选择备份文件</p>
+    </div><footer><button class="btn primary" value="default">完成</button></footer></form>
   </dialog>
 
   <div id="toast" class="toast" role="status" hidden></div>

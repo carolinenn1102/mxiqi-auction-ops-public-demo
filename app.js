@@ -3,91 +3,758 @@
 
   const STORAGE_KEY = "mxiqi-public-demo-records-v1";
   const AUDIT_KEY = "mxiqi-public-demo-audit-v1";
-  const SF_THRESHOLD = 1000;
+  const SETTINGS_KEY = "mxiqi-public-demo-settings-v2";
+  const CUSTOMERS_KEY = "mxiqi-public-demo-customers-v2";
+  const MIGRATION_KEY = "mxiqi-public-demo-schema";
+  const BACKUP_META_KEY = "mxiqi-public-demo-last-backup";
+
+  const defaultSettings = {
+    defaultCommissionType: "percent",
+    defaultCommissionValue: 8,
+    birthdayCommissionType: "percent",
+    birthdayCommissionValue: 5,
+    birthdayLabel: "生日月优惠",
+    sfThreshold: 1000,
+  };
+
+  const seedCustomers = {
+    "林先生·上海": { birthdayMonth: 7 },
+    "周女士": { birthdayMonth: 12 },
+  };
+
   const seedRecords = [
-    {id:"d101",lot:101,itemName:"PMG 67EPQ 2024年龙年纪念钞",sellerWechat:"林先生·上海",contactedAt:"2026-07-12",projectName:"纪念钞专场",coinBoxId:"HX-DEMO-101",trackingNumber:"SF-DEMO-101-0001",auctionAt:"2026-07-28 20:00",auctionHouse:"夏日钱币精选",lotLabel:"A场 / Lot 101",received:"是",finalOutcome:"成交",finalPrice:1680,commissionAmount:134.4,settlementAmount:1545.6,profit:134.4,startPrice:1000,primaryCategory:"钞票",secondaryCategory:"纪念钞",settled:false,carrier:"sf",carrierOverride:"",logisticsStatus:"ready",pickupCode:"DEMO-SF-101-A7K2",logisticsNote:"公开体验模拟码"},
-    {id:"d102",lot:102,itemName:"袁世凯像民国三年壹圆 银元",sellerWechat:"藏泉阁",contactedAt:"2026-07-13",projectName:"机制币专场",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-28 20:00",auctionHouse:"夏日钱币精选",lotLabel:"A场 / Lot 102",received:"是",finalOutcome:"成交",finalPrice:860,commissionAmount:68.8,settlementAmount:791.2,profit:68.8,startPrice:500,primaryCategory:"硬币",secondaryCategory:"银元",settled:false,carrier:"cainiao",carrierOverride:"",logisticsStatus:"simulation_ready",pickupCode:"DEMO-CN-102-P8Q2",logisticsNote:"公开体验模拟码"},
+    {id:"d101",lot:101,itemName:"PMG 67EPQ 2024年龙年纪念钞",sellerWechat:"林先生·上海",contactedAt:"2026-07-12",projectName:"纪念钞专场",coinBoxId:"HX-DEMO-101",trackingNumber:"SF-DEMO-101-0001",auctionAt:"2026-07-28 20:00",auctionHouse:"夏日钱币精选",lotLabel:"A场 / Lot 101",received:"是",finalOutcome:"成交",finalPrice:1680,commissionAmount:84,settlementAmount:1596,profit:84,promotion:"生日月优惠 · 5%",startPrice:1000,primaryCategory:"钞票",secondaryCategory:"纪念钞",settled:false,carrier:"sf",carrierOverride:"",logisticsStatus:"ready",pickupCode:"DEMO-SF-101-A7K2",logisticsNote:"公开体验模拟码"},
+    {id:"d102",lot:102,itemName:"袁世凯像民国三年壹圆 银元",sellerWechat:"藏泉阁",contactedAt:"2026-07-13",projectName:"机制币专场",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-28 20:00",auctionHouse:"夏日钱币精选",lotLabel:"A场 / Lot 102",received:"是",finalOutcome:"成交",finalPrice:860,commissionAmount:68.8,settlementAmount:791.2,profit:68.8,promotion:"普通佣金 · 8%",startPrice:500,primaryCategory:"硬币",secondaryCategory:"银元",settled:false,carrier:"cainiao",carrierOverride:"",logisticsStatus:"simulation_ready",pickupCode:"DEMO-CN-102-P8Q2",logisticsNote:"公开体验模拟码"},
     {id:"d103",lot:103,itemName:"T46 庚申年猴票 四方联",sellerWechat:"邮缘收藏",contactedAt:"2026-07-14",projectName:"经典邮票专场",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-29 19:30",auctionHouse:"邮品臻选",lotLabel:"B场 / Lot 103",received:"待确认",finalOutcome:"待拍",finalPrice:0,commissionAmount:0,settlementAmount:0,profit:0,startPrice:2200,primaryCategory:"邮票",secondaryCategory:"JT邮票",settled:false,carrier:"pending",carrierOverride:"",logisticsStatus:"not_requested",pickupCode:"",logisticsNote:""},
-    {id:"d104",lot:104,itemName:"清乾隆青花缠枝莲纹盘",sellerWechat:"周女士",contactedAt:"2026-07-15",projectName:"古器物专场",coinBoxId:"",trackingNumber:"SF-DEMO-104-0001",auctionAt:"2026-07-30 20:00",auctionHouse:"东方古美术",lotLabel:"C场 / Lot 104",received:"是",finalOutcome:"成交",finalPrice:3260,commissionAmount:326,settlementAmount:2934,profit:326,startPrice:1800,primaryCategory:"陶瓷",secondaryCategory:"旧藏瓷器",settled:true,promotion:"",settlementNote:"已转账",carrier:"sf",carrierOverride:"",logisticsStatus:"simulation_ready",pickupCode:"DEMO-SF-104-K3M8",logisticsNote:"公开体验模拟码"},
-    {id:"d105",lot:105,itemName:"1980年中国奥委会纪念铜章",sellerWechat:"",contactedAt:"",projectName:"章牌杂项",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-30 20:00",auctionHouse:"东方古美术",lotLabel:"C场 / Lot 105",received:"否",finalOutcome:"成交",finalPrice:420,commissionAmount:0,settlementAmount:0,profit:0,startPrice:100,primaryCategory:"章牌",secondaryCategory:"纪念章",settled:false,carrier:"cainiao",carrierOverride:"",logisticsStatus:"not_requested",pickupCode:"",logisticsNote:""}
+    {id:"d104",lot:104,itemName:"清乾隆青花缠枝莲纹盘",sellerWechat:"周女士",contactedAt:"2026-07-15",projectName:"古器物专场",coinBoxId:"",trackingNumber:"SF-DEMO-104-0001",auctionAt:"2026-07-30 20:00",auctionHouse:"东方古美术",lotLabel:"C场 / Lot 104",received:"是",finalOutcome:"成交",finalPrice:3260,commissionAmount:260.8,settlementAmount:2999.2,profit:260.8,promotion:"普通佣金 · 8%",startPrice:1800,primaryCategory:"陶瓷",secondaryCategory:"旧藏瓷器",settled:true,settledAt:"2026-07-20T08:30:00.000Z",settlementNote:"已转账",carrier:"sf",carrierOverride:"",logisticsStatus:"simulation_ready",pickupCode:"DEMO-SF-104-K3M8",logisticsNote:"公开体验模拟码"},
+    {id:"d105",lot:105,itemName:"1980年中国奥委会纪念铜章",sellerWechat:"",contactedAt:"",projectName:"章牌杂项",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-30 20:00",auctionHouse:"东方古美术",lotLabel:"C场 / Lot 105",received:"否",finalOutcome:"成交",finalPrice:420,commissionAmount:33.6,settlementAmount:386.4,profit:33.6,promotion:"普通佣金 · 8%",startPrice:100,primaryCategory:"章牌",secondaryCategory:"纪念章",settled:false,carrier:"cainiao",carrierOverride:"",logisticsStatus:"not_requested",pickupCode:"",logisticsNote:""},
   ];
-  const state = {records:load(STORAGE_KEY,seedRecords),audit:load(AUDIT_KEY,[]),stage:"all",query:"",selected:new Set(),editingId:""};
+
+  const clone = (value) => typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value));
+  const state = {
+    records: loadArray(STORAGE_KEY, seedRecords),
+    audit: loadArray(AUDIT_KEY, []),
+    settings: loadObject(SETTINGS_KEY, defaultSettings),
+    customers: loadObject(CUSTOMERS_KEY, seedCustomers),
+    stage: "all",
+    query: "",
+    selected: new Set(),
+    editingId: "",
+  };
+
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
-  const currency = new Intl.NumberFormat("zh-CN",{style:"currency",currency:"CNY",maximumFractionDigits:2});
+  const currency = new Intl.NumberFormat("zh-CN", {style:"currency",currency:"CNY",maximumFractionDigits:2});
   const editDialog = $("#edit-dialog");
   const editForm = $("#edit-form");
   const importDialog = $("#import-dialog");
   const auditDialog = $("#audit-dialog");
+  const settingsDialog = $("#settings-dialog");
+  const settingsForm = $("#settings-form");
+  const backupDialog = $("#backup-dialog");
+  let pendingBackupFile = null;
 
-  function load(key,fallback){try{const value=JSON.parse(localStorage.getItem(key));return Array.isArray(value)?value:structuredClone(fallback)}catch{return structuredClone(fallback)}}
-  function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state.records));localStorage.setItem(AUDIT_KEY,JSON.stringify(state.audit.slice(0,100)))}
-  function uid(){return `demo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`}
-  function esc(value){return String(value??"").replace(/[&<>"']/g,(char)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char])}
-  function compact(record){return Object.fromEntries(Object.entries(record).filter(([,value])=>value!==""&&value!==undefined&&value!==null))}
-  function audit(action,detail){state.audit.unshift({id:uid(),action,detail,time:new Date().toISOString()});save()}
-  function notify(text,tone="success"){$("#toast").textContent=text;$("#toast").className=`toast ${tone}`;$("#toast").hidden=false;clearTimeout(notify.timer);notify.timer=setTimeout(()=>{$("#toast").hidden=true},4000)}
-  function missing(record){return [!record.sellerWechat&&"送拍人",!record.contactedAt&&"联系时间",!record.trackingNumber&&"快递单号",!record.itemName&&"拍品名称",!record.auctionAt&&"拍卖时间",!record.lotLabel&&"拍场/Lot",record.received==="待确认"&&"是否收到",!record.finalOutcome&&"成交状态",record.finalOutcome==="成交"&&Number(record.finalPrice)<=0&&"最终价格"].filter(Boolean)}
-  function carrierFor(record){return record.carrierOverride||(Number(record.finalPrice)>=SF_THRESHOLD?"sf":"cainiao")}
-  function carrierLabel(value){return value==="sf"?"顺丰":value==="cainiao"?"菜鸟":"待判断"}
-  function logisticsLabel(value){return ({not_requested:"未申请",simulation_ready:"模拟流程",ready:"人工码已就绪",failed:"申请失败"})[value]||"未申请"}
-  function visibleRecords(){const query=state.query.trim().toLowerCase();return state.records.filter((record)=>{const search=!query||[record.lot,record.itemName,record.sellerWechat,record.auctionHouse,record.trackingNumber,record.pickupCode].join(" ").toLowerCase().includes(query);const stage=state.stage==="all"||(state.stage==="missing"&&missing(record).length)||(state.stage==="pickup"&&Number(record.finalPrice)>0&&!record.pickupCode)||(state.stage==="settlement"&&Number(record.finalPrice)>0&&!record.settled);return search&&stage})}
-
-  function render(){
-    const records=state.records;
-    $("#metric-total").textContent=records.length;
-    $("#metric-missing").textContent=records.filter((item)=>missing(item).length).length;
-    $("#metric-pickup").textContent=records.filter((item)=>Number(item.finalPrice)>0&&!item.pickupCode).length;
-    $("#metric-settlement").textContent=records.filter((item)=>Number(item.finalPrice)>0&&!item.settled).length;
-    $("#metric-amount").textContent=`成交额 ${currency.format(records.reduce((sum,item)=>sum+Number(item.finalPrice||0),0))}`;
-    $$("[data-stage]").forEach((button)=>button.classList.toggle("selected",button.dataset.stage===state.stage));
-    $$(".nav-item[data-stage]").forEach((button)=>button.classList.toggle("active",button.dataset.stage===state.stage));
-    const visible=visibleRecords();$("#result-count").textContent=`${visible.length} 条结果`;
-    const selectable=visible.filter((item)=>Number(item.finalPrice)>0);$("#select-all").checked=selectable.length>0&&selectable.every((item)=>state.selected.has(item.id));
-    const selectedCount=state.selected.size;$("#selection-count").hidden=!selectedCount;$("#batch-pickup").hidden=!selectedCount;$("#clear-selection").hidden=!selectedCount;$("#selection-count").textContent=`已选 ${selectedCount} 条`;
-    const body=$("#records-body");
-    if(!visible.length){body.innerHTML='<tr><td colspan="10" class="empty-state">没有匹配的拍品，调整筛选条件试试。</td></tr>';return}
-    body.innerHTML=visible.map((record)=>{const gaps=missing(record);const carrier=record.carrier||"pending";return `<tr class="${state.selected.has(record.id)?"selected-row":""}"><td class="select-column"><input type="checkbox" data-select="${esc(record.id)}" ${state.selected.has(record.id)?"checked":""} ${Number(record.finalPrice)<=0?"disabled":""}></td><td><div class="lot-cell"><span>${record.lot}</span><div><b>${esc(record.itemName)}</b><small>${esc(record.projectName||record.primaryCategory||"未设置项目")}</small></div></div></td><td><b class="${record.sellerWechat?"":"muted"}">${esc(record.sellerWechat||"待补")}</b><small>${esc(record.trackingNumber||"未填快递单号")}</small></td><td><b>${esc(record.auctionHouse||"待设置拍场")}</b><small>${esc(record.auctionAt||"待设置时间")}</small></td><td><b class="money">${Number(record.finalPrice)>0?currency.format(record.finalPrice):"待拍"}</b><small>${esc(record.finalOutcome||"状态待确认")}</small></td><td>${gaps.length?`<button class="chip warning" data-action="edit" data-id="${esc(record.id)}" title="${esc(gaps.join("、"))}">缺 ${gaps.length} 项</button>`:'<span class="chip success">完整</span>'}</td><td><span class="carrier ${carrier}">${carrierLabel(carrier)}</span><small>${logisticsLabel(record.logisticsStatus)}</small></td><td>${record.pickupCode?`<code>${esc(record.pickupCode)}</code>`:'<span class="muted">—</span>'}<small>${esc(record.pickupCode?"仅模拟，不可寄件":record.logisticsNote||"")}</small></td><td>${record.settled?'<span class="chip success">已结账</span>':'<span class="chip neutral">未结账</span>'}<small>${record.settlementAmount?currency.format(record.settlementAmount):""}</small></td><td><div class="row-actions"><button data-action="edit" data-id="${esc(record.id)}">编辑</button><button data-action="pickup" data-id="${esc(record.id)}" ${Number(record.finalPrice)<=0?"disabled":""}>取件</button><button data-action="manual" data-id="${esc(record.id)}">录码</button></div></td></tr>`}).join("");
+  function loadArray(key, fallback) {
+    try {
+      const value = JSON.parse(localStorage.getItem(key));
+      return Array.isArray(value) ? value : clone(fallback);
+    } catch {
+      return clone(fallback);
+    }
   }
 
-  function openEditor(id=""){
-    state.editingId=id;editForm.reset();const record=state.records.find((item)=>item.id===id)||{lot:Math.max(0,...state.records.map((item)=>Number(item.lot)||0))+1,received:"待确认",settled:false};
-    $("#edit-title").textContent=id?`Lot ${record.lot}`:"新建拍品";
-    [...editForm.elements].forEach((element)=>{if(!element.name)return;const value=record[element.name];if(element.type==="checkbox")element.checked=Boolean(value);else element.value=value??""});editDialog.showModal();
+  function loadObject(key, fallback) {
+    try {
+      const value = JSON.parse(localStorage.getItem(key));
+      return value && typeof value === "object" && !Array.isArray(value) ? {...clone(fallback), ...value} : clone(fallback);
+    } catch {
+      return clone(fallback);
+    }
   }
-  function requestPickup(record){const carrier=carrierFor(record);record.carrier=carrier;record.logisticsStatus="simulation_ready";record.pickupCode=`DEMO-${carrier==="sf"?"SF":"CN"}-${record.lot}-${Math.random().toString(36).slice(2,6).toUpperCase()}`;record.logisticsNote="公开体验模拟码，不可用于真实寄件";audit("申请模拟取件",`Lot ${record.lot} · ${carrierLabel(carrier)}`)}
-  function upsert(records){for(const incoming of records){const lot=Number(incoming.lot);if(!Number.isInteger(lot)||lot<=0||!incoming.itemName)continue;const index=state.records.findIndex((item)=>Number(item.lot)===lot);if(index>=0)state.records[index]={...state.records[index],...incoming,id:state.records[index].id};else state.records.push({...incoming,id:uid(),received:incoming.received||"待确认",settled:Boolean(incoming.settled),carrier:incoming.carrier||"pending",logisticsStatus:incoming.logisticsStatus||"not_requested",pickupCode:incoming.pickupCode||""})}save();render()}
 
-  $$("[data-stage]").forEach((button)=>button.addEventListener("click",()=>{state.stage=button.dataset.stage;render()}));
-  $$("[data-close-dialog]").forEach((button)=>button.addEventListener("click",()=>button.closest("dialog")?.close("cancel")));
-  $("#search").addEventListener("input",(event)=>{state.query=event.target.value;render()});
-  $("#records-body").addEventListener("change",(event)=>{const id=event.target.dataset.select;if(!id)return;event.target.checked?state.selected.add(id):state.selected.delete(id);render()});
-  $("#records-body").addEventListener("click",(event)=>{const button=event.target.closest("[data-action]");if(!button)return;const record=state.records.find((item)=>item.id===button.dataset.id);if(!record)return;if(button.dataset.action==="edit")openEditor(record.id);if(button.dataset.action==="pickup"){requestPickup(record);save();render();notify(`Lot ${record.lot} 已生成明确标识的模拟码`,"info")}if(button.dataset.action==="manual"){const code=prompt("请输入已核验的取件码；公开体验版不会连接真实物流平台。",record.pickupCode.startsWith("DEMO-")?"":record.pickupCode);if(code&&code.trim()){record.pickupCode=code.trim();record.logisticsStatus="ready";record.carrier=carrierFor(record);record.logisticsNote="体验者人工录入";audit("人工录码",`Lot ${record.lot}`);save();render();notify("人工取件码已保存在当前浏览器")}}});
-  $("#select-all").addEventListener("change",(event)=>{visibleRecords().filter((item)=>Number(item.finalPrice)>0).forEach((item)=>event.target.checked?state.selected.add(item.id):state.selected.delete(item.id));render()});
-  $("#clear-selection").addEventListener("click",()=>{state.selected.clear();render()});
-  $("#batch-pickup").addEventListener("click",()=>{let count=0;state.records.filter((item)=>state.selected.has(item.id)&&Number(item.finalPrice)>0).forEach((item)=>{requestPickup(item);count++});state.selected.clear();save();render();notify(`已批量处理 ${count} 条，均为 DEMO 模拟流程`,"info")});
-  $("#new-record").addEventListener("click",()=>openEditor());
-  editForm.addEventListener("submit",(event)=>{event.preventDefault();const data=new FormData(editForm);const existing=state.records.find((item)=>item.id===state.editingId)||{};const record={...existing,id:existing.id||uid(),lot:Number(data.get("lot")),itemName:String(data.get("itemName")||"").trim(),auctionHouse:String(data.get("auctionHouse")||""),auctionAt:String(data.get("auctionAt")||""),lotLabel:String(data.get("lotLabel")||""),projectName:String(data.get("projectName")||""),startPrice:Number(data.get("startPrice")||0),finalPrice:Number(data.get("finalPrice")||0),finalOutcome:String(data.get("finalOutcome")||""),primaryCategory:String(data.get("primaryCategory")||""),secondaryCategory:String(data.get("secondaryCategory")||""),sellerWechat:String(data.get("sellerWechat")||""),contactedAt:String(data.get("contactedAt")||""),coinBoxId:String(data.get("coinBoxId")||""),trackingNumber:String(data.get("trackingNumber")||""),received:String(data.get("received")||"待确认"),commissionAmount:Number(data.get("commissionAmount")||0),settlementAmount:Number(data.get("settlementAmount")||0),profit:Number(data.get("profit")||0),promotion:String(data.get("promotion")||""),settlementNote:String(data.get("settlementNote")||""),settled:data.get("settled")==="on",carrierOverride:String(data.get("carrierOverride")||"")};if(!Number.isInteger(record.lot)||record.lot<=0||!record.itemName){notify("请填写有效 Lot 和拍品名称","error");return}const duplicate=state.records.find((item)=>Number(item.lot)===record.lot&&item.id!==record.id);if(duplicate){notify(`Lot ${record.lot} 已存在，请直接编辑该记录`,"error");return}const index=state.records.findIndex((item)=>item.id===record.id);if(index>=0)state.records[index]=record;else state.records.push({...record,carrier:"pending",logisticsStatus:"not_requested",pickupCode:""});audit("保存拍品",`Lot ${record.lot} · ${record.itemName}`);save();editDialog.close();render();notify(`Lot ${record.lot} 已保存`)});
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.records));
+    localStorage.setItem(AUDIT_KEY, JSON.stringify(state.audit.slice(0, 200)));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+    localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(state.customers));
+  }
 
-  $("#open-import").addEventListener("click",()=>importDialog.showModal());
-  $("#excel-file").addEventListener("change",(event)=>{$("#file-name").textContent=event.target.files[0]?.name||"选择 .xlsx 文件"});
-  $("#import-form").addEventListener("submit",async(event)=>{event.preventDefault();try{let records=[];const file=$("#excel-file").files[0];const json=$("#json-input").value.trim();if(file)records=await parseWorkbook(await file.arrayBuffer());else if(json){const parsed=JSON.parse(json);records=Array.isArray(parsed)?parsed:[parsed]}else throw new Error("请选择 Excel 文件或粘贴 JSON");const valid=records.filter((item)=>Number(item.lot)>0&&item.itemName);if(!valid.length)throw new Error("文件中没有可导入的数据行");upsert(valid);audit("导入数据",`${valid.length} 条拍品`);importDialog.close();$("#import-form").reset();$("#file-name").textContent="选择 .xlsx 文件";notify(`已导入 ${valid.length} 条记录`)}catch(error){notify(error.message||"导入失败","error")}});
-  $("#open-audit").addEventListener("click",()=>{const list=$("#audit-list");list.innerHTML=state.audit.length?state.audit.map((item)=>`<article class="audit-entry"><span class="audit-dot"></span><div><b>${esc(item.action)}</b><p>${esc(item.detail)}</p></div><time>${new Date(item.time).toLocaleString("zh-CN",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"})}</time></article>`).join(""):'<div class="audit-empty">暂无操作记录</div>';auditDialog.showModal()});
-  $("#reset-demo").addEventListener("click",()=>{if(!confirm("确定恢复示例数据？当前浏览器中的体验修改将被清除。"))return;state.records=structuredClone(seedRecords);state.audit=[];state.selected.clear();save();render();notify("已恢复示例数据")});
+  function uid() {
+    return `demo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  }
 
-  function norm(value){return String(value??"").trim().replace(/\s+/g,"").replace(/[（）()：:]/g,"").toLowerCase()}
-  function cellText(cell){const value=cell.value;if(value==null)return"";if(value instanceof Date)return value.toISOString().slice(0,10);if(typeof value==="object"){if(value.text)return String(value.text).trim();if(Array.isArray(value.richText))return value.richText.map((part)=>part.text||"").join("").trim();if(value.result!=null)return String(value.result).trim()}return String(value).trim()}
-  function cellNumber(cell){if(typeof cell.value==="number")return cell.value;const value=Number(cellText(cell).replace(/[¥￥,，\s]/g,""));return Number.isFinite(value)?value:0}
-  function headerMap(row){const map=new Map();row.eachCell({includeEmpty:false},(cell,col)=>{const key=norm(cellText(cell));if(key)map.set(key,col)});return map}
-  function column(map,...names){for(const name of names){const col=map.get(norm(name));if(col)return col}return 0}
-  function textAt(row,map,...names){const col=column(map,...names);return col?cellText(row.getCell(col)):""}
-  function numberAt(row,map,...names){const col=column(map,...names);return col?cellNumber(row.getCell(col)):0}
-  function lotFromLabel(value){const match=value.match(/\blot\s*[:：#\-/]?\s*(\d+)/i)||value.match(/(\d+)\s*$/);return match?Number(match[1]):0}
-  async function parseWorkbook(buffer){const workbook=new ExcelJS.Workbook();await workbook.xlsx.load(buffer);let found=null;for(const sheet of workbook.worksheets){for(let rowNo=1;rowNo<=Math.min(sheet.rowCount||1,8);rowNo++){const map=headerMap(sheet.getRow(rowNo));if(column(map,"Lot")&&column(map,"拍品名称")){found={kind:"mxiqi",sheet,rowNo,map};break}if(column(map,"送拍人（微信名）","送拍人微信名")&&column(map,"拍场/Lot","拍场Lot")){found={kind:"tracker",sheet,rowNo,map};break}}if(found)break}if(!found)throw new Error("无法识别表格，请使用送拍跟踪表或麦稀奇 v3.7 模板");const records=[];for(let rowNo=found.rowNo+1;rowNo<=found.sheet.rowCount;rowNo++){const row=found.sheet.getRow(rowNo);if(found.kind==="mxiqi"){const lot=Math.trunc(numberAt(row,found.map,"Lot"));const itemName=textAt(row,found.map,"拍品名称");if(!lot&&!itemName)continue;if(lot>0&&itemName)records.push(compact({lot,itemName,startPrice:numberAt(row,found.map,"起拍价"),primaryCategory:textAt(row,found.map,"一级分类"),secondaryCategory:textAt(row,found.map,"二级分类"),description:textAt(row,found.map,"拍品介绍")}))}else{const lotLabel=textAt(row,found.map,"拍场/Lot","拍场Lot");const lot=lotFromLabel(lotLabel);const projectName=textAt(row,found.map,"送拍项目");if(!lot&&!projectName)continue;const outcome=textAt(row,found.map,"拍出价格/拖回","拍出价格拖回");if(lot>0&&projectName)records.push(compact({lot,itemName:projectName,projectName,lotLabel,auctionHouse:lotLabel.split(/[\/／]/)[0].trim(),sellerWechat:textAt(row,found.map,"送拍人（微信名）","送拍人微信名"),contactedAt:textAt(row,found.map,"联系时间"),coinBoxId:textAt(row,found.map,"盒子币编号"),trackingNumber:textAt(row,found.map,"快递单号"),auctionAt:textAt(row,found.map,"上拍时间（拍卖时间）","上拍时间拍卖时间"),received:textAt(row,found.map,"是/否收到","是否收到")||"待确认",finalOutcome:outcome.includes("拖回")?"拖回":numberAt(row,found.map,"拍出价格/拖回")>0?"成交":"",finalPrice:outcome.includes("拖回")?0:numberAt(row,found.map,"拍出价格/拖回"),commissionAmount:numberAt(row,found.map,"送拍佣金"),settlementAmount:numberAt(row,found.map,"结款金额"),settled:textAt(row,found.map,"是/否已结账","是否已结账")==="是",promotion:textAt(row,found.map,"适用优惠方案"),settlementNote:textAt(row,found.map,"结账"),profit:numberAt(row,found.map,"利润（不包含邮费）","利润不包含邮费")}))}}return records}
+  function esc(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]);
+  }
 
-  function download(buffer,name){const blob=new Blob([buffer],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});const url=URL.createObjectURL(blob);const anchor=document.createElement("a");anchor.href=url;anchor.download=name;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-  $("#export-tracker").addEventListener("click",async()=>{const workbook=new ExcelJS.Workbook();const sheet=workbook.addWorksheet("Sheet1");const headers=["送拍人（微信名）","联系时间","送拍项目","盒子币编号","快递单号","上拍时间（拍卖时间）","拍场/Lot","是/否收到","拍出价格/拖回","送拍佣金","结款金额","是/否已结账","适用优惠方案","结账","利润（不包含邮费）"];sheet.addRow([null,...headers]);state.records.forEach((r)=>sheet.addRow([null,r.sellerWechat||null,r.contactedAt||null,r.projectName||r.itemName,r.coinBoxId||null,r.trackingNumber||null,r.auctionAt||null,r.lotLabel||`${r.auctionHouse||""} / Lot ${r.lot}`,r.received||"待确认",r.finalOutcome==="拖回"?"拖回":r.finalPrice||null,r.commissionAmount||null,r.settlementAmount||null,r.settled?"是":"否",r.promotion||null,r.settlementNote||null,r.profit||null]));sheet.getRow(1).font={bold:true};sheet.views=[{state:"frozen",ySplit:1}];download(await workbook.xlsx.writeBuffer(),`送拍跟踪表_体验版_${new Date().toISOString().slice(0,10)}.xlsx`);audit("导出表格","送拍跟踪表")});
-  $("#export-mxiqi").addEventListener("click",async()=>{const workbook=new ExcelJS.Workbook();const sheet=workbook.addWorksheet("导入模板");sheet.mergeCells("A1:V1");sheet.getCell("A1").value="麦稀奇拍品导入模板(v3.7) · 公开体验版";sheet.addRow(["基本信息","","拍卖设置","","","","估价范围","","分类设置","","属性设置","","","","","详情","","其它","","","标签",""]);const headers=["Lot","拍品名称","起拍价","封顶价","保留价","亮点(是/否)","低价","高价","一级分类","二级分类","发行年份","国家地区","评级公司","评级编号","评级分数","拍品介绍","拍卖提示","拍卖顺序","图鉴编号","图片全显","标签1","标签2"];sheet.addRow(headers);state.records.forEach((r)=>sheet.addRow([r.lot,r.itemName,r.startPrice||0,r.capPrice||null,r.reservePrice||null,r.highlight||"否",r.estimateLow||null,r.estimateHigh||null,r.primaryCategory||null,r.secondaryCategory||null,r.issueYear||null,r.country||null,r.gradingCompany||null,r.gradingId||null,r.gradingScore||null,r.description||null,r.auctionHint||null,r.auctionOrder||null,r.catalogId||null,r.fullImage||null,r.tag1||null,r.tag2||null]));sheet.getRow(3).font={bold:true};sheet.views=[{state:"frozen",ySplit:3}];const note=workbook.addWorksheet("导入说明");note.addRows([["公开体验版说明"],["该文件由浏览器本地体验页面生成。"],["第3行字段名称请勿修改。"]]);download(await workbook.xlsx.writeBuffer(),`麦稀奇导入模板_体验版_${new Date().toISOString().slice(0,10)}.xlsx`);audit("导出表格","麦稀奇模板")});
+  function compact(record) {
+    return Object.fromEntries(Object.entries(record).filter(([, value]) => value !== "" && value !== undefined && value !== null));
+  }
+
+  function roundMoney(value) {
+    return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+  }
+
+  function audit(action, detail) {
+    state.audit.unshift({id:uid(), action, detail, time:new Date().toISOString()});
+    save();
+  }
+
+  function notify(text, tone = "success") {
+    $("#toast").textContent = text;
+    $("#toast").className = `toast ${tone}`;
+    $("#toast").hidden = false;
+    clearTimeout(notify.timer);
+    notify.timer = setTimeout(() => { $("#toast").hidden = true; }, 4000);
+  }
+
+  function missing(record) {
+    return [
+      !record.sellerWechat && "送拍人",
+      !record.contactedAt && "联系时间",
+      !record.trackingNumber && "快递单号",
+      !record.itemName && "拍品名称",
+      !record.auctionAt && "拍卖时间",
+      !record.lotLabel && "拍场/Lot",
+      record.received === "待确认" && "是否收到",
+      !record.finalOutcome && "成交状态",
+      record.finalOutcome === "成交" && Number(record.finalPrice) <= 0 && "最终价格",
+    ].filter(Boolean);
+  }
+
+  function auctionMonth(record) {
+    const match = String(record.auctionAt || "").match(/^\d{4}-(\d{1,2})/);
+    return match ? Number(match[1]) : new Date().getMonth() + 1;
+  }
+
+  function birthdayMonthFor(record) {
+    return Number(record.birthdayMonth || state.customers[record.sellerWechat]?.birthdayMonth || 0);
+  }
+
+  function formatRule(type, value) {
+    return type === "fixed" ? `每件 ${currency.format(value || 0)}` : `成交价的 ${Number(value || 0)}%`;
+  }
+
+  function commissionPlan(record) {
+    const birthday = birthdayMonthFor(record);
+    const isBirthday = Boolean(birthday && birthday === auctionMonth(record));
+    const type = isBirthday ? state.settings.birthdayCommissionType : state.settings.defaultCommissionType;
+    const value = Number(isBirthday ? state.settings.birthdayCommissionValue : state.settings.defaultCommissionValue) || 0;
+    const label = isBirthday ? state.settings.birthdayLabel : "普通佣金";
+    const gross = Math.max(0, Number(record.finalPrice) || 0);
+    const amount = roundMoney(type === "fixed" ? value : gross * value / 100);
+    return {amount:Math.min(amount, gross), label:`${label} · ${type === "fixed" ? currency.format(value) : `${value}%`}`, isBirthday, type, value};
+  }
+
+  function recalculateRecord(record, force = false) {
+    const gross = Math.max(0, Number(record.finalPrice) || 0);
+    if (record.settled && !force) return record;
+    if (!gross || record.finalOutcome === "拖回") {
+      record.commissionAmount = 0;
+      record.settlementAmount = 0;
+      record.profit = 0;
+      record.promotion = "";
+      return record;
+    }
+    const plan = commissionPlan(record);
+    record.commissionAmount = plan.amount;
+    record.settlementAmount = roundMoney(gross - plan.amount);
+    record.profit = plan.amount;
+    record.promotion = plan.label;
+    return record;
+  }
+
+  function carrierFor(record) {
+    return record.carrierOverride || (Number(record.finalPrice) >= Number(state.settings.sfThreshold || 1000) ? "sf" : "cainiao");
+  }
+
+  function carrierLabel(value) {
+    return value === "sf" ? "顺丰" : value === "cainiao" ? "菜鸟" : "待判断";
+  }
+
+  function logisticsLabel(value) {
+    return ({not_requested:"未申请",simulation_ready:"模拟流程",ready:"人工码已就绪",failed:"申请失败"})[value] || "未申请";
+  }
+
+  function soldRecords() {
+    return state.records.filter((record) => Number(record.finalPrice) > 0 && record.finalOutcome !== "拖回");
+  }
+
+  function visibleRecords() {
+    const query = state.query.trim().toLowerCase();
+    return state.records.filter((record) => {
+      const search = !query || [record.lot,record.itemName,record.sellerWechat,record.auctionHouse,record.trackingNumber,record.pickupCode,record.promotion].join(" ").toLowerCase().includes(query);
+      const stage = state.stage === "all"
+        || (state.stage === "missing" && missing(record).length)
+        || (state.stage === "pickup" && Number(record.finalPrice) > 0 && !record.pickupCode)
+        || (state.stage === "settlement" && Number(record.finalPrice) > 0 && !record.settled);
+      return search && stage;
+    });
+  }
+
+  function renderSettlementSummary() {
+    const sold = soldRecords();
+    const settled = sold.filter((record) => record.settled);
+    const remaining = sold.length - settled.length;
+    const percent = sold.length ? Math.round(settled.length * 100 / sold.length) : 0;
+    $("#settlement-summary").hidden = state.stage !== "settlement";
+    $("#settled-count").textContent = settled.length;
+    $("#sold-count").textContent = sold.length;
+    $("#settlement-progress").style.width = `${percent}%`;
+    $("#settlement-gross").textContent = currency.format(sold.reduce((sum, record) => sum + Number(record.finalPrice || 0), 0));
+    $("#settlement-commission").textContent = currency.format(sold.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0));
+    $("#settlement-payable").textContent = currency.format(sold.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0));
+    $("#settlement-hint").textContent = remaining ? `还有 ${remaining} 条待确认，全部结账后开放结算表导出。` : "本批成交记录已全部结账，可以导出结算表。";
+    $("#export-settlement").disabled = !(sold.length && remaining === 0);
+    $("#export-settlement").textContent = remaining ? `还有 ${remaining} 条未结账` : "导出本批结算表";
+  }
+
+  function render() {
+    const records = state.records;
+    $("#metric-total").textContent = records.length;
+    $("#metric-missing").textContent = records.filter((item) => missing(item).length).length;
+    $("#metric-pickup").textContent = records.filter((item) => Number(item.finalPrice) > 0 && !item.pickupCode).length;
+    $("#metric-settlement").textContent = records.filter((item) => Number(item.finalPrice) > 0 && !item.settled).length;
+    $("#metric-amount").textContent = `成交额 ${currency.format(records.reduce((sum, item) => sum + Number(item.finalPrice || 0), 0))}`;
+    $$('[data-stage]').forEach((button) => button.classList.toggle("selected", button.dataset.stage === state.stage));
+    $$('.nav-item[data-stage]').forEach((button) => button.classList.toggle("active", button.dataset.stage === state.stage));
+
+    const visible = visibleRecords();
+    $("#result-count").textContent = `${visible.length} 条结果`;
+    const selectable = visible.filter((item) => Number(item.finalPrice) > 0);
+    $("#select-all").checked = selectable.length > 0 && selectable.every((item) => state.selected.has(item.id));
+    const selectedCount = state.selected.size;
+    $("#selection-count").hidden = !selectedCount;
+    $("#batch-pickup").hidden = !selectedCount || state.stage === "settlement";
+    $("#batch-settle").hidden = !selectedCount || state.stage !== "settlement";
+    $("#clear-selection").hidden = !selectedCount;
+    $("#selection-count").textContent = `已选 ${selectedCount} 条`;
+    renderSettlementSummary();
+
+    const body = $("#records-body");
+    if (!visible.length) {
+      body.innerHTML = '<tr><td colspan="10" class="empty-state">没有匹配的拍品，调整筛选条件试试。</td></tr>';
+      return;
+    }
+
+    body.innerHTML = visible.map((record) => {
+      const gaps = missing(record);
+      const carrier = record.carrier || carrierFor(record);
+      const settlementDetail = Number(record.finalPrice) > 0
+        ? `${record.settlementAmount ? currency.format(record.settlementAmount) : "待计算"} · 佣金 ${currency.format(record.commissionAmount || 0)}`
+        : "";
+      return `<tr class="${state.selected.has(record.id) ? "selected-row" : ""}">
+        <td class="select-column"><input type="checkbox" data-select="${esc(record.id)}" ${state.selected.has(record.id) ? "checked" : ""} ${Number(record.finalPrice) <= 0 ? "disabled" : ""}></td>
+        <td><div class="lot-cell"><span>${record.lot}</span><div><b>${esc(record.itemName)}</b><small>${esc(record.projectName || record.primaryCategory || "未设置项目")}</small></div></div></td>
+        <td><b class="${record.sellerWechat ? "" : "muted"}">${esc(record.sellerWechat || "待补")}</b><small>${esc(record.trackingNumber || "未填快递单号")}</small></td>
+        <td><b>${esc(record.auctionHouse || "待设置拍场")}</b><small>${esc(record.auctionAt || "待设置时间")}</small></td>
+        <td><b class="money">${Number(record.finalPrice) > 0 ? currency.format(record.finalPrice) : "待拍"}</b><small>${esc(record.finalOutcome || "状态待确认")}</small></td>
+        <td>${gaps.length ? `<button class="chip warning" data-action="edit" data-id="${esc(record.id)}" title="${esc(gaps.join("、"))}">缺 ${gaps.length} 项</button>` : '<span class="chip success">完整</span>'}</td>
+        <td><span class="carrier ${carrier}">${carrierLabel(carrier)}</span><small>${logisticsLabel(record.logisticsStatus)}</small></td>
+        <td>${record.pickupCode ? `<code>${esc(record.pickupCode)}</code>` : '<span class="muted">—</span>'}<small>${esc(record.pickupCode ? "仅模拟，不可寄件" : record.logisticsNote || "")}</small></td>
+        <td>${record.settled ? '<span class="chip success">已结账</span>' : '<span class="chip neutral">未结账</span>'}<small>${esc(settlementDetail)}</small><small>${esc(record.promotion || "")}</small></td>
+        <td><div class="row-actions"><button data-action="edit" data-id="${esc(record.id)}">编辑</button><button data-action="pickup" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>取件</button><button data-action="manual" data-id="${esc(record.id)}">录码</button><button data-action="toggle-settle" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>${record.settled ? "撤销" : "结账"}</button></div></td>
+      </tr>`;
+    }).join("");
+  }
+
+  function previewCommission() {
+    const data = new FormData(editForm);
+    const temporary = {
+      sellerWechat: String(data.get("sellerWechat") || "").trim(),
+      birthdayMonth: Number(data.get("birthdayMonth") || 0),
+      auctionAt: String(data.get("auctionAt") || ""),
+      finalPrice: Number(data.get("finalPrice") || 0),
+    };
+    const plan = commissionPlan(temporary);
+    const gross = Math.max(0, temporary.finalPrice);
+    editForm.elements.commissionAmount.value = gross ? plan.amount : 0;
+    editForm.elements.settlementAmount.value = gross ? roundMoney(gross - plan.amount) : 0;
+    editForm.elements.profit.value = gross ? plan.amount : 0;
+    editForm.elements.promotion.value = gross ? plan.label : "";
+  }
+
+  function openEditor(id = "") {
+    state.editingId = id;
+    editForm.reset();
+    const record = state.records.find((item) => item.id === id) || {lot:Math.max(0, ...state.records.map((item) => Number(item.lot) || 0)) + 1,received:"待确认",settled:false};
+    $("#edit-title").textContent = id ? `Lot ${record.lot}` : "新建拍品";
+    [...editForm.elements].forEach((element) => {
+      if (!element.name) return;
+      let value = record[element.name];
+      if (element.name === "birthdayMonth") value = birthdayMonthFor(record) || "";
+      if (element.type === "checkbox") element.checked = Boolean(value);
+      else element.value = value ?? "";
+    });
+    previewCommission();
+    editDialog.showModal();
+  }
+
+  function requestPickup(record) {
+    const carrier = carrierFor(record);
+    record.carrier = carrier;
+    record.logisticsStatus = "simulation_ready";
+    record.pickupCode = `DEMO-${carrier === "sf" ? "SF" : "CN"}-${record.lot}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    record.logisticsNote = "公开体验模拟码，不可用于真实寄件";
+    audit("申请模拟取件", `Lot ${record.lot} · ${carrierLabel(carrier)}`);
+  }
+
+  function upsert(records) {
+    for (const incoming of records) {
+      const lot = Number(incoming.lot);
+      if (!Number.isInteger(lot) || lot <= 0 || !incoming.itemName) continue;
+      const index = state.records.findIndex((item) => Number(item.lot) === lot);
+      if (index >= 0) {
+        state.records[index] = {...state.records[index], ...incoming, id:state.records[index].id};
+        recalculateRecord(state.records[index]);
+      } else {
+        const record = {...incoming,id:uid(),received:incoming.received || "待确认",settled:Boolean(incoming.settled),carrier:incoming.carrier || "pending",logisticsStatus:incoming.logisticsStatus || "not_requested",pickupCode:incoming.pickupCode || ""};
+        recalculateRecord(record);
+        state.records.push(record);
+      }
+    }
+    save();
+    render();
+  }
+
+  function updateRulePreviews() {
+    const data = new FormData(settingsForm);
+    $("#default-rule-preview").textContent = `示例：成交价 ¥1,000 时，${formatRule(data.get("defaultCommissionType"), Number(data.get("defaultCommissionValue") || 0))}。`;
+    $("#birthday-rule-preview").textContent = `生日月份内，${formatRule(data.get("birthdayCommissionType"), Number(data.get("birthdayCommissionValue") || 0))}，整月自动应用。`;
+  }
+
+  function openSettings() {
+    [...settingsForm.elements].forEach((element) => {
+      if (element.name && state.settings[element.name] !== undefined) element.value = state.settings[element.name];
+    });
+    updateRulePreviews();
+    settingsDialog.showModal();
+  }
+
+  function updateBackupSummary() {
+    const lastBackup = localStorage.getItem(BACKUP_META_KEY);
+    const customerCount = Object.values(state.customers).filter((customer) => Number(customer.birthdayMonth) > 0).length;
+    $("#backup-summary").textContent = `${state.records.length} 条拍品 · ${customerCount} 位客户已设生日月${lastBackup ? ` · 上次备份 ${new Date(lastBackup).toLocaleString("zh-CN")}` : " · 尚未下载过备份"}`;
+  }
+
+  function openBackup() {
+    pendingBackupFile = null;
+    $("#backup-file").value = "";
+    $("#restore-backup").disabled = true;
+    $("#backup-file-name").textContent = "尚未选择备份文件";
+    updateBackupSummary();
+    backupDialog.showModal();
+  }
+
+  function downloadBlob(content, name, type) {
+    const blob = content instanceof Blob ? content : new Blob([content], {type});
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = name;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function downloadBackup() {
+    const exportedAt = new Date().toISOString();
+    const backup = {schemaVersion:2,exportedAt,records:state.records,settings:state.settings,customers:state.customers,audit:state.audit};
+    downloadBlob(JSON.stringify(backup, null, 2), `送拍工作台_完整备份_${exportedAt.slice(0, 10)}.json`, "application/json;charset=utf-8");
+    localStorage.setItem(BACKUP_META_KEY, exportedAt);
+    audit("下载完整备份", `${state.records.length} 条拍品`);
+    updateBackupSummary();
+    notify("完整备份已下载，请妥善保存");
+  }
+
+  async function restoreBackup() {
+    if (!pendingBackupFile) return;
+    try {
+      const backup = JSON.parse(await pendingBackupFile.text());
+      if (!backup || !Array.isArray(backup.records)) throw new Error("备份文件格式不正确");
+      state.records = backup.records.map((record) => ({...record,id:record.id || uid()}));
+      state.settings = backup.settings && typeof backup.settings === "object" ? {...defaultSettings, ...backup.settings} : clone(defaultSettings);
+      state.customers = backup.customers && typeof backup.customers === "object" ? backup.customers : {};
+      state.audit = Array.isArray(backup.audit) ? backup.audit : [];
+      state.selected.clear();
+      audit("恢复完整备份", `${state.records.length} 条拍品`);
+      save();
+      render();
+      backupDialog.close();
+      notify(`已恢复 ${state.records.length} 条拍品及全部规则`);
+    } catch (error) {
+      notify(error.message || "备份恢复失败", "error");
+    }
+  }
+
+  $$('[data-stage]').forEach((button) => button.addEventListener("click", () => {
+    state.stage = button.dataset.stage;
+    state.selected.clear();
+    render();
+  }));
+  $$('[data-close-dialog]').forEach((button) => button.addEventListener("click", () => button.closest("dialog")?.close("cancel")));
+  $("#search").addEventListener("input", (event) => { state.query = event.target.value; render(); });
+  $("#records-body").addEventListener("change", (event) => {
+    const id = event.target.dataset.select;
+    if (!id) return;
+    event.target.checked ? state.selected.add(id) : state.selected.delete(id);
+    render();
+  });
+
+  $("#records-body").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+    const record = state.records.find((item) => item.id === button.dataset.id);
+    if (!record) return;
+    if (button.dataset.action === "edit") openEditor(record.id);
+    if (button.dataset.action === "pickup") {
+      requestPickup(record);
+      save();
+      render();
+      notify(`Lot ${record.lot} 已生成明确标识的模拟码`, "info");
+    }
+    if (button.dataset.action === "manual") {
+      const code = prompt("请输入已核验的取件码；公开体验版不会连接真实物流平台。", String(record.pickupCode || "").startsWith("DEMO-") ? "" : record.pickupCode || "");
+      if (code && code.trim()) {
+        record.pickupCode = code.trim();
+        record.logisticsStatus = "ready";
+        record.carrier = carrierFor(record);
+        record.logisticsNote = "体验者人工录入";
+        audit("人工录码", `Lot ${record.lot}`);
+        save();
+        render();
+        notify("人工取件码已保存在当前浏览器");
+      }
+    }
+    if (button.dataset.action === "toggle-settle" && Number(record.finalPrice) > 0) {
+      if (record.settled) {
+        record.settled = false;
+        record.settledAt = "";
+        audit("撤销结账", `Lot ${record.lot}`);
+      } else {
+        recalculateRecord(record, true);
+        record.settled = true;
+        record.settledAt = new Date().toISOString();
+        record.settlementNote = record.settlementNote || "网页确认结账";
+        audit("确认结账", `Lot ${record.lot} · ${currency.format(record.settlementAmount)}`);
+      }
+      save();
+      render();
+    }
+  });
+
+  $("#select-all").addEventListener("change", (event) => {
+    visibleRecords().filter((item) => Number(item.finalPrice) > 0).forEach((item) => event.target.checked ? state.selected.add(item.id) : state.selected.delete(item.id));
+    render();
+  });
+  $("#clear-selection").addEventListener("click", () => { state.selected.clear(); render(); });
+  $("#batch-pickup").addEventListener("click", () => {
+    let count = 0;
+    state.records.filter((item) => state.selected.has(item.id) && Number(item.finalPrice) > 0).forEach((item) => { requestPickup(item); count += 1; });
+    state.selected.clear();
+    save();
+    render();
+    notify(`已批量处理 ${count} 条，均为 DEMO 模拟流程`, "info");
+  });
+  $("#batch-settle").addEventListener("click", () => {
+    let count = 0;
+    state.records.filter((item) => state.selected.has(item.id) && Number(item.finalPrice) > 0 && !item.settled).forEach((item) => {
+      recalculateRecord(item, true);
+      item.settled = true;
+      item.settledAt = new Date().toISOString();
+      item.settlementNote = item.settlementNote || "网页批量确认结账";
+      count += 1;
+    });
+    state.selected.clear();
+    audit("批量确认结账", `${count} 条拍品`);
+    save();
+    render();
+    notify(`已将 ${count} 条记录标记为已结账`);
+  });
+
+  $("#new-record").addEventListener("click", () => openEditor());
+  ["sellerWechat","birthdayMonth","auctionAt","finalPrice"].forEach((name) => editForm.elements[name].addEventListener("input", previewCommission));
+  editForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = new FormData(editForm);
+    const existing = state.records.find((item) => item.id === state.editingId) || {};
+    const birthdayMonth = Number(data.get("birthdayMonth") || 0);
+    const sellerWechat = String(data.get("sellerWechat") || "").trim();
+    if (sellerWechat) state.customers[sellerWechat] = {birthdayMonth};
+    const record = {
+      ...existing,
+      id: existing.id || uid(),
+      lot: Number(data.get("lot")),
+      itemName: String(data.get("itemName") || "").trim(),
+      auctionHouse: String(data.get("auctionHouse") || ""),
+      auctionAt: String(data.get("auctionAt") || ""),
+      lotLabel: String(data.get("lotLabel") || ""),
+      projectName: String(data.get("projectName") || ""),
+      startPrice: Number(data.get("startPrice") || 0),
+      finalPrice: Number(data.get("finalPrice") || 0),
+      finalOutcome: String(data.get("finalOutcome") || ""),
+      primaryCategory: String(data.get("primaryCategory") || ""),
+      secondaryCategory: String(data.get("secondaryCategory") || ""),
+      sellerWechat,
+      birthdayMonth,
+      contactedAt: String(data.get("contactedAt") || ""),
+      coinBoxId: String(data.get("coinBoxId") || ""),
+      trackingNumber: String(data.get("trackingNumber") || ""),
+      received: String(data.get("received") || "待确认"),
+      settlementNote: String(data.get("settlementNote") || ""),
+      settled: data.get("settled") === "on",
+      carrierOverride: String(data.get("carrierOverride") || ""),
+    };
+    if (!Number.isInteger(record.lot) || record.lot <= 0 || !record.itemName) {
+      notify("请填写有效 Lot 和拍品名称", "error");
+      return;
+    }
+    const duplicate = state.records.find((item) => Number(item.lot) === record.lot && item.id !== record.id);
+    if (duplicate) {
+      notify(`Lot ${record.lot} 已存在，请直接编辑该记录`, "error");
+      return;
+    }
+    recalculateRecord(record, true);
+    if (record.settled) record.settledAt = existing.settledAt || new Date().toISOString();
+    const index = state.records.findIndex((item) => item.id === record.id);
+    if (index >= 0) state.records[index] = record;
+    else state.records.push({...record,carrier:"pending",logisticsStatus:"not_requested",pickupCode:""});
+    state.records.filter((item) => !item.settled && item.sellerWechat === sellerWechat).forEach((item) => recalculateRecord(item));
+    audit("保存拍品", `Lot ${record.lot} · ${record.itemName}`);
+    save();
+    editDialog.close();
+    render();
+    notify(`Lot ${record.lot} 已保存，佣金已自动计算`);
+  });
+
+  $("#open-import").addEventListener("click", () => importDialog.showModal());
+  $("#excel-file").addEventListener("change", (event) => { $("#file-name").textContent = event.target.files[0]?.name || "选择 .xlsx 文件"; });
+  $("#import-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      let records = [];
+      const file = $("#excel-file").files[0];
+      const json = $("#json-input").value.trim();
+      if (file) records = await parseWorkbook(await file.arrayBuffer());
+      else if (json) {
+        const parsed = JSON.parse(json);
+        records = Array.isArray(parsed) ? parsed : [parsed];
+      } else throw new Error("请选择 Excel 文件或粘贴 JSON");
+      const valid = records.filter((item) => Number(item.lot) > 0 && item.itemName);
+      if (!valid.length) throw new Error("文件中没有可导入的数据行");
+      upsert(valid);
+      audit("导入数据", `${valid.length} 条拍品`);
+      importDialog.close();
+      $("#import-form").reset();
+      $("#file-name").textContent = "选择 .xlsx 文件";
+      notify(`已导入 ${valid.length} 条记录并套用佣金规则`);
+    } catch (error) {
+      notify(error.message || "导入失败", "error");
+    }
+  });
+
+  $("#open-settings").addEventListener("click", openSettings);
+  settingsForm.addEventListener("input", updateRulePreviews);
+  settingsForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = new FormData(settingsForm);
+    state.settings = {
+      defaultCommissionType: String(data.get("defaultCommissionType")),
+      defaultCommissionValue: Math.max(0, Number(data.get("defaultCommissionValue") || 0)),
+      birthdayCommissionType: String(data.get("birthdayCommissionType")),
+      birthdayCommissionValue: Math.max(0, Number(data.get("birthdayCommissionValue") || 0)),
+      birthdayLabel: String(data.get("birthdayLabel") || "生日月优惠").trim(),
+      sfThreshold: Math.max(0, Number(data.get("sfThreshold") || 0)),
+    };
+    state.records.filter((record) => !record.settled).forEach((record) => recalculateRecord(record));
+    audit("更新佣金规则", `默认 ${formatRule(state.settings.defaultCommissionType, state.settings.defaultCommissionValue)}；生日月 ${formatRule(state.settings.birthdayCommissionType, state.settings.birthdayCommissionValue)}`);
+    save();
+    settingsDialog.close();
+    render();
+    notify("佣金规则已保存，未结账记录已重新计算");
+  });
+
+  $("#open-backup").addEventListener("click", openBackup);
+  $("#download-backup").addEventListener("click", downloadBackup);
+  $("#backup-file").addEventListener("change", (event) => {
+    pendingBackupFile = event.target.files[0] || null;
+    $("#backup-file-name").textContent = pendingBackupFile ? pendingBackupFile.name : "尚未选择备份文件";
+    $("#restore-backup").disabled = !pendingBackupFile;
+  });
+  $("#restore-backup").addEventListener("click", restoreBackup);
+
+  $("#open-audit").addEventListener("click", () => {
+    const list = $("#audit-list");
+    list.innerHTML = state.audit.length ? state.audit.map((item) => `<article class="audit-entry"><span class="audit-dot"></span><div><b>${esc(item.action)}</b><p>${esc(item.detail)}</p></div><time>${new Date(item.time).toLocaleString("zh-CN", {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"})}</time></article>`).join("") : '<div class="audit-empty">暂无操作记录</div>';
+    auditDialog.showModal();
+  });
+
+  $("#reset-demo").addEventListener("click", () => {
+    if (!confirm("确定恢复示例数据？当前浏览器中的体验修改将被清除。建议先下载完整备份。")) return;
+    state.records = clone(seedRecords);
+    state.audit = [];
+    state.settings = clone(defaultSettings);
+    state.customers = clone(seedCustomers);
+    state.selected.clear();
+    save();
+    render();
+    notify("已恢复示例数据和默认佣金规则");
+  });
+
+  function norm(value) {
+    return String(value ?? "").trim().replace(/\s+/g, "").replace(/[（）()：:]/g, "").toLowerCase();
+  }
+  function cellText(cell) {
+    const value = cell.value;
+    if (value == null) return "";
+    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    if (typeof value === "object") {
+      if (value.text) return String(value.text).trim();
+      if (Array.isArray(value.richText)) return value.richText.map((part) => part.text || "").join("").trim();
+      if (value.result != null) return String(value.result).trim();
+    }
+    return String(value).trim();
+  }
+  function cellNumber(cell) {
+    if (typeof cell.value === "number") return cell.value;
+    const value = Number(cellText(cell).replace(/[¥￥,，\s]/g, ""));
+    return Number.isFinite(value) ? value : 0;
+  }
+  function headerMap(row) {
+    const map = new Map();
+    row.eachCell({includeEmpty:false}, (cell, col) => { const key = norm(cellText(cell)); if (key) map.set(key, col); });
+    return map;
+  }
+  function column(map, ...names) {
+    for (const name of names) { const col = map.get(norm(name)); if (col) return col; }
+    return 0;
+  }
+  function textAt(row, map, ...names) { const col = column(map, ...names); return col ? cellText(row.getCell(col)) : ""; }
+  function numberAt(row, map, ...names) { const col = column(map, ...names); return col ? cellNumber(row.getCell(col)) : 0; }
+  function lotFromLabel(value) {
+    const match = value.match(/\blot\s*[:：#\-/]?\s*(\d+)/i) || value.match(/(\d+)\s*$/);
+    return match ? Number(match[1]) : 0;
+  }
+
+  async function parseWorkbook(buffer) {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    let found = null;
+    for (const sheet of workbook.worksheets) {
+      for (let rowNo = 1; rowNo <= Math.min(sheet.rowCount || 1, 8); rowNo += 1) {
+        const map = headerMap(sheet.getRow(rowNo));
+        if (column(map, "Lot") && column(map, "拍品名称")) { found = {kind:"mxiqi",sheet,rowNo,map}; break; }
+        if (column(map, "送拍人（微信名）", "送拍人微信名") && column(map, "拍场/Lot", "拍场Lot")) { found = {kind:"tracker",sheet,rowNo,map}; break; }
+      }
+      if (found) break;
+    }
+    if (!found) throw new Error("无法识别表格，请使用送拍跟踪表或麦稀奇 v3.7 模板");
+    const records = [];
+    for (let rowNo = found.rowNo + 1; rowNo <= found.sheet.rowCount; rowNo += 1) {
+      const row = found.sheet.getRow(rowNo);
+      if (found.kind === "mxiqi") {
+        const lot = Math.trunc(numberAt(row, found.map, "Lot"));
+        const itemName = textAt(row, found.map, "拍品名称");
+        if (!lot && !itemName) continue;
+        if (lot > 0 && itemName) records.push(compact({lot,itemName,startPrice:numberAt(row,found.map,"起拍价"),primaryCategory:textAt(row,found.map,"一级分类"),secondaryCategory:textAt(row,found.map,"二级分类"),description:textAt(row,found.map,"拍品介绍")}));
+      } else {
+        const lotLabel = textAt(row, found.map, "拍场/Lot", "拍场Lot");
+        const lot = lotFromLabel(lotLabel);
+        const projectName = textAt(row, found.map, "送拍项目");
+        if (!lot && !projectName) continue;
+        const outcome = textAt(row, found.map, "拍出价格/拖回", "拍出价格拖回");
+        if (lot > 0 && projectName) records.push(compact({lot,itemName:projectName,projectName,lotLabel,auctionHouse:lotLabel.split(/[\/／]/)[0].trim(),sellerWechat:textAt(row,found.map,"送拍人（微信名）","送拍人微信名"),contactedAt:textAt(row,found.map,"联系时间"),coinBoxId:textAt(row,found.map,"盒子币编号"),trackingNumber:textAt(row,found.map,"快递单号"),auctionAt:textAt(row,found.map,"上拍时间（拍卖时间）","上拍时间拍卖时间"),received:textAt(row,found.map,"是/否收到","是否收到") || "待确认",finalOutcome:outcome.includes("拖回") ? "拖回" : numberAt(row,found.map,"拍出价格/拖回") > 0 ? "成交" : "",finalPrice:outcome.includes("拖回") ? 0 : numberAt(row,found.map,"拍出价格/拖回"),settled:textAt(row,found.map,"是/否已结账","是否已结账") === "是",settlementNote:textAt(row,found.map,"结账")}));
+      }
+    }
+    return records;
+  }
+
+  async function exportTracker() {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet("Sheet1");
+      const headers = ["送拍人（微信名）","联系时间","送拍项目","盒子币编号","快递单号","上拍时间（拍卖时间）","拍场/Lot","是/否收到","拍出价格/拖回","送拍佣金","结款金额","是/否已结账","适用优惠方案","结账","利润（不包含邮费）"];
+      sheet.addRow([null, ...headers]);
+      state.records.forEach((record) => sheet.addRow([null,record.sellerWechat || null,record.contactedAt || null,record.projectName || record.itemName,record.coinBoxId || null,record.trackingNumber || null,record.auctionAt || null,record.lotLabel || `${record.auctionHouse || ""} / Lot ${record.lot}`,record.received || "待确认",record.finalOutcome === "拖回" ? "拖回" : record.finalPrice || null,record.commissionAmount || null,record.settlementAmount || null,record.settled ? "是" : "否",record.promotion || null,record.settlementNote || null,record.profit || null]));
+      sheet.getRow(1).font = {bold:true};
+      sheet.views = [{state:"frozen",ySplit:1}];
+      downloadBlob(await workbook.xlsx.writeBuffer(), `送拍跟踪表_体验版_${new Date().toISOString().slice(0,10)}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      audit("导出表格", "送拍跟踪表");
+    } catch (error) { notify(error.message || "导出失败", "error"); }
+  }
+
+  async function exportMxiqi() {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet("导入模板");
+      sheet.mergeCells("A1:V1");
+      sheet.getCell("A1").value = "麦稀奇拍品导入模板(v3.7) · 公开体验版";
+      sheet.addRow(["基本信息","","拍卖设置","","","","估价范围","","分类设置","","属性设置","","","","","详情","","其它","","","标签",""]);
+      sheet.addRow(["Lot","拍品名称","起拍价","封顶价","保留价","亮点(是/否)","低价","高价","一级分类","二级分类","发行年份","国家地区","评级公司","评级编号","评级分数","拍品介绍","拍卖提示","拍卖顺序","图鉴编号","图片全显","标签1","标签2"]);
+      state.records.forEach((record) => sheet.addRow([record.lot,record.itemName,record.startPrice || 0,record.capPrice || null,record.reservePrice || null,record.highlight || "否",record.estimateLow || null,record.estimateHigh || null,record.primaryCategory || null,record.secondaryCategory || null,record.issueYear || null,record.country || null,record.gradingCompany || null,record.gradingId || null,record.gradingScore || null,record.description || null,record.auctionHint || null,record.auctionOrder || null,record.catalogId || null,record.fullImage || null,record.tag1 || null,record.tag2 || null]));
+      sheet.getRow(3).font = {bold:true};
+      sheet.views = [{state:"frozen",ySplit:3}];
+      const note = workbook.addWorksheet("导入说明");
+      note.addRows([["公开体验版说明"],["该文件由浏览器本地体验页面生成。"],["第3行字段名称请勿修改。"]]);
+      downloadBlob(await workbook.xlsx.writeBuffer(), `麦稀奇导入模板_体验版_${new Date().toISOString().slice(0,10)}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      audit("导出表格", "麦稀奇模板");
+    } catch (error) { notify(error.message || "导出失败", "error"); }
+  }
+
+  async function exportSettlement() {
+    const sold = soldRecords();
+    if (!sold.length || sold.some((record) => !record.settled)) {
+      notify("还有未结账记录，暂不能导出本批结算表", "error");
+      return;
+    }
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const summary = workbook.addWorksheet("结算汇总");
+      summary.addRows([
+        ["送拍结算汇总"],
+        ["导出时间", new Date().toLocaleString("zh-CN")],
+        ["成交件数", sold.length],
+        ["成交总额", sold.reduce((sum, record) => sum + Number(record.finalPrice || 0), 0)],
+        ["佣金合计", sold.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0)],
+        ["应结金额", sold.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0)],
+      ]);
+      summary.getColumn(1).width = 18;
+      summary.getColumn(2).width = 24;
+      summary.getRow(1).font = {bold:true,size:16};
+      const detail = workbook.addWorksheet("结算明细");
+      detail.addRow(["Lot","拍品名称","送拍人","拍卖时间","成交价","佣金规则","送拍佣金","应结金额","结账时间","结账说明"]);
+      sold.forEach((record) => detail.addRow([record.lot,record.itemName,record.sellerWechat || "",record.auctionAt || "",record.finalPrice,record.promotion || "",record.commissionAmount || 0,record.settlementAmount || 0,record.settledAt ? new Date(record.settledAt).toLocaleString("zh-CN") : "",record.settlementNote || ""]));
+      detail.getRow(1).font = {bold:true};
+      detail.views = [{state:"frozen",ySplit:1}];
+      [8,28,18,20,14,20,14,14,21,24].forEach((width, index) => { detail.getColumn(index + 1).width = width; });
+      downloadBlob(await workbook.xlsx.writeBuffer(), `送拍结算表_${new Date().toISOString().slice(0,10)}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      audit("导出结算表", `${sold.length} 条已结账记录`);
+      notify("结算表已导出");
+    } catch (error) { notify(error.message || "结算表导出失败", "error"); }
+  }
+
+  $("#export-tracker").addEventListener("click", exportTracker);
+  $("#export-mxiqi").addEventListener("click", exportMxiqi);
+  $("#export-settlement").addEventListener("click", exportSettlement);
+
+  if (localStorage.getItem(MIGRATION_KEY) !== "2") {
+    state.records.filter((record) => !record.settled).forEach((record) => recalculateRecord(record));
+    localStorage.setItem(MIGRATION_KEY, "2");
+    save();
+  }
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", async () => {
+      try {
+        await navigator.serviceWorker.register("sw.js");
+        await navigator.serviceWorker.ready;
+        $("#offline-status").textContent = "离线访问已准备";
+      } catch {
+        $("#offline-status").textContent = "本机数据已启用";
+      }
+    });
+  } else {
+    $("#offline-status").textContent = "本机数据已启用";
+  }
 
   render();
 })();
