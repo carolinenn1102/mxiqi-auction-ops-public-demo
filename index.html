@@ -55,6 +55,11 @@
           <h2><span id="settled-count">0</span> / <span id="sold-count">0</span> 条已结账</h2>
           <div class="progress-track" aria-label="结算进度"><span id="settlement-progress"></span></div>
           <p id="settlement-hint">全部成交记录确认结账后，即可导出结算表。</p>
+          <div class="settlement-scope-filters">
+            <label><span>送拍人</span><select id="settlement-seller"><option value="">全部送拍人</option></select></label>
+            <label><span>开始日期</span><input id="settlement-from" type="date"></label>
+            <label><span>结束日期</span><input id="settlement-to" type="date"></label>
+          </div>
         </div>
         <div class="settlement-totals">
           <div><small>成交总额</small><b id="settlement-gross">¥0</b></div>
@@ -64,7 +69,9 @@
         <div class="settlement-actions">
           <button class="btn secondary" id="batch-settle" hidden>将所选标为已结账</button>
           <button class="btn primary" id="export-settlement" disabled>全部结账后导出</button>
+          <button class="btn secondary" id="export-settlement-image" disabled>导出结算明细图片</button>
         </div>
+        <div class="seller-summary-wrap"><div class="seller-summary-heading"><h3>送拍人汇总</h3><small>点击送拍人即可查看其本期拍品</small></div><div class="seller-summary-list" id="seller-summary-list"></div></div>
       </section>
 
       <section class="data-panel">
@@ -72,6 +79,13 @@
         <div class="toolbar">
           <label class="search-box"><span>⌕</span><input id="search" placeholder="搜索 Lot、拍品、送拍人、单号或取件码"></label>
           <div class="bulk-actions"><span class="result-count" id="result-count">0 条结果</span><span class="selection-count" id="selection-count" hidden></span><button class="btn ghost" id="batch-pickup" hidden>批量申请取件</button><button class="text-button" id="clear-selection" hidden>取消选择</button></div>
+        </div>
+        <div class="advanced-filters" aria-label="拍品筛选">
+          <label><span>送拍人</span><select id="filter-seller"><option value="">全部</option></select></label>
+          <label><span>拍场</span><select id="filter-auction"><option value="">全部</option></select></label>
+          <label><span>成交状态</span><select id="filter-outcome"><option value="">全部</option><option>待拍</option><option>成交</option><option>流拍</option><option>拖回</option></select></label>
+          <label><span>付款/拖回</span><select id="filter-disposition"><option value="">全部</option><option value="overdue">超时未付款</option><option value="拖回/发回">拖回/发回</option><option value="拖回/再拍">拖回/再拍</option><option value="拖回/等待">拖回/等待</option><option value="拆单">拆单</option></select></label>
+          <button class="text-button" id="clear-filters">清除筛选</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -97,6 +111,9 @@
           <label class="field"><span>起拍价</span><input name="startPrice" type="number" min="0" step="0.01"></label>
           <label class="field"><span>最终价格</span><input name="finalPrice" type="number" min="0" step="0.01"></label>
           <label class="field"><span>成交状态</span><select name="finalOutcome"><option value="">待确认</option><option>待拍</option><option>成交</option><option>流拍</option><option>拖回</option></select></label>
+          <label class="field"><span>买家付款状态</span><select name="paymentStatus"><option value="">未设置</option><option>待付款</option><option>已付款</option></select></label>
+          <label class="field"><span>付款截止时间</span><input name="paymentDueAt" type="datetime-local"></label>
+          <label class="field"><span>拖回/特殊处理</span><select name="returnDisposition"><option value="">正常流程</option><option>拖回/发回</option><option>拖回/再拍</option><option>拖回/等待</option><option>拆单</option></select></label>
           <label class="field"><span>一级分类</span><input name="primaryCategory"></label>
           <label class="field"><span>二级分类</span><input name="secondaryCategory"></label>
         </div></section>

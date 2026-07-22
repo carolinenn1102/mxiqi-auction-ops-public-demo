@@ -24,9 +24,9 @@
 
   const seedRecords = [
     {id:"d101",lot:101,itemName:"PMG 67EPQ 2024年龙年纪念钞",sellerWechat:"林先生·上海",contactedAt:"2026-07-12",projectName:"纪念钞专场",coinBoxId:"HX-DEMO-101",trackingNumber:"SF-DEMO-101-0001",auctionAt:"2026-07-28 20:00",auctionHouse:"夏日钱币精选",lotLabel:"A场 / Lot 101",received:"是",finalOutcome:"成交",finalPrice:1680,commissionAmount:84,settlementAmount:1596,profit:84,promotion:"生日月优惠 · 5%",startPrice:1000,primaryCategory:"钞票",secondaryCategory:"纪念钞",settled:false,carrier:"sf",carrierOverride:"",logisticsStatus:"ready",pickupCode:"DEMO-SF-101-A7K2",logisticsNote:"公开体验模拟码"},
-    {id:"d102",lot:102,itemName:"袁世凯像民国三年壹圆 银元",sellerWechat:"藏泉阁",contactedAt:"2026-07-13",projectName:"机制币专场",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-28 20:00",auctionHouse:"夏日钱币精选",lotLabel:"A场 / Lot 102",received:"是",finalOutcome:"成交",finalPrice:860,commissionAmount:68.8,settlementAmount:791.2,profit:68.8,promotion:"普通佣金 · 8%",startPrice:500,primaryCategory:"硬币",secondaryCategory:"银元",settled:false,carrier:"cainiao",carrierOverride:"",logisticsStatus:"simulation_ready",pickupCode:"DEMO-CN-102-P8Q2",logisticsNote:"公开体验模拟码"},
+    {id:"d102",lot:102,itemName:"袁世凯像民国三年壹圆 银元",sellerWechat:"藏泉阁",contactedAt:"2026-07-13",projectName:"机制币专场",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-28 20:00",auctionHouse:"夏日钱币精选",lotLabel:"A场 / Lot 102",received:"是",finalOutcome:"成交",finalPrice:860,paymentStatus:"待付款",paymentDueAt:"2026-07-21T20:00",returnDisposition:"拖回/等待",commissionAmount:68.8,settlementAmount:791.2,profit:68.8,promotion:"普通佣金 · 8%",startPrice:500,primaryCategory:"硬币",secondaryCategory:"银元",settled:false,carrier:"cainiao",carrierOverride:"",logisticsStatus:"simulation_ready",pickupCode:"DEMO-CN-102-P8Q2",logisticsNote:"公开体验模拟码"},
     {id:"d103",lot:103,itemName:"T46 庚申年猴票 四方联",sellerWechat:"邮缘收藏",contactedAt:"2026-07-14",projectName:"经典邮票专场",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-29 19:30",auctionHouse:"邮品臻选",lotLabel:"B场 / Lot 103",received:"待确认",finalOutcome:"待拍",finalPrice:0,commissionAmount:0,settlementAmount:0,profit:0,startPrice:2200,primaryCategory:"邮票",secondaryCategory:"JT邮票",settled:false,carrier:"pending",carrierOverride:"",logisticsStatus:"not_requested",pickupCode:"",logisticsNote:""},
-    {id:"d104",lot:104,itemName:"清乾隆青花缠枝莲纹盘",sellerWechat:"周女士",contactedAt:"2026-07-15",projectName:"古器物专场",coinBoxId:"",trackingNumber:"SF-DEMO-104-0001",auctionAt:"2026-07-30 20:00",auctionHouse:"东方古美术",lotLabel:"C场 / Lot 104",received:"是",finalOutcome:"成交",finalPrice:3260,commissionAmount:260.8,settlementAmount:2999.2,profit:260.8,promotion:"普通佣金 · 8%",startPrice:1800,primaryCategory:"陶瓷",secondaryCategory:"旧藏瓷器",settled:true,settledAt:"2026-07-20T08:30:00.000Z",settlementNote:"已转账",carrier:"sf",carrierOverride:"",logisticsStatus:"simulation_ready",pickupCode:"DEMO-SF-104-K3M8",logisticsNote:"公开体验模拟码"},
+    {id:"d104",lot:104,itemName:"清乾隆青花缠枝莲纹盘",sellerWechat:"周女士",contactedAt:"2026-07-15",projectName:"古器物专场",coinBoxId:"",trackingNumber:"SF-DEMO-104-0001",auctionAt:"2026-07-30 20:00",auctionHouse:"东方古美术",lotLabel:"C场 / Lot 104",received:"是",finalOutcome:"成交",finalPrice:3260,paymentStatus:"已付款",commissionAmount:260.8,settlementAmount:2999.2,profit:260.8,promotion:"普通佣金 · 8%",startPrice:1800,primaryCategory:"陶瓷",secondaryCategory:"旧藏瓷器",settled:true,settledAt:"2026-07-20T08:30:00.000Z",settlementNote:"已转账",carrier:"sf",carrierOverride:"",logisticsStatus:"simulation_ready",pickupCode:"DEMO-SF-104-K3M8",logisticsNote:"公开体验模拟码"},
     {id:"d105",lot:105,itemName:"1980年中国奥委会纪念铜章",sellerWechat:"",contactedAt:"",projectName:"章牌杂项",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-30 20:00",auctionHouse:"东方古美术",lotLabel:"C场 / Lot 105",received:"否",finalOutcome:"成交",finalPrice:420,commissionAmount:33.6,settlementAmount:386.4,profit:33.6,promotion:"普通佣金 · 8%",startPrice:100,primaryCategory:"章牌",secondaryCategory:"纪念章",settled:false,carrier:"cainiao",carrierOverride:"",logisticsStatus:"not_requested",pickupCode:"",logisticsNote:""},
   ];
 
@@ -38,6 +38,8 @@
     customers: loadObject(CUSTOMERS_KEY, seedCustomers),
     stage: "all",
     query: "",
+    filters: {seller:"",auction:"",outcome:"",disposition:""},
+    settlementScope: {seller:"",from:"",to:""},
     selected: new Set(),
     editingId: "",
   };
@@ -180,20 +182,94 @@
     return state.records.filter((record) => Number(record.finalPrice) > 0 && record.finalOutcome !== "拖回");
   }
 
+  function isPaymentOverdue(record) {
+    if (record.paymentStatus !== "待付款" || !record.paymentDueAt || Number(record.finalPrice) <= 0) return false;
+    const deadline = new Date(record.paymentDueAt).getTime();
+    return Number.isFinite(deadline) && deadline < Date.now();
+  }
+
+  function datePart(value) {
+    return String(value || "").slice(0, 10);
+  }
+
+  function paymentDeadlineFromAuction(value) {
+    const source = String(value || "").trim().replace(" ", "T");
+    const time = new Date(source).getTime();
+    if (!Number.isFinite(time)) return "";
+    const deadline = new Date(time + 24 * 60 * 60 * 1000);
+    return new Date(deadline.getTime() - deadline.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }
+
+  function ensurePaymentTracking(record) {
+    if (Number(record.finalPrice) <= 0 || record.finalOutcome !== "成交") return record;
+    if (!record.paymentStatus) record.paymentStatus = record.settled ? "已付款" : "待付款";
+    if (record.paymentStatus === "待付款" && !record.paymentDueAt) record.paymentDueAt = paymentDeadlineFromAuction(record.auctionAt);
+    return record;
+  }
+
+  function settlementRecords() {
+    return soldRecords().filter((record) => {
+      const date = datePart(record.auctionAt);
+      return (!state.settlementScope.seller || record.sellerWechat === state.settlementScope.seller)
+        && (!state.settlementScope.from || (date && date >= state.settlementScope.from))
+        && (!state.settlementScope.to || (date && date <= state.settlementScope.to));
+    });
+  }
+
   function visibleRecords() {
     const query = state.query.trim().toLowerCase();
     return state.records.filter((record) => {
       const search = !query || [record.lot,record.itemName,record.sellerWechat,record.auctionHouse,record.trackingNumber,record.pickupCode,record.promotion].join(" ").toLowerCase().includes(query);
+      const filters = (!state.filters.seller || record.sellerWechat === state.filters.seller)
+        && (!state.filters.auction || record.auctionHouse === state.filters.auction)
+        && (!state.filters.outcome || record.finalOutcome === state.filters.outcome)
+        && (!state.filters.disposition || (state.filters.disposition === "overdue" ? isPaymentOverdue(record) : record.returnDisposition === state.filters.disposition));
       const stage = state.stage === "all"
         || (state.stage === "missing" && missing(record).length)
         || (state.stage === "pickup" && Number(record.finalPrice) > 0 && !record.pickupCode)
-        || (state.stage === "settlement" && Number(record.finalPrice) > 0 && !record.settled);
-      return search && stage;
+        || (state.stage === "settlement" && settlementRecords().some((item) => item.id === record.id));
+      return search && filters && stage;
     });
   }
 
+  function setDynamicOptions(selector, values, allLabel, current) {
+    const select = $(selector);
+    select.innerHTML = `<option value="">${esc(allLabel)}</option>${values.map((value) => `<option value="${esc(value)}">${esc(value)}</option>`).join("")}`;
+    select.value = current || "";
+  }
+
+  function renderFilterOptions() {
+    const sellers = [...new Set(state.records.map((record) => record.sellerWechat).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-CN"));
+    const auctions = [...new Set(state.records.map((record) => record.auctionHouse).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-CN"));
+    setDynamicOptions("#filter-seller", sellers, "全部", state.filters.seller);
+    setDynamicOptions("#filter-auction", auctions, "全部", state.filters.auction);
+    setDynamicOptions("#settlement-seller", sellers, "全部送拍人", state.settlementScope.seller);
+    $("#settlement-from").value = state.settlementScope.from;
+    $("#settlement-to").value = state.settlementScope.to;
+  }
+
+  function renderSellerSummary() {
+    const periodRecords = soldRecords().filter((record) => {
+      const date = datePart(record.auctionAt);
+      return (!state.settlementScope.from || (date && date >= state.settlementScope.from))
+        && (!state.settlementScope.to || (date && date <= state.settlementScope.to));
+    });
+    const grouped = new Map();
+    periodRecords.forEach((record) => {
+      const seller = record.sellerWechat || "待补送拍人";
+      const current = grouped.get(seller) || {seller,count:0,gross:0,payable:0,pending:0};
+      current.count += 1;
+      current.gross += Number(record.finalPrice || 0);
+      current.payable += Number(record.settlementAmount || 0);
+      if (!record.settled) current.pending += 1;
+      grouped.set(seller, current);
+    });
+    const entries = [...grouped.values()].sort((a, b) => b.payable - a.payable);
+    $("#seller-summary-list").innerHTML = entries.length ? entries.map((item) => `<button class="seller-summary-item ${state.settlementScope.seller === item.seller ? "active" : ""}" data-seller-summary="${esc(item.seller === "待补送拍人" ? "" : item.seller)}"><span><b>${esc(item.seller)}</b><small>${item.count} 件 · ${item.pending} 件待结账 · 成交 ${currency.format(item.gross)}</small></span><strong>${currency.format(item.payable)}</strong></button>`).join("") : '<div class="audit-empty">当前时间段暂无成交记录</div>';
+  }
+
   function renderSettlementSummary() {
-    const sold = soldRecords();
+    const sold = settlementRecords();
     const settled = sold.filter((record) => record.settled);
     const remaining = sold.length - settled.length;
     const percent = sold.length ? Math.round(settled.length * 100 / sold.length) : 0;
@@ -207,10 +283,13 @@
     $("#settlement-hint").textContent = remaining ? `还有 ${remaining} 条待确认，全部结账后开放结算表导出。` : "本批成交记录已全部结账，可以导出结算表。";
     $("#export-settlement").disabled = !(sold.length && remaining === 0);
     $("#export-settlement").textContent = remaining ? `还有 ${remaining} 条未结账` : "导出本批结算表";
+    $("#export-settlement-image").disabled = !(sold.length && remaining === 0);
+    renderSellerSummary();
   }
 
   function render() {
     const records = state.records;
+    renderFilterOptions();
     $("#metric-total").textContent = records.length;
     $("#metric-missing").textContent = records.filter((item) => missing(item).length).length;
     $("#metric-pickup").textContent = records.filter((item) => Number(item.finalPrice) > 0 && !item.pickupCode).length;
@@ -248,7 +327,7 @@
         <td><div class="lot-cell"><span>${record.lot}</span><div><b>${esc(record.itemName)}</b><small>${esc(record.projectName || record.primaryCategory || "未设置项目")}</small></div></div></td>
         <td><b class="${record.sellerWechat ? "" : "muted"}">${esc(record.sellerWechat || "待补")}</b><small>${esc(record.trackingNumber || "未填快递单号")}</small></td>
         <td><b>${esc(record.auctionHouse || "待设置拍场")}</b><small>${esc(record.auctionAt || "待设置时间")}</small></td>
-        <td><b class="money">${Number(record.finalPrice) > 0 ? currency.format(record.finalPrice) : "待拍"}</b><small>${esc(record.finalOutcome || "状态待确认")}</small></td>
+        <td><b class="money">${Number(record.finalPrice) > 0 ? currency.format(record.finalPrice) : "待拍"}</b><small>${esc(record.finalOutcome || "状态待确认")}${record.paymentStatus ? ` · ${esc(record.paymentStatus)}` : ""}</small>${isPaymentOverdue(record) ? '<span class="chip overdue">超时未付款</span>' : ""}${record.returnDisposition ? `<span class="chip disposition">${esc(record.returnDisposition)}</span>` : ""}</td>
         <td>${gaps.length ? `<button class="chip warning" data-action="edit" data-id="${esc(record.id)}" title="${esc(gaps.join("、"))}">缺 ${gaps.length} 项</button>` : '<span class="chip success">完整</span>'}</td>
         <td><span class="carrier ${carrier}">${carrierLabel(carrier)}</span><small>${logisticsLabel(record.logisticsStatus)}</small></td>
         <td>${record.pickupCode ? `<code>${esc(record.pickupCode)}</code>` : '<span class="muted">—</span>'}<small>${esc(record.pickupCode ? "仅模拟，不可寄件" : record.logisticsNote || "")}</small></td>
@@ -306,9 +385,11 @@
       const index = state.records.findIndex((item) => Number(item.lot) === lot);
       if (index >= 0) {
         state.records[index] = {...state.records[index], ...incoming, id:state.records[index].id};
+        ensurePaymentTracking(state.records[index]);
         recalculateRecord(state.records[index]);
       } else {
         const record = {...incoming,id:uid(),received:incoming.received || "待确认",settled:Boolean(incoming.settled),carrier:incoming.carrier || "pending",logisticsStatus:incoming.logisticsStatus || "not_requested",pickupCode:incoming.pickupCode || ""};
+        ensurePaymentTracking(record);
         recalculateRecord(record);
         state.records.push(record);
       }
@@ -358,7 +439,7 @@
 
   function downloadBackup() {
     const exportedAt = new Date().toISOString();
-    const backup = {schemaVersion:2,exportedAt,records:state.records,settings:state.settings,customers:state.customers,audit:state.audit};
+    const backup = {schemaVersion:3,exportedAt,records:state.records,settings:state.settings,customers:state.customers,audit:state.audit};
     downloadBlob(JSON.stringify(backup, null, 2), `送拍工作台_完整备份_${exportedAt.slice(0, 10)}.json`, "application/json;charset=utf-8");
     localStorage.setItem(BACKUP_META_KEY, exportedAt);
     audit("下载完整备份", `${state.records.length} 条拍品`);
@@ -393,6 +474,27 @@
   }));
   $$('[data-close-dialog]').forEach((button) => button.addEventListener("click", () => button.closest("dialog")?.close("cancel")));
   $("#search").addEventListener("input", (event) => { state.query = event.target.value; render(); });
+  [["#filter-seller","seller"],["#filter-auction","auction"],["#filter-outcome","outcome"],["#filter-disposition","disposition"]].forEach(([selector, key]) => {
+    $(selector).addEventListener("change", (event) => { state.filters[key] = event.target.value; state.selected.clear(); render(); });
+  });
+  $("#clear-filters").addEventListener("click", () => {
+    state.filters = {seller:"",auction:"",outcome:"",disposition:""};
+    state.query = "";
+    $("#search").value = "";
+    state.selected.clear();
+    render();
+  });
+  $("#settlement-seller").addEventListener("change", (event) => { state.settlementScope.seller = event.target.value; state.filters.seller = ""; state.selected.clear(); render(); });
+  $("#settlement-from").addEventListener("change", (event) => { state.settlementScope.from = event.target.value; state.selected.clear(); render(); });
+  $("#settlement-to").addEventListener("change", (event) => { state.settlementScope.to = event.target.value; state.selected.clear(); render(); });
+  $("#seller-summary-list").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-seller-summary]");
+    if (!button) return;
+    state.settlementScope.seller = button.dataset.sellerSummary;
+    state.filters.seller = "";
+    state.selected.clear();
+    render();
+  });
   $("#records-body").addEventListener("change", (event) => {
     const id = event.target.dataset.select;
     if (!id) return;
@@ -492,6 +594,9 @@
       startPrice: Number(data.get("startPrice") || 0),
       finalPrice: Number(data.get("finalPrice") || 0),
       finalOutcome: String(data.get("finalOutcome") || ""),
+      paymentStatus: String(data.get("paymentStatus") || ""),
+      paymentDueAt: String(data.get("paymentDueAt") || ""),
+      returnDisposition: String(data.get("returnDisposition") || ""),
       primaryCategory: String(data.get("primaryCategory") || ""),
       secondaryCategory: String(data.get("secondaryCategory") || ""),
       sellerWechat,
@@ -504,6 +609,7 @@
       settled: data.get("settled") === "on",
       carrierOverride: String(data.get("carrierOverride") || ""),
     };
+    ensurePaymentTracking(record);
     if (!Number.isInteger(record.lot) || record.lot <= 0 || !record.itemName) {
       notify("请填写有效 Lot 和拍品名称", "error");
       return;
@@ -701,7 +807,7 @@
   }
 
   async function exportSettlement() {
-    const sold = soldRecords();
+    const sold = settlementRecords();
     if (!sold.length || sold.some((record) => !record.settled)) {
       notify("还有未结账记录，暂不能导出本批结算表", "error");
       return;
@@ -712,6 +818,8 @@
       summary.addRows([
         ["送拍结算汇总"],
         ["导出时间", new Date().toLocaleString("zh-CN")],
+        ["送拍人范围", state.settlementScope.seller || "全部送拍人"],
+        ["拍卖时间范围", `${state.settlementScope.from || "不限"} 至 ${state.settlementScope.to || "不限"}`],
         ["成交件数", sold.length],
         ["成交总额", sold.reduce((sum, record) => sum + Number(record.finalPrice || 0), 0)],
         ["佣金合计", sold.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0)],
@@ -721,24 +829,101 @@
       summary.getColumn(2).width = 24;
       summary.getRow(1).font = {bold:true,size:16};
       const detail = workbook.addWorksheet("结算明细");
-      detail.addRow(["Lot","拍品名称","送拍人","拍卖时间","成交价","佣金规则","送拍佣金","应结金额","结账时间","结账说明"]);
-      sold.forEach((record) => detail.addRow([record.lot,record.itemName,record.sellerWechat || "",record.auctionAt || "",record.finalPrice,record.promotion || "",record.commissionAmount || 0,record.settlementAmount || 0,record.settledAt ? new Date(record.settledAt).toLocaleString("zh-CN") : "",record.settlementNote || ""]));
+      detail.addRow(["Lot","拍品名称","送拍人","拍卖时间","成交价","买家付款","拖回/特殊处理","佣金规则","送拍佣金","应结金额","结账时间","结账说明"]);
+      sold.forEach((record) => detail.addRow([record.lot,record.itemName,record.sellerWechat || "",record.auctionAt || "",record.finalPrice,record.paymentStatus || "",record.returnDisposition || "",record.promotion || "",record.commissionAmount || 0,record.settlementAmount || 0,record.settledAt ? new Date(record.settledAt).toLocaleString("zh-CN") : "",record.settlementNote || ""]));
       detail.getRow(1).font = {bold:true};
       detail.views = [{state:"frozen",ySplit:1}];
-      [8,28,18,20,14,20,14,14,21,24].forEach((width, index) => { detail.getColumn(index + 1).width = width; });
+      [8,28,18,20,14,14,18,20,14,14,21,24].forEach((width, index) => { detail.getColumn(index + 1).width = width; });
       downloadBlob(await workbook.xlsx.writeBuffer(), `送拍结算表_${new Date().toISOString().slice(0,10)}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       audit("导出结算表", `${sold.length} 条已结账记录`);
       notify("结算表已导出");
     } catch (error) { notify(error.message || "结算表导出失败", "error"); }
   }
 
+  function exportSettlementImage() {
+    const sold = settlementRecords();
+    if (!sold.length || sold.some((record) => !record.settled)) {
+      notify("还有未结账记录，暂不能导出结算明细图片", "error");
+      return;
+    }
+    const width = 1500;
+    const rowHeight = 46;
+    const headerHeight = 250;
+    const height = headerHeight + rowHeight * (sold.length + 1) + 70;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    context.fillStyle = "#f7f5ef";
+    context.fillRect(0, 0, width, height);
+    context.fillStyle = "#102735";
+    context.fillRect(0, 0, width, 118);
+    context.fillStyle = "#f7ead0";
+    context.font = 'bold 34px "Microsoft YaHei", sans-serif';
+    context.fillText("送拍结算明细", 50, 70);
+    context.fillStyle = "#314b57";
+    context.font = '20px "Microsoft YaHei", sans-serif';
+    context.fillText(`送拍人：${state.settlementScope.seller || "全部"}　时间：${state.settlementScope.from || "不限"} 至 ${state.settlementScope.to || "不限"}`, 50, 158);
+    const gross = sold.reduce((sum, record) => sum + Number(record.finalPrice || 0), 0);
+    const commission = sold.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0);
+    const payable = sold.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0);
+    context.font = 'bold 22px "Microsoft YaHei", sans-serif';
+    context.fillText(`${sold.length} 件　成交 ${currency.format(gross)}　佣金 ${currency.format(commission)}　应结 ${currency.format(payable)}`, 50, 204);
+
+    const columns = [
+      {label:"Lot",x:50,width:80},
+      {label:"拍品名称",x:130,width:370},
+      {label:"送拍人",x:500,width:180},
+      {label:"拍卖时间",x:680,width:210},
+      {label:"成交价",x:890,width:140},
+      {label:"佣金",x:1030,width:140},
+      {label:"应结金额",x:1170,width:160},
+      {label:"处理状态",x:1330,width:140},
+    ];
+    const tableTop = headerHeight;
+    context.fillStyle = "#e8e5dd";
+    context.fillRect(40, tableTop, width - 80, rowHeight);
+    context.fillStyle = "#52636c";
+    context.font = 'bold 16px "Microsoft YaHei", sans-serif';
+    columns.forEach((column) => context.fillText(column.label, column.x + 8, tableTop + 29));
+    const truncate = (text, max) => String(text || "").length > max ? `${String(text).slice(0, max - 1)}…` : String(text || "");
+    sold.forEach((record, index) => {
+      const y = tableTop + rowHeight * (index + 1);
+      context.fillStyle = index % 2 ? "#f1efe9" : "#fffefa";
+      context.fillRect(40, y, width - 80, rowHeight);
+      context.fillStyle = "#213944";
+      context.font = '15px "Microsoft YaHei", sans-serif';
+      const values = [record.lot,truncate(record.itemName,22),truncate(record.sellerWechat || "待补",10),truncate(record.auctionAt,16),currency.format(record.finalPrice || 0),currency.format(record.commissionAmount || 0),currency.format(record.settlementAmount || 0),truncate(record.returnDisposition || "已结账",8)];
+      values.forEach((value, columnIndex) => context.fillText(String(value), columns[columnIndex].x + 8, y + 29));
+    });
+    context.fillStyle = "#7b898f";
+    context.font = '14px "Microsoft YaHei", sans-serif';
+    context.fillText(`导出时间：${new Date().toLocaleString("zh-CN")} · 由送拍运营工作台生成`, 50, height - 28);
+    canvas.toBlob((blob) => {
+      if (!blob) return notify("图片生成失败", "error");
+      downloadBlob(blob, `送拍结算明细_${new Date().toISOString().slice(0,10)}.png`, "image/png");
+      audit("导出结算图片", `${sold.length} 条已结账记录`);
+      notify("结算明细图片已导出");
+    }, "image/png");
+  }
+
   $("#export-tracker").addEventListener("click", exportTracker);
   $("#export-mxiqi").addEventListener("click", exportMxiqi);
   $("#export-settlement").addEventListener("click", exportSettlement);
+  $("#export-settlement-image").addEventListener("click", exportSettlementImage);
 
-  if (localStorage.getItem(MIGRATION_KEY) !== "2") {
+  if (localStorage.getItem(MIGRATION_KEY) !== "3") {
+    const sampleOverdue = state.records.find((record) => record.id === "d102");
+    if (sampleOverdue && !sampleOverdue.paymentStatus) {
+      sampleOverdue.paymentStatus = "待付款";
+      sampleOverdue.paymentDueAt = "2026-07-21T20:00";
+      sampleOverdue.returnDisposition = "拖回/等待";
+    }
+    const samplePaid = state.records.find((record) => record.id === "d104");
+    if (samplePaid && !samplePaid.paymentStatus) samplePaid.paymentStatus = "已付款";
+    state.records.forEach((record) => ensurePaymentTracking(record));
     state.records.filter((record) => !record.settled).forEach((record) => recalculateRecord(record));
-    localStorage.setItem(MIGRATION_KEY, "2");
+    localStorage.setItem(MIGRATION_KEY, "3");
     save();
   }
 
