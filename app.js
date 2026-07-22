@@ -5,6 +5,7 @@
   const AUDIT_KEY = "mxiqi-public-demo-audit-v1";
   const SETTINGS_KEY = "mxiqi-public-demo-settings-v2";
   const CUSTOMERS_KEY = "mxiqi-public-demo-customers-v2";
+  const COLLECTOR_KEY = "mxiqi-public-demo-collector-v1";
   const MIGRATION_KEY = "mxiqi-public-demo-schema";
   const BACKUP_META_KEY = "mxiqi-public-demo-last-backup";
 
@@ -15,6 +16,15 @@
     birthdayCommissionValue: 5,
     birthdayLabel: "生日月优惠",
     sfThreshold: 1000,
+  };
+
+  const defaultCollector = {
+    intervalSeconds: 60,
+    idleMinutes: 10,
+    lastRunAt: "",
+    runCount: 0,
+    lastResult: "未执行采集",
+    adapter: "demo",
   };
 
   const seedCustomers = {
@@ -36,6 +46,7 @@
     audit: loadArray(AUDIT_KEY, []),
     settings: loadObject(SETTINGS_KEY, defaultSettings),
     customers: loadObject(CUSTOMERS_KEY, seedCustomers),
+    collector: loadObject(COLLECTOR_KEY, defaultCollector),
     stage: "all",
     query: "",
     filters: {seller:"",auction:"",outcome:"",disposition:""},
@@ -55,6 +66,7 @@
   const settingsForm = $("#settings-form");
   const backupDialog = $("#backup-dialog");
   let pendingBackupFile = null;
+  const collectorRuntime = {running:false,busy:false,nextRunAt:0,lastActivityAt:Date.now()};
 
   function loadArray(key, fallback) {
     try {
@@ -79,6 +91,7 @@
     localStorage.setItem(AUDIT_KEY, JSON.stringify(state.audit.slice(0, 200)));
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
     localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(state.customers));
+    localStorage.setItem(COLLECTOR_KEY, JSON.stringify(state.collector));
   }
 
   function uid() {
@@ -412,10 +425,103 @@
     settingsDialog.showModal();
   }
 
+  function collectorTime(value) {
+    return value ? new Date(value).toLocaleString("zh-CN", {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}) : "尚未刷新";
+  }
+
+  function collectorCountdown() {
+    if (!collectorRuntime.running || !collectorRuntime.nextRunAt) return "—";
+    const seconds = Math.max(0, Math.ceil((collectorRuntime.nextRunAt - Date.now()) / 1000));
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds % 60;
+    return minutes ? `${minutes}分${String(remainder).padStart(2, "0")}秒` : `${seconds} 秒`;
+  }
+
+  function renderCollectorPanel() {
+    const status = collectorRuntime.busy ? "正在执行一次刷新…" : collectorRuntime.running ? `自动采集中 · 每 ${state.collector.intervalSeconds} 秒一次` : "已停止，不会自动请求";
+    $("#collector-runtime-status").textContent = status;
+    $("#collector-last-run").textContent = collectorTime(state.collector.lastRunAt);
+    $("#collector-next-run").textContent = collectorCountdown();
+    $("#collector-run-count").textContent = `${Number(state.collector.runCount || 0)} 次`;
+    $("#collector-last-result").textContent = state.collector.lastResult || "未执行采集";
+    $("#collector-light").className = `collector-light ${collectorRuntime.busy ? "busy" : collectorRuntime.running ? "running" : ""}`;
+    $("#collector-start").disabled = collectorRuntime.running;
+    $("#collector-stop").disabled = !collectorRuntime.running;
+    $("#collector-refresh").disabled = collectorRuntime.busy;
+    $("#collector-interval").disabled = collectorRuntime.busy;
+    $("#collector-idle").disabled = collectorRuntime.busy;
+    $("#collector-sidebar-status").textContent = collectorRuntime.busy ? "正在刷新数据" : collectorRuntime.running ? `自动采集 ${collectorCountdown()}` : "采集已停止";
+    const sidebarDot = document.querySelector(".status-dot.collector");
+    sidebarDot?.classList.toggle("running", collectorRuntime.running || collectorRuntime.busy);
+  }
+
+  async function runCollector(trigger = "manual") {
+    if (collectorRuntime.busy) return;
+    collectorRuntime.busy = true;
+    renderCollectorPanel();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 550));
+      const checked = state.records.length;
+      const now = new Date().toISOString();
+      state.collector.lastRunAt = now;
+      state.collector.runCount = Number(state.collector.runCount || 0) + 1;
+      state.collector.lastResult = `演示刷新完成：检查 ${checked} 条本机拍品，真实数据源未连接，0 条变更`;
+      audit(trigger === "auto" ? "自动演示刷新" : "手动演示刷新", `检查 ${checked} 条，0 条变更`);
+      save();
+    } catch (error) {
+      state.collector.lastResult = `刷新失败：${error.message || "未知错误"}`;
+      save();
+    } finally {
+      collectorRuntime.busy = false;
+      if (collectorRuntime.running) collectorRuntime.nextRunAt = Date.now() + Number(state.collector.intervalSeconds) * 1000;
+      renderCollectorPanel();
+    }
+  }
+
+  function startCollector() {
+    state.collector.intervalSeconds = Number($("#collector-interval").value || 60);
+    state.collector.idleMinutes = Number($("#collector-idle").value || 10);
+    collectorRuntime.running = true;
+    collectorRuntime.lastActivityAt = Date.now();
+    collectorRuntime.nextRunAt = Date.now() + state.collector.intervalSeconds * 1000;
+    audit("开始自动采集", `每 ${state.collector.intervalSeconds} 秒；闲置 ${state.collector.idleMinutes} 分钟自动停止`);
+    save();
+    renderCollectorPanel();
+    notify(`自动采集已开启，${state.collector.intervalSeconds} 秒后首次刷新`, "info");
+  }
+
+  function stopCollector(reason = "手动停止", showNotice = true) {
+    if (!collectorRuntime.running && !collectorRuntime.busy) return;
+    collectorRuntime.running = false;
+    collectorRuntime.nextRunAt = 0;
+    audit("停止自动采集", reason);
+    save();
+    renderCollectorPanel();
+    if (showNotice) notify(reason, "info");
+  }
+
+  function collectorTick() {
+    if (!collectorRuntime.running) return renderCollectorPanel();
+    const idleMs = Number(state.collector.idleMinutes || 10) * 60 * 1000;
+    if (Date.now() - collectorRuntime.lastActivityAt >= idleMs) {
+      stopCollector(`已闲置 ${state.collector.idleMinutes} 分钟，自动采集已停止`);
+      return;
+    }
+    if (!collectorRuntime.busy && Date.now() >= collectorRuntime.nextRunAt) void runCollector("auto");
+    renderCollectorPanel();
+  }
+
+  function openCollector() {
+    $("#collector-interval").value = String(state.collector.intervalSeconds || 60);
+    $("#collector-idle").value = String(state.collector.idleMinutes || 10);
+    renderCollectorPanel();
+    $("#collector-dialog").showModal();
+  }
+
   function updateBackupSummary() {
     const lastBackup = localStorage.getItem(BACKUP_META_KEY);
     const customerCount = Object.values(state.customers).filter((customer) => Number(customer.birthdayMonth) > 0).length;
-    $("#backup-summary").textContent = `${state.records.length} 条拍品 · ${customerCount} 位客户已设生日月${lastBackup ? ` · 上次备份 ${new Date(lastBackup).toLocaleString("zh-CN")}` : " · 尚未下载过备份"}`;
+    $("#backup-summary").textContent = `${state.records.length} 条拍品 · ${customerCount} 位客户已设生日月 · 采集间隔 ${state.collector.intervalSeconds} 秒${lastBackup ? ` · 上次备份 ${new Date(lastBackup).toLocaleString("zh-CN")}` : " · 尚未下载过备份"}`;
   }
 
   function openBackup() {
@@ -439,7 +545,7 @@
 
   function downloadBackup() {
     const exportedAt = new Date().toISOString();
-    const backup = {schemaVersion:3,exportedAt,records:state.records,settings:state.settings,customers:state.customers,audit:state.audit};
+    const backup = {schemaVersion:4,exportedAt,records:state.records,settings:state.settings,customers:state.customers,collector:state.collector,audit:state.audit};
     downloadBlob(JSON.stringify(backup, null, 2), `送拍工作台_完整备份_${exportedAt.slice(0, 10)}.json`, "application/json;charset=utf-8");
     localStorage.setItem(BACKUP_META_KEY, exportedAt);
     audit("下载完整备份", `${state.records.length} 条拍品`);
@@ -455,7 +561,11 @@
       state.records = backup.records.map((record) => ({...record,id:record.id || uid()}));
       state.settings = backup.settings && typeof backup.settings === "object" ? {...defaultSettings, ...backup.settings} : clone(defaultSettings);
       state.customers = backup.customers && typeof backup.customers === "object" ? backup.customers : {};
+      state.collector = backup.collector && typeof backup.collector === "object" ? {...defaultCollector, ...backup.collector} : clone(defaultCollector);
       state.audit = Array.isArray(backup.audit) ? backup.audit : [];
+      collectorRuntime.running = false;
+      collectorRuntime.busy = false;
+      collectorRuntime.nextRunAt = 0;
       state.selected.clear();
       audit("恢复完整备份", `${state.records.length} 条拍品`);
       save();
@@ -658,6 +768,23 @@
     }
   });
 
+  $("#open-collector").addEventListener("click", openCollector);
+  $("#collector-refresh").addEventListener("click", () => { collectorRuntime.lastActivityAt = Date.now(); void runCollector("manual"); });
+  $("#collector-start").addEventListener("click", startCollector);
+  $("#collector-stop").addEventListener("click", () => stopCollector("已手动停止自动采集"));
+  [["#collector-interval","intervalSeconds"],["#collector-idle","idleMinutes"]].forEach(([selector, key]) => {
+    $(selector).addEventListener("change", (event) => {
+      state.collector[key] = Number(event.target.value);
+      if (collectorRuntime.running && key === "intervalSeconds") collectorRuntime.nextRunAt = Date.now() + state.collector.intervalSeconds * 1000;
+      collectorRuntime.lastActivityAt = Date.now();
+      save();
+      renderCollectorPanel();
+    });
+  });
+  ["pointerdown","keydown","touchstart"].forEach((eventName) => document.addEventListener(eventName, () => {
+    if (collectorRuntime.running) collectorRuntime.lastActivityAt = Date.now();
+  }, {passive:true}));
+
   $("#open-settings").addEventListener("click", openSettings);
   settingsForm.addEventListener("input", updateRulePreviews);
   settingsForm.addEventListener("submit", (event) => {
@@ -700,6 +827,10 @@
     state.audit = [];
     state.settings = clone(defaultSettings);
     state.customers = clone(seedCustomers);
+    state.collector = clone(defaultCollector);
+    collectorRuntime.running = false;
+    collectorRuntime.busy = false;
+    collectorRuntime.nextRunAt = 0;
     state.selected.clear();
     save();
     render();
@@ -927,6 +1058,8 @@
     save();
   }
 
+  window.setInterval(collectorTick, 1000);
+
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", async () => {
       try {
@@ -942,4 +1075,5 @@
   }
 
   render();
+  renderCollectorPanel();
 })();
