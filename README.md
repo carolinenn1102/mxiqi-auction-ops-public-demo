@@ -2,6 +2,8 @@
 
 独立静态体验站，不连接正式数据库或物流接口。
 
+体验地址：<https://carolinenn1102.github.io/mxiqi-auction-ops-public-demo/>
+
 - 数据保存在访问者浏览器的 `localStorage`
 - 支持两种 Excel 导入与导出
 - 物流流程仅生成带 `DEMO-` 前缀的模拟码
