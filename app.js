@@ -6,6 +6,7 @@
   const SETTINGS_KEY = "mxiqi-public-demo-settings-v2";
   const CUSTOMERS_KEY = "mxiqi-public-demo-customers-v2";
   const COLLECTOR_KEY = "mxiqi-public-demo-collector-v1";
+  const CONNECTION_KEY = "mxiqi-public-demo-connection-v1";
   const MIGRATION_KEY = "mxiqi-public-demo-schema";
   const BACKUP_META_KEY = "mxiqi-public-demo-last-backup";
 
@@ -25,6 +26,15 @@
     runCount: 0,
     lastResult: "未执行采集",
     adapter: "demo",
+  };
+
+  const defaultConnection = {
+    status: "disconnected",
+    mode: "demo",
+    method: "password",
+    connectedAt: "",
+    lastCheckedAt: "",
+    label: "",
   };
 
   const seedCustomers = {
@@ -47,6 +57,7 @@
     settings: loadObject(SETTINGS_KEY, defaultSettings),
     customers: loadObject(CUSTOMERS_KEY, seedCustomers),
     collector: loadObject(COLLECTOR_KEY, defaultCollector),
+    connection: loadObject(CONNECTION_KEY, defaultConnection),
     stage: "all",
     query: "",
     filters: {seller:"",auction:"",outcome:"",disposition:"",shipping:""},
@@ -68,6 +79,7 @@
   const backupDialog = $("#backup-dialog");
   const shippingDialog = $("#shipping-dialog");
   const shippingForm = $("#shipping-form");
+  const connectionDialog = $("#connection-dialog");
   let pendingBackupFile = null;
   const collectorRuntime = {running:false,busy:false,nextRunAt:0,lastActivityAt:Date.now()};
 
@@ -95,6 +107,7 @@
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
     localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(state.customers));
     localStorage.setItem(COLLECTOR_KEY, JSON.stringify(state.collector));
+    localStorage.setItem(CONNECTION_KEY, JSON.stringify(state.connection));
   }
 
   function uid() {
@@ -622,6 +635,45 @@
     settingsDialog.showModal();
   }
 
+  function connectionMethodLabel(value) {
+    return ({password:"手机号 + 密码",sms:"手机验证码",wechat:"微信登录",qq:"QQ 登录"})[value] || "未选择";
+  }
+
+  function isCollectorConnected() {
+    return state.connection.status === "demo_connected" || state.connection.status === "connected";
+  }
+
+  function connectionTime(value) {
+    return value ? new Date(value).toLocaleString("zh-CN", {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}) : "尚未检查";
+  }
+
+  function renderConnectionPanel() {
+    const connected = isCollectorConnected();
+    const isDemo = state.connection.status === "demo_connected";
+    $("#connection-runtime-status").textContent = connected ? isDemo ? "演示登录已连接（非真实账号）" : "麦稀奇会话已连接" : "未连接，采集已锁定";
+    $("#connection-runtime-detail").textContent = connected
+      ? isDemo ? "只用于体验登录门禁和采集调度；真实麦稀奇数据源仍未连接。" : "连接器可以在授权范围内执行采集。"
+      : "请先选择登录方式并在麦稀奇官方页面完成登录。";
+    $("#connection-runtime-type").textContent = connected ? `${connectionMethodLabel(state.connection.method)} · ${isDemo ? "演示" : "正式"}` : "无";
+    $("#connection-last-checked").textContent = connectionTime(state.connection.lastCheckedAt);
+    $("#connection-light").classList.toggle("connected", connected);
+    $("#connection-sidebar-status").textContent = connected ? isDemo ? "演示登录已连接" : "麦稀奇已登录" : "麦稀奇未登录";
+    document.querySelector(".status-dot.connection")?.classList.toggle("connected", connected);
+    $("#connection-status-text").textContent = connected ? isDemo ? "演示登录已连接" : "麦稀奇已登录" : "麦稀奇未登录";
+    $("#connection-status-button").classList.toggle("connected", connected);
+    $("#connection-demo-login").disabled = connected;
+    $("#connection-check").disabled = false;
+    $("#connection-logout").disabled = !connected;
+    $$("input[name='connectionMethod']").forEach((input) => { input.disabled = connected; });
+  }
+
+  function openConnection() {
+    const method = state.connection.method || "password";
+    $$("input[name='connectionMethod']").forEach((input) => { input.checked = input.value === method; });
+    renderConnectionPanel();
+    connectionDialog.showModal();
+  }
+
   function collectorTime(value) {
     return value ? new Date(value).toLocaleString("zh-CN", {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}) : "尚未刷新";
   }
@@ -635,24 +687,32 @@
   }
 
   function renderCollectorPanel() {
-    const status = collectorRuntime.busy ? "正在执行一次刷新…" : collectorRuntime.running ? `自动采集中 · 每 ${state.collector.intervalSeconds} 秒一次` : "已停止，不会自动请求";
+    const connected = isCollectorConnected();
+    const status = !connected ? "等待平台登录，采集已锁定" : collectorRuntime.busy ? "正在执行一次刷新…" : collectorRuntime.running ? `自动采集中 · 每 ${state.collector.intervalSeconds} 秒一次` : "已停止，不会自动请求";
     $("#collector-runtime-status").textContent = status;
     $("#collector-last-run").textContent = collectorTime(state.collector.lastRunAt);
     $("#collector-next-run").textContent = collectorCountdown();
     $("#collector-run-count").textContent = `${Number(state.collector.runCount || 0)} 次`;
     $("#collector-last-result").textContent = state.collector.lastResult || "未执行采集";
     $("#collector-light").className = `collector-light ${collectorRuntime.busy ? "busy" : collectorRuntime.running ? "running" : ""}`;
-    $("#collector-start").disabled = collectorRuntime.running;
+    $("#collector-start").disabled = collectorRuntime.running || !connected;
     $("#collector-stop").disabled = !collectorRuntime.running;
-    $("#collector-refresh").disabled = collectorRuntime.busy;
+    $("#collector-refresh").disabled = collectorRuntime.busy || !connected;
     $("#collector-interval").disabled = collectorRuntime.busy;
     $("#collector-idle").disabled = collectorRuntime.busy;
-    $("#collector-sidebar-status").textContent = collectorRuntime.busy ? "正在刷新数据" : collectorRuntime.running ? `自动采集 ${collectorCountdown()}` : "采集已停止";
+    $("#collector-sidebar-status").textContent = !connected ? "等待登录后采集" : collectorRuntime.busy ? "正在刷新数据" : collectorRuntime.running ? `自动采集 ${collectorCountdown()}` : "采集已停止";
     const sidebarDot = document.querySelector(".status-dot.collector");
     sidebarDot?.classList.toggle("running", collectorRuntime.running || collectorRuntime.busy);
   }
 
   async function runCollector(trigger = "manual") {
+    if (!isCollectorConnected()) {
+      state.collector.lastResult = "未执行：请先建立麦稀奇登录连接";
+      save();
+      renderCollectorPanel();
+      notify("请先在“平台登录”中建立连接", "error");
+      return false;
+    }
     if (collectorRuntime.busy) return;
     collectorRuntime.busy = true;
     renderCollectorPanel();
@@ -676,6 +736,13 @@
   }
 
   function startCollector() {
+    if (!isCollectorConnected()) {
+      state.collector.lastResult = "未执行：请先建立麦稀奇登录连接";
+      save();
+      renderCollectorPanel();
+      notify("请先在“平台登录”中建立连接", "error");
+      return false;
+    }
     state.collector.intervalSeconds = Number($("#collector-interval").value || 60);
     state.collector.idleMinutes = Number($("#collector-idle").value || 10);
     collectorRuntime.running = true;
@@ -711,6 +778,7 @@
   function openCollector() {
     $("#collector-interval").value = String(state.collector.intervalSeconds || 60);
     $("#collector-idle").value = String(state.collector.idleMinutes || 10);
+    renderConnectionPanel();
     renderCollectorPanel();
     $("#collector-dialog").showModal();
   }
@@ -719,7 +787,8 @@
     const lastBackup = localStorage.getItem(BACKUP_META_KEY);
     const customerCount = Object.values(state.customers).filter((customer) => Number(customer.birthdayMonth) > 0).length;
     const shippingPending = state.records.filter((record) => isShippingCandidate(record) && shippingStage(record) !== "completed").length;
-    $("#backup-summary").textContent = `${state.records.length} 条拍品 · ${customerCount} 位客户已设生日月 · ${shippingPending} 单待发货 · 采集间隔 ${state.collector.intervalSeconds} 秒${lastBackup ? ` · 上次备份 ${new Date(lastBackup).toLocaleString("zh-CN")}` : " · 尚未下载过备份"}`;
+    const connectionLabel = isCollectorConnected() ? state.connection.status === "demo_connected" ? "演示登录已连接" : "平台已连接" : "平台未登录";
+    $("#backup-summary").textContent = `${state.records.length} 条拍品 · ${customerCount} 位客户已设生日月 · ${shippingPending} 单待发货 · ${connectionLabel} · 采集间隔 ${state.collector.intervalSeconds} 秒${lastBackup ? ` · 上次备份 ${new Date(lastBackup).toLocaleString("zh-CN")}` : " · 尚未下载过备份"}`;
   }
 
   function openBackup() {
@@ -743,7 +812,7 @@
 
   function downloadBackup() {
     const exportedAt = new Date().toISOString();
-    const backup = {schemaVersion:5,exportedAt,records:state.records,settings:state.settings,customers:state.customers,collector:state.collector,audit:state.audit};
+    const backup = {schemaVersion:6,exportedAt,records:state.records,settings:state.settings,customers:state.customers,collector:state.collector,connection:state.connection,audit:state.audit};
     downloadBlob(JSON.stringify(backup, null, 2), `送拍工作台_完整备份_${exportedAt.slice(0, 10)}.json`, "application/json;charset=utf-8");
     localStorage.setItem(BACKUP_META_KEY, exportedAt);
     audit("下载完整备份", `${state.records.length} 条拍品`);
@@ -760,6 +829,8 @@
       state.settings = backup.settings && typeof backup.settings === "object" ? {...defaultSettings, ...backup.settings} : clone(defaultSettings);
       state.customers = backup.customers && typeof backup.customers === "object" ? backup.customers : {};
       state.collector = backup.collector && typeof backup.collector === "object" ? {...defaultCollector, ...backup.collector} : clone(defaultCollector);
+      const restoredConnection = backup.connection && typeof backup.connection === "object" ? {...defaultConnection, ...backup.connection} : clone(defaultConnection);
+      state.connection = restoredConnection.status === "demo_connected" ? restoredConnection : clone(defaultConnection);
       state.audit = Array.isArray(backup.audit) ? backup.audit : [];
       collectorRuntime.running = false;
       collectorRuntime.busy = false;
@@ -768,6 +839,8 @@
       audit("恢复完整备份", `${state.records.length} 条拍品`);
       save();
       render();
+      renderConnectionPanel();
+      renderCollectorPanel();
       backupDialog.close();
       notify(`已恢复 ${state.records.length} 条拍品及全部规则`);
     } catch (error) {
@@ -1067,6 +1140,47 @@
     }
   });
 
+  $("#open-connection").addEventListener("click", openConnection);
+  $("#connection-status-button").addEventListener("click", openConnection);
+  $("#collector-open-connection").addEventListener("click", () => {
+    $("#collector-dialog").close("connection");
+    openConnection();
+  });
+  $("#connection-demo-login").addEventListener("click", () => {
+    const method = document.querySelector("input[name='connectionMethod']:checked")?.value || "password";
+    const now = new Date().toISOString();
+    state.connection = {status:"demo_connected",mode:"demo",method,connectedAt:now,lastCheckedAt:now,label:"演示登录会话"};
+    audit("建立演示登录会话", `${connectionMethodLabel(method)} · 未连接真实账号`);
+    save();
+    renderConnectionPanel();
+    renderCollectorPanel();
+    notify("演示登录已建立，采集调度已解锁；真实数据源仍未连接", "info");
+  });
+  $("#connection-check").addEventListener("click", () => {
+    state.connection.lastCheckedAt = new Date().toISOString();
+    if (!isCollectorConnected()) {
+      audit("检查平台会话", "未发现正式连接器，公开网页无法读取麦稀奇跨站会话");
+      save();
+      renderConnectionPanel();
+      notify("公开体验版无法读取麦稀奇登录 Cookie；需要正式本地连接器", "error");
+      return;
+    }
+    audit("检查平台会话", state.connection.status === "demo_connected" ? "演示会话有效，真实数据源未连接" : "正式会话检查完成");
+    save();
+    renderConnectionPanel();
+    notify(state.connection.status === "demo_connected" ? "演示会话有效；这不代表麦稀奇真实账号已登录" : "平台会话有效");
+  });
+  $("#connection-logout").addEventListener("click", () => {
+    if (!isCollectorConnected()) return;
+    if (collectorRuntime.running || collectorRuntime.busy) stopCollector("登录连接已退出，自动采集同步停止", false);
+    state.connection = clone(defaultConnection);
+    audit("退出平台连接", "采集已锁定");
+    save();
+    renderConnectionPanel();
+    renderCollectorPanel();
+    notify("已退出连接，采集功能重新锁定", "info");
+  });
+
   $("#open-collector").addEventListener("click", openCollector);
   $("#collector-refresh").addEventListener("click", () => { collectorRuntime.lastActivityAt = Date.now(); void runCollector("manual"); });
   $("#collector-start").addEventListener("click", startCollector);
@@ -1127,13 +1241,16 @@
     state.settings = clone(defaultSettings);
     state.customers = clone(seedCustomers);
     state.collector = clone(defaultCollector);
+    state.connection = clone(defaultConnection);
     collectorRuntime.running = false;
     collectorRuntime.busy = false;
     collectorRuntime.nextRunAt = 0;
     state.selected.clear();
     save();
     render();
-    notify("已恢复示例数据和默认佣金规则");
+    renderConnectionPanel();
+    renderCollectorPanel();
+    notify("已恢复示例数据、默认规则和未登录状态");
   });
 
   function norm(value) {
@@ -1342,7 +1459,7 @@
   $("#export-settlement").addEventListener("click", exportSettlement);
   $("#export-settlement-image").addEventListener("click", exportSettlementImage);
 
-  if (localStorage.getItem(MIGRATION_KEY) !== "4") {
+  if (localStorage.getItem(MIGRATION_KEY) !== "5") {
     const sampleOverdue = state.records.find((record) => record.id === "d102");
     if (sampleOverdue && !sampleOverdue.paymentStatus) {
       sampleOverdue.paymentStatus = "待付款";
@@ -1369,7 +1486,9 @@
       record.mxiqiShippingStatus ||= "";
     });
     state.records.filter((record) => !record.settled).forEach((record) => recalculateRecord(record));
-    localStorage.setItem(MIGRATION_KEY, "4");
+    state.connection = {...defaultConnection, ...state.connection};
+    if (!["disconnected","demo_connected"].includes(state.connection.status)) state.connection = clone(defaultConnection);
+    localStorage.setItem(MIGRATION_KEY, "5");
     save();
   }
 
@@ -1390,5 +1509,6 @@
   }
 
   render();
+  renderConnectionPanel();
   renderCollectorPanel();
 })();

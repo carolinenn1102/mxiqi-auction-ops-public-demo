@@ -19,6 +19,7 @@
         <button class="nav-item" data-stage="pickup"><span>⌁</span> 物流取件</button>
         <button class="nav-item" data-stage="shipping"><span>↗</span> 发货复核</button>
         <button class="nav-item" data-stage="settlement"><span>¥</span> 结算复核</button>
+        <button class="nav-item" id="open-connection"><span>⇄</span> 平台登录</button>
         <button class="nav-item" id="open-collector"><span>↻</span> 采集控制</button>
         <button class="nav-item" id="open-settings"><span>⚙</span> 佣金规则</button>
         <button class="nav-item" id="open-backup"><span>⇩</span> 本地备份</button>
@@ -27,6 +28,7 @@
       <div class="sidebar-status">
         <div class="status-line"><span class="status-dot"></span> 公开体验环境</div>
         <div class="status-line"><span class="status-dot simulation"></span> 物流模拟模式</div>
+        <div class="status-line"><span class="status-dot connection"></span> <span id="connection-sidebar-status">麦稀奇未登录</span></div>
         <div class="status-line"><span class="status-dot collector"></span> <span id="collector-sidebar-status">采集已停止</span></div>
         <div class="status-line"><span class="status-dot offline"></span> <span id="offline-status">正在准备离线访问</span></div>
         <button id="reset-demo">恢复示例数据 →</button>
@@ -38,6 +40,7 @@
       <header class="topbar">
         <div><p class="eyebrow">拍品 · 物流 · 结算</p><h1>送拍全流程工作台</h1></div>
         <div class="top-actions">
+          <button class="btn connection-button" id="connection-status-button"><span class="connection-button-dot"></span><span id="connection-status-text">麦稀奇未登录</span></button>
           <button class="btn secondary" id="open-import">导入数据</button>
           <button class="btn secondary" id="export-tracker">导出送拍跟踪表</button>
           <button class="btn secondary" id="export-mxiqi">导出麦稀奇模板</button>
@@ -166,9 +169,27 @@
     <form method="dialog"><header><h2>最近操作记录</h2><button class="icon-close" type="button" value="cancel" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body"><p class="modal-copy">仅记录当前浏览器中的体验操作。</p><div class="audit-list" id="audit-list"></div></div><footer><button class="btn primary" value="default">完成</button></footer></form>
   </dialog>
 
+  <dialog id="connection-dialog" class="dialog wide-dialog">
+    <form method="dialog"><header><div><p class="eyebrow">采集前置条件</p><h2>麦稀奇平台登录与连接</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
+      <div class="connection-security"><b>登录必须在麦稀奇官方页面完成</b><p>公开体验版不会要求、读取或保存真实密码、短信验证码、Cookie 和接口密钥。正式版由受控后端或本地连接器复用已授权会话。</p></div>
+      <section class="connection-runtime-card">
+        <div class="connection-runtime-head"><span class="connection-light" id="connection-light"></span><div><small>当前连接状态</small><b id="connection-runtime-status">未连接，采集已锁定</b><p id="connection-runtime-detail">请先选择登录方式并在官方页面完成登录。</p></div></div>
+        <div class="connection-runtime-meta"><div><small>连接类型</small><b id="connection-runtime-type">无</b></div><div><small>最近检查</small><b id="connection-last-checked">尚未检查</b></div><div><small>会话保存</small><b>仅保存状态，不保存凭证</b></div></div>
+      </section>
+      <section class="rule-card"><h3>麦稀奇当前登录方式</h3><div class="login-method-grid">
+        <label><input type="radio" name="connectionMethod" value="password" checked><span><b>手机号 + 密码</b><small>官方账号密码登录</small></span></label>
+        <label><input type="radio" name="connectionMethod" value="sms"><span><b>手机验证码</b><small>验证码由用户本人填写</small></span></label>
+        <label><input type="radio" name="connectionMethod" value="wechat"><span><b>微信登录</b><small>在官方页面扫码确认</small></span></label>
+        <label><input type="radio" name="connectionMethod" value="qq"><span><b>QQ 登录</b><small>在官方页面完成授权</small></span></label>
+      </div><p class="rule-preview">访问组织页面但没有会话时，会跳转到麦稀奇登录页。登录成功后，正式连接器才可以读取授权范围内的数据。</p></section>
+      <section class="connector-boundary"><div><span>正式连接器</span><b>尚未接入</b><p>需要客户账号、允许的访问方式及人工处理验证码。公开网页受跨站限制，不能直接读取麦稀奇登录 Cookie。</p></div><span class="chip neutral">等待联调</span></section>
+      <div class="connection-actions"><a class="btn secondary" href="https://www.mxiqi.com/user.login" target="_blank" rel="noopener noreferrer">打开麦稀奇官方登录页</a><button class="btn primary" type="button" id="connection-demo-login">建立演示登录会话</button><button class="btn secondary" type="button" id="connection-check">检查当前会话</button><button class="btn secondary danger" type="button" id="connection-logout">退出连接</button></div>
+    </div><footer><button class="btn primary" value="default">完成</button></footer></form>
+  </dialog>
+
   <dialog id="collector-dialog" class="dialog wide-dialog">
     <form method="dialog"><header><div><p class="eyebrow">按需刷新</p><h2>麦稀奇数据采集控制</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
-      <div class="collector-notice"><b>当前为演示采集器</b><p>这里只验证刷新调度，不会登录或抓取麦稀奇真实数据。接通真实采集前需要平台允许的登录方式、字段范围和验证方案。</p></div>
+      <div class="collector-notice"><b>当前为演示采集器</b><p>必须先建立登录连接才能运行。演示会话只解锁调度体验，不会登录或抓取麦稀奇真实数据。</p><button class="text-button" type="button" id="collector-open-connection">查看登录状态 →</button></div>
       <section class="collector-runtime-card">
         <div class="collector-state"><span class="collector-light" id="collector-light"></span><div><small>当前状态</small><b id="collector-runtime-status">已停止，不会自动请求</b></div></div>
         <div class="collector-runtime-grid"><div><small>上次刷新</small><b id="collector-last-run">尚未刷新</b></div><div><small>下次刷新</small><b id="collector-next-run">—</b></div><div><small>本机累计</small><b id="collector-run-count">0 次</b></div></div>
@@ -227,7 +248,7 @@
   <dialog id="backup-dialog" class="dialog">
     <form method="dialog"><header><div><p class="eyebrow">本地数据保障</p><h2>完整备份与恢复</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
       <div class="backup-status"><span class="backup-shield">✓</span><div><b>当前数据自动保存在这台设备</b><p id="backup-summary">正在读取数据状态…</p></div></div>
-      <p class="modal-copy">备份文件包含拍品、地址审核、发货回填、佣金规则、客户生日月份和操作记录。即使更换网址，也可以用备份文件恢复。清理浏览器数据前务必先下载备份。</p>
+      <p class="modal-copy">备份文件包含拍品、地址审核、发货回填、平台连接状态、佣金规则、客户生日月份和操作记录，但不包含密码、验证码或 Cookie。清理浏览器数据前务必先下载备份。</p>
       <div class="backup-actions"><button class="btn primary" type="button" id="download-backup">下载完整备份</button><label class="btn secondary file-button">选择备份文件<input id="backup-file" type="file" accept="application/json,.json"></label><button class="btn secondary" type="button" id="restore-backup" disabled>恢复所选备份</button></div>
       <p class="backup-file-name" id="backup-file-name">尚未选择备份文件</p>
     </div><footer><button class="btn primary" value="default">完成</button></footer></form>
