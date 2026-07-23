@@ -33,11 +33,11 @@
   };
 
   const seedRecords = [
-    {id:"d101",lot:101,itemName:"PMG 67EPQ 2024年龙年纪念钞",sellerWechat:"林先生·上海",contactedAt:"2026-07-12",projectName:"纪念钞专场",coinBoxId:"HX-DEMO-101",trackingNumber:"SF-DEMO-101-0001",auctionAt:"2026-07-28 20:00",auctionHouse:"夏日钱币精选",lotLabel:"A场 / Lot 101",received:"是",finalOutcome:"成交",finalPrice:1680,commissionAmount:84,settlementAmount:1596,profit:84,promotion:"生日月优惠 · 5%",startPrice:1000,primaryCategory:"钞票",secondaryCategory:"纪念钞",settled:false,carrier:"sf",carrierOverride:"",logisticsStatus:"ready",pickupCode:"DEMO-SF-101-A7K2",logisticsNote:"公开体验模拟码"},
+    {id:"d101",lot:101,itemName:"PMG 67EPQ 2024年龙年纪念钞",sellerWechat:"林先生·上海",contactedAt:"2026-07-12",projectName:"纪念钞专场",coinBoxId:"HX-DEMO-101",trackingNumber:"SF-DEMO-101-0001",auctionAt:"2026-07-28 20:00",auctionHouse:"夏日钱币精选",lotLabel:"A场 / Lot 101",received:"是",finalOutcome:"成交",finalPrice:1680,paymentStatus:"已付款",commissionAmount:84,settlementAmount:1596,profit:84,promotion:"生日月优惠 · 5%",startPrice:1000,primaryCategory:"钞票",secondaryCategory:"纪念钞",settled:false,carrier:"sf",carrierOverride:"",logisticsStatus:"ready",pickupCode:"DEMO-SF-101-A7K2",logisticsNote:"公开体验模拟码",recipientRaw:"演示收件人 13800000001 上海市浦东新区世纪大道100号",recipientName:"演示收件人",recipientPhone:"13800000001",addressProvince:"上海市",addressCity:"上海市",addressDistrict:"浦东新区",addressDetail:"世纪大道100号",addressStatus:"pending_review",shippingCarrier:"sf",mxiqiShippingStatus:""},
     {id:"d102",lot:102,itemName:"袁世凯像民国三年壹圆 银元",sellerWechat:"藏泉阁",contactedAt:"2026-07-13",projectName:"机制币专场",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-28 20:00",auctionHouse:"夏日钱币精选",lotLabel:"A场 / Lot 102",received:"是",finalOutcome:"成交",finalPrice:860,paymentStatus:"待付款",paymentDueAt:"2026-07-21T20:00",returnDisposition:"拖回/等待",commissionAmount:68.8,settlementAmount:791.2,profit:68.8,promotion:"普通佣金 · 8%",startPrice:500,primaryCategory:"硬币",secondaryCategory:"银元",settled:false,carrier:"cainiao",carrierOverride:"",logisticsStatus:"simulation_ready",pickupCode:"DEMO-CN-102-P8Q2",logisticsNote:"公开体验模拟码"},
     {id:"d103",lot:103,itemName:"T46 庚申年猴票 四方联",sellerWechat:"邮缘收藏",contactedAt:"2026-07-14",projectName:"经典邮票专场",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-29 19:30",auctionHouse:"邮品臻选",lotLabel:"B场 / Lot 103",received:"待确认",finalOutcome:"待拍",finalPrice:0,commissionAmount:0,settlementAmount:0,profit:0,startPrice:2200,primaryCategory:"邮票",secondaryCategory:"JT邮票",settled:false,carrier:"pending",carrierOverride:"",logisticsStatus:"not_requested",pickupCode:"",logisticsNote:""},
-    {id:"d104",lot:104,itemName:"清乾隆青花缠枝莲纹盘",sellerWechat:"周女士",contactedAt:"2026-07-15",projectName:"古器物专场",coinBoxId:"",trackingNumber:"SF-DEMO-104-0001",auctionAt:"2026-07-30 20:00",auctionHouse:"东方古美术",lotLabel:"C场 / Lot 104",received:"是",finalOutcome:"成交",finalPrice:3260,paymentStatus:"已付款",commissionAmount:260.8,settlementAmount:2999.2,profit:260.8,promotion:"普通佣金 · 8%",startPrice:1800,primaryCategory:"陶瓷",secondaryCategory:"旧藏瓷器",settled:true,settledAt:"2026-07-20T08:30:00.000Z",settlementNote:"已转账",carrier:"sf",carrierOverride:"",logisticsStatus:"simulation_ready",pickupCode:"DEMO-SF-104-K3M8",logisticsNote:"公开体验模拟码"},
-    {id:"d105",lot:105,itemName:"1980年中国奥委会纪念铜章",sellerWechat:"",contactedAt:"",projectName:"章牌杂项",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-30 20:00",auctionHouse:"东方古美术",lotLabel:"C场 / Lot 105",received:"否",finalOutcome:"成交",finalPrice:420,commissionAmount:33.6,settlementAmount:386.4,profit:33.6,promotion:"普通佣金 · 8%",startPrice:100,primaryCategory:"章牌",secondaryCategory:"纪念章",settled:false,carrier:"cainiao",carrierOverride:"",logisticsStatus:"not_requested",pickupCode:"",logisticsNote:""},
+    {id:"d104",lot:104,itemName:"清乾隆青花缠枝莲纹盘",sellerWechat:"周女士",contactedAt:"2026-07-15",projectName:"古器物专场",coinBoxId:"",trackingNumber:"SF-DEMO-104-0001",auctionAt:"2026-07-30 20:00",auctionHouse:"东方古美术",lotLabel:"C场 / Lot 104",received:"是",finalOutcome:"成交",finalPrice:3260,paymentStatus:"已付款",commissionAmount:260.8,settlementAmount:2999.2,profit:260.8,promotion:"普通佣金 · 8%",startPrice:1800,primaryCategory:"陶瓷",secondaryCategory:"旧藏瓷器",settled:true,settledAt:"2026-07-20T08:30:00.000Z",settlementNote:"已转账",carrier:"sf",carrierOverride:"",logisticsStatus:"simulation_ready",pickupCode:"DEMO-SF-104-K3M8",logisticsNote:"公开体验模拟码",recipientRaw:"体验客户 13800000004 北京市朝阳区建国路88号",recipientName:"体验客户",recipientPhone:"13800000004",addressProvince:"北京市",addressCity:"北京市",addressDistrict:"朝阳区",addressDetail:"建国路88号",addressStatus:"reviewed",shippingCarrier:"sf",outboundTrackingNumber:"SF-DEMO-OUT-104-0001",mxiqiShippingStatus:"filled",addressReviewedAt:"2026-07-20T09:00:00.000Z",shippingOrderedAt:"2026-07-20T09:05:00.000Z",mxiqiFilledAt:"2026-07-20T09:08:00.000Z"},
+    {id:"d105",lot:105,itemName:"1980年中国奥委会纪念铜章",sellerWechat:"",contactedAt:"",projectName:"章牌杂项",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-30 20:00",auctionHouse:"东方古美术",lotLabel:"C场 / Lot 105",received:"否",finalOutcome:"成交",finalPrice:420,paymentStatus:"已付款",commissionAmount:33.6,settlementAmount:386.4,profit:33.6,promotion:"普通佣金 · 8%",startPrice:100,primaryCategory:"章牌",secondaryCategory:"纪念章",settled:false,carrier:"cainiao",carrierOverride:"",logisticsStatus:"not_requested",pickupCode:"",logisticsNote:"",recipientRaw:"小王 13800000005 南山科技园科苑路",addressStatus:"needs_correction",shippingCarrier:"cainiao",mxiqiShippingStatus:""},
   ];
 
   const clone = (value) => typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value));
@@ -49,10 +49,11 @@
     collector: loadObject(COLLECTOR_KEY, defaultCollector),
     stage: "all",
     query: "",
-    filters: {seller:"",auction:"",outcome:"",disposition:""},
+    filters: {seller:"",auction:"",outcome:"",disposition:"",shipping:""},
     settlementScope: {seller:"",from:"",to:""},
     selected: new Set(),
     editingId: "",
+    shippingId: "",
   };
 
   const $ = (selector) => document.querySelector(selector);
@@ -65,6 +66,8 @@
   const settingsDialog = $("#settings-dialog");
   const settingsForm = $("#settings-form");
   const backupDialog = $("#backup-dialog");
+  const shippingDialog = $("#shipping-dialog");
+  const shippingForm = $("#shipping-form");
   let pendingBackupFile = null;
   const collectorRuntime = {running:false,busy:false,nextRunAt:0,lastActivityAt:Date.now()};
 
@@ -191,6 +194,86 @@
     return ({not_requested:"未申请",simulation_ready:"模拟流程",ready:"人工码已就绪",failed:"申请失败"})[value] || "未申请";
   }
 
+  function isShippingCandidate(record) {
+    return record.finalOutcome === "成交" && Number(record.finalPrice) > 0 && record.paymentStatus === "已付款" && record.returnDisposition !== "拖回/发回";
+  }
+
+  function shippingStage(record) {
+    if (!isShippingCandidate(record)) return "not_ready";
+    if (record.mxiqiShippingStatus === "filled") return "completed";
+    if (record.outboundTrackingNumber) return "mxiqi_pending";
+    if (record.addressStatus === "reviewed") return "ready_to_order";
+    return "needs_address";
+  }
+
+  function shippingStageLabel(record) {
+    return ({not_ready:"付款后进入发货",needs_address:"地址待二审",ready_to_order:"地址已审，可下单",mxiqi_pending:"单号待回填",completed:"发货已完成"})[shippingStage(record)];
+  }
+
+  function addressStatusLabel(value) {
+    return ({pending_review:"拆分完成，待二审",needs_correction:"识别不完整，需修正",reviewed:"地址已二审"})[value] || "待录入地址";
+  }
+
+  function addressValuesFromForm() {
+    const data = new FormData(shippingForm);
+    return {
+      recipientRaw:String(data.get("recipientRaw") || "").trim(),
+      recipientName:String(data.get("recipientName") || "").trim(),
+      recipientPhone:String(data.get("recipientPhone") || "").replace(/\D/g, ""),
+      addressProvince:String(data.get("addressProvince") || "").trim(),
+      addressCity:String(data.get("addressCity") || "").trim(),
+      addressDistrict:String(data.get("addressDistrict") || "").trim(),
+      addressDetail:String(data.get("addressDetail") || "").trim(),
+      shippingCarrier:String(data.get("shippingCarrier") || "cainiao"),
+    };
+  }
+
+  function addressMissing(values) {
+    return [
+      !values.recipientName && "收件人",
+      !/^1[3-9]\d{9}$/.test(values.recipientPhone) && "11 位手机号",
+      !values.addressProvince && "省",
+      !values.addressCity && "市",
+      !values.addressDistrict && "区/县",
+      !values.addressDetail && "详细地址",
+    ].filter(Boolean);
+  }
+
+  function splitRecipientAddress(raw) {
+    const source = String(raw || "").replace(/[，,；;|｜\n\r\t]+/g, " ").replace(/\s+/g, " ").trim();
+    const phoneMatch = source.match(/(?:\+?86[ -]?)?(1[3-9]\d{9})/);
+    const recipientPhone = phoneMatch?.[1] || "";
+    const withoutPhone = source.replace(phoneMatch?.[0] || "", " ").replace(/\s+/g, " ").trim();
+    const provincePattern = /(北京市|上海市|天津市|重庆市|河北省|山西省|辽宁省|吉林省|黑龙江省|江苏省|浙江省|安徽省|福建省|江西省|山东省|河南省|湖北省|湖南省|广东省|海南省|四川省|贵州省|云南省|陕西省|甘肃省|青海省|台湾省|内蒙古自治区|广西壮族自治区|西藏自治区|宁夏回族自治区|新疆维吾尔自治区|香港特别行政区|澳门特别行政区)/;
+    const provinceMatch = withoutPhone.match(provincePattern);
+    let recipientName = "";
+    let addressProvince = "";
+    let addressCity = "";
+    let addressDistrict = "";
+    let addressDetail = "";
+    if (provinceMatch) {
+      recipientName = withoutPhone.slice(0, provinceMatch.index).trim().replace(/\s+/g, "");
+      addressProvince = provinceMatch[1];
+      let remaining = withoutPhone.slice(Number(provinceMatch.index) + addressProvince.length).replace(/\s+/g, "");
+      if (["北京市","上海市","天津市","重庆市"].includes(addressProvince)) addressCity = addressProvince;
+      else {
+        const cityMatch = remaining.match(/^(.{2,10}?(?:市|自治州|地区|盟))/);
+        addressCity = cityMatch?.[1] || "";
+        remaining = remaining.slice(addressCity.length);
+      }
+      const districtMatch = remaining.match(/^(.{1,10}?(?:新区|区|县|旗))/);
+      addressDistrict = districtMatch?.[1] || "";
+      addressDetail = remaining.slice(addressDistrict.length).trim();
+    } else {
+      const tokens = withoutPhone.split(" ").filter(Boolean);
+      if (tokens[0] && tokens[0].length <= 8) recipientName = tokens.shift();
+      addressDetail = tokens.join("");
+    }
+    const values = {recipientRaw:source,recipientName,recipientPhone,addressProvince,addressCity,addressDistrict,addressDetail};
+    const gaps = addressMissing(values);
+    return {...values,addressStatus:gaps.length ? "needs_correction" : "pending_review",addressWarnings:gaps};
+  }
+
   function soldRecords() {
     return state.records.filter((record) => Number(record.finalPrice) > 0 && record.finalOutcome !== "拖回");
   }
@@ -232,14 +315,16 @@
   function visibleRecords() {
     const query = state.query.trim().toLowerCase();
     return state.records.filter((record) => {
-      const search = !query || [record.lot,record.itemName,record.sellerWechat,record.auctionHouse,record.trackingNumber,record.pickupCode,record.promotion].join(" ").toLowerCase().includes(query);
+      const search = !query || [record.lot,record.itemName,record.sellerWechat,record.auctionHouse,record.trackingNumber,record.pickupCode,record.outboundTrackingNumber,record.recipientName,record.recipientPhone,record.recipientRaw,record.promotion].join(" ").toLowerCase().includes(query);
       const filters = (!state.filters.seller || record.sellerWechat === state.filters.seller)
         && (!state.filters.auction || record.auctionHouse === state.filters.auction)
         && (!state.filters.outcome || record.finalOutcome === state.filters.outcome)
-        && (!state.filters.disposition || (state.filters.disposition === "overdue" ? isPaymentOverdue(record) : record.returnDisposition === state.filters.disposition));
+        && (!state.filters.disposition || (state.filters.disposition === "overdue" ? isPaymentOverdue(record) : record.returnDisposition === state.filters.disposition))
+        && (!state.filters.shipping || shippingStage(record) === state.filters.shipping);
       const stage = state.stage === "all"
         || (state.stage === "missing" && missing(record).length)
         || (state.stage === "pickup" && Number(record.finalPrice) > 0 && !record.pickupCode)
+        || (state.stage === "shipping" && isShippingCandidate(record))
         || (state.stage === "settlement" && settlementRecords().some((item) => item.id === record.id));
       return search && filters && stage;
     });
@@ -256,6 +341,9 @@
     const auctions = [...new Set(state.records.map((record) => record.auctionHouse).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-CN"));
     setDynamicOptions("#filter-seller", sellers, "全部", state.filters.seller);
     setDynamicOptions("#filter-auction", auctions, "全部", state.filters.auction);
+    $("#filter-outcome").value = state.filters.outcome;
+    $("#filter-disposition").value = state.filters.disposition;
+    $("#filter-shipping").value = state.filters.shipping;
     setDynamicOptions("#settlement-seller", sellers, "全部送拍人", state.settlementScope.seller);
     $("#settlement-from").value = state.settlementScope.from;
     $("#settlement-to").value = state.settlementScope.to;
@@ -300,12 +388,33 @@
     renderSellerSummary();
   }
 
+  function nextShippingRecord() {
+    const priority = {mxiqi_pending:0,ready_to_order:1,needs_address:2};
+    return state.records.filter((record) => isShippingCandidate(record) && shippingStage(record) !== "completed").sort((a, b) => (priority[shippingStage(a)] ?? 9) - (priority[shippingStage(b)] ?? 9) || Number(a.lot) - Number(b.lot))[0];
+  }
+
+  function renderShippingSummary() {
+    const candidates = state.records.filter(isShippingCandidate);
+    const counts = {needs_address:0,ready_to_order:0,mxiqi_pending:0,completed:0};
+    candidates.forEach((record) => { const stage = shippingStage(record); if (counts[stage] !== undefined) counts[stage] += 1; });
+    const pending = candidates.length - counts.completed;
+    $("#shipping-summary").hidden = state.stage !== "shipping";
+    $("#shipping-pending-count").textContent = pending;
+    $("#shipping-address-count").textContent = counts.needs_address;
+    $("#shipping-order-count").textContent = counts.ready_to_order;
+    $("#shipping-fill-count").textContent = counts.mxiqi_pending;
+    $("#shipping-complete-count").textContent = counts.completed;
+    $("#shipping-next").disabled = !pending;
+    $("#shipping-next").textContent = pending ? "处理下一单" : "本批发货已完成";
+  }
+
   function render() {
     const records = state.records;
     renderFilterOptions();
     $("#metric-total").textContent = records.length;
     $("#metric-missing").textContent = records.filter((item) => missing(item).length).length;
     $("#metric-pickup").textContent = records.filter((item) => Number(item.finalPrice) > 0 && !item.pickupCode).length;
+    $("#metric-shipping").textContent = records.filter((item) => isShippingCandidate(item) && shippingStage(item) !== "completed").length;
     $("#metric-settlement").textContent = records.filter((item) => Number(item.finalPrice) > 0 && !item.settled).length;
     $("#metric-amount").textContent = `成交额 ${currency.format(records.reduce((sum, item) => sum + Number(item.finalPrice || 0), 0))}`;
     $$('[data-stage]').forEach((button) => button.classList.toggle("selected", button.dataset.stage === state.stage));
@@ -321,6 +430,7 @@
     $("#batch-settle").hidden = !selectedCount || state.stage !== "settlement";
     $("#clear-selection").hidden = !selectedCount;
     $("#selection-count").textContent = `已选 ${selectedCount} 条`;
+    renderShippingSummary();
     renderSettlementSummary();
 
     const body = $("#records-body");
@@ -335,6 +445,10 @@
       const settlementDetail = Number(record.finalPrice) > 0
         ? `${record.settlementAmount ? currency.format(record.settlementAmount) : "待计算"} · 佣金 ${currency.format(record.commissionAmount || 0)}`
         : "";
+      const deliveryCode = record.outboundTrackingNumber || record.pickupCode || "";
+      const deliveryHint = record.outboundTrackingNumber
+        ? `${record.mxiqiShippingStatus === "filled" ? "麦稀奇已回填" : "出库单号待回填"} · ${addressStatusLabel(record.addressStatus)}`
+        : record.pickupCode ? "模拟取件码，不可寄件" : shippingStageLabel(record);
       return `<tr class="${state.selected.has(record.id) ? "selected-row" : ""}">
         <td class="select-column"><input type="checkbox" data-select="${esc(record.id)}" ${state.selected.has(record.id) ? "checked" : ""} ${Number(record.finalPrice) <= 0 ? "disabled" : ""}></td>
         <td><div class="lot-cell"><span>${record.lot}</span><div><b>${esc(record.itemName)}</b><small>${esc(record.projectName || record.primaryCategory || "未设置项目")}</small></div></div></td>
@@ -342,10 +456,10 @@
         <td><b>${esc(record.auctionHouse || "待设置拍场")}</b><small>${esc(record.auctionAt || "待设置时间")}</small></td>
         <td><b class="money">${Number(record.finalPrice) > 0 ? currency.format(record.finalPrice) : "待拍"}</b><small>${esc(record.finalOutcome || "状态待确认")}${record.paymentStatus ? ` · ${esc(record.paymentStatus)}` : ""}</small>${isPaymentOverdue(record) ? '<span class="chip overdue">超时未付款</span>' : ""}${record.returnDisposition ? `<span class="chip disposition">${esc(record.returnDisposition)}</span>` : ""}</td>
         <td>${gaps.length ? `<button class="chip warning" data-action="edit" data-id="${esc(record.id)}" title="${esc(gaps.join("、"))}">缺 ${gaps.length} 项</button>` : '<span class="chip success">完整</span>'}</td>
-        <td><span class="carrier ${carrier}">${carrierLabel(carrier)}</span><small>${logisticsLabel(record.logisticsStatus)}</small></td>
-        <td>${record.pickupCode ? `<code>${esc(record.pickupCode)}</code>` : '<span class="muted">—</span>'}<small>${esc(record.pickupCode ? "仅模拟，不可寄件" : record.logisticsNote || "")}</small></td>
+        <td><span class="carrier ${carrier}">${carrierLabel(carrier)}</span><small>${logisticsLabel(record.logisticsStatus)} · ${esc(shippingStageLabel(record))}</small></td>
+        <td>${deliveryCode ? `<code>${esc(deliveryCode)}</code>` : '<span class="muted">—</span>'}<small>${esc(deliveryHint)}</small></td>
         <td>${record.settled ? '<span class="chip success">已结账</span>' : '<span class="chip neutral">未结账</span>'}<small>${esc(settlementDetail)}</small><small>${esc(record.promotion || "")}</small></td>
-        <td><div class="row-actions"><button data-action="edit" data-id="${esc(record.id)}">编辑</button><button data-action="pickup" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>取件</button><button data-action="manual" data-id="${esc(record.id)}">录码</button><button data-action="toggle-settle" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>${record.settled ? "撤销" : "结账"}</button></div></td>
+        <td><div class="row-actions"><button data-action="edit" data-id="${esc(record.id)}">编辑</button><button data-action="pickup" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>取件</button><button data-action="manual" data-id="${esc(record.id)}">录码</button><button data-action="shipping" data-id="${esc(record.id)}" ${!isShippingCandidate(record) ? "disabled" : ""}>发货</button><button data-action="toggle-settle" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>${record.settled ? "撤销" : "结账"}</button></div></td>
       </tr>`;
     }).join("");
   }
@@ -380,6 +494,89 @@
     });
     previewCommission();
     editDialog.showModal();
+  }
+
+  function setShippingStep(selector, status) {
+    const step = $(selector);
+    step.classList.remove("done", "current");
+    if (status) step.classList.add(status);
+  }
+
+  function populateShippingForm(record) {
+    ["recipientRaw","recipientName","recipientPhone","addressProvince","addressCity","addressDistrict","addressDetail","outboundTrackingNumber"].forEach((name) => {
+      shippingForm.elements[name].value = record[name] || "";
+    });
+    shippingForm.elements.shippingCarrier.value = record.shippingCarrier || record.carrier || carrierFor(record);
+  }
+
+  function renderShippingDialog(record, populate = true) {
+    if (populate) populateShippingForm(record);
+    const stage = shippingStage(record);
+    const addressGaps = addressMissing(record);
+    const hasWaybill = Boolean(record.outboundTrackingNumber);
+    const filled = record.mxiqiShippingStatus === "filled";
+    $("#shipping-title").textContent = `Lot ${record.lot} · ${record.itemName}`;
+    $("#shipping-payment-state").textContent = isShippingCandidate(record) ? "已付款，可进入发货" : "未付款，不可发货";
+    $("#shipping-address-state").textContent = addressStatusLabel(record.addressStatus);
+    $("#shipping-order-state").textContent = hasWaybill ? `${carrierLabel(record.shippingCarrier)} · 已生成单号` : record.addressStatus === "reviewed" ? "可以下单" : "等待地址二审";
+    $("#shipping-fill-state").textContent = filled ? "已确认回填" : hasWaybill ? "复制后待确认" : "尚无单号";
+    $("#shipping-address-badge").textContent = addressStatusLabel(record.addressStatus);
+    setShippingStep("#shipping-step-payment", isShippingCandidate(record) ? "done" : "current");
+    setShippingStep("#shipping-step-address", record.addressStatus === "reviewed" ? "done" : isShippingCandidate(record) ? "current" : "");
+    setShippingStep("#shipping-step-order", hasWaybill ? "done" : record.addressStatus === "reviewed" ? "current" : "");
+    setShippingStep("#shipping-step-fill", filled ? "done" : hasWaybill ? "current" : "");
+
+    const message = $("#shipping-address-message");
+    message.className = "address-review-message";
+    if (record.addressStatus === "reviewed") {
+      message.classList.add("success");
+      message.textContent = "二次审核已通过。下单前仍请对照麦稀奇原始订单确认一次。";
+    } else if (addressGaps.length) {
+      message.classList.add("error");
+      message.textContent = `还需补充或修正：${addressGaps.join("、")}。`;
+    } else {
+      message.textContent = "拆分结果只作参考，请逐项核对后点击“确认二次审核无误”。";
+    }
+
+    const addressLocked = hasWaybill;
+    ["recipientRaw","recipientName","recipientPhone","addressProvince","addressCity","addressDistrict","addressDetail"].forEach((name) => { shippingForm.elements[name].disabled = addressLocked; });
+    shippingForm.elements.shippingCarrier.disabled = hasWaybill;
+    $("#shipping-split-address").disabled = addressLocked;
+    $("#shipping-review-address").disabled = addressLocked;
+    $("#shipping-create-order").disabled = !isShippingCandidate(record) || record.addressStatus !== "reviewed" || hasWaybill;
+    $("#shipping-copy-waybill").disabled = !hasWaybill;
+    $("#shipping-confirm-fill").disabled = !hasWaybill || filled;
+    $("#shipping-confirm-fill").textContent = filled ? "已确认回填" : "模拟确认已回填";
+    $("#shipping-order-note").textContent = filled
+      ? `演示单号 ${record.outboundTrackingNumber} 已标记为麦稀奇回填完成。`
+      : hasWaybill
+        ? `已生成演示单号 ${record.outboundTrackingNumber}。请复制到麦稀奇，粘贴后再确认回填。`
+        : !isShippingCandidate(record)
+          ? "订单尚未确认付款，暂不能进入发货。"
+          : record.addressStatus !== "reviewed"
+            ? "未完成地址二审，暂不能下单。"
+            : `地址已二审，可模拟向${carrierLabel(shippingForm.elements.shippingCarrier.value)}下单。`;
+  }
+
+  function openShipping(id) {
+    const record = state.records.find((item) => item.id === id);
+    if (!record) return;
+    state.shippingId = id;
+    shippingForm.reset();
+    renderShippingDialog(record);
+    shippingDialog.showModal();
+  }
+
+  async function copyText(value) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(value);
+    const area = document.createElement("textarea");
+    area.value = value;
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.append(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
   }
 
   function requestPickup(record) {
@@ -521,7 +718,8 @@
   function updateBackupSummary() {
     const lastBackup = localStorage.getItem(BACKUP_META_KEY);
     const customerCount = Object.values(state.customers).filter((customer) => Number(customer.birthdayMonth) > 0).length;
-    $("#backup-summary").textContent = `${state.records.length} 条拍品 · ${customerCount} 位客户已设生日月 · 采集间隔 ${state.collector.intervalSeconds} 秒${lastBackup ? ` · 上次备份 ${new Date(lastBackup).toLocaleString("zh-CN")}` : " · 尚未下载过备份"}`;
+    const shippingPending = state.records.filter((record) => isShippingCandidate(record) && shippingStage(record) !== "completed").length;
+    $("#backup-summary").textContent = `${state.records.length} 条拍品 · ${customerCount} 位客户已设生日月 · ${shippingPending} 单待发货 · 采集间隔 ${state.collector.intervalSeconds} 秒${lastBackup ? ` · 上次备份 ${new Date(lastBackup).toLocaleString("zh-CN")}` : " · 尚未下载过备份"}`;
   }
 
   function openBackup() {
@@ -545,7 +743,7 @@
 
   function downloadBackup() {
     const exportedAt = new Date().toISOString();
-    const backup = {schemaVersion:4,exportedAt,records:state.records,settings:state.settings,customers:state.customers,collector:state.collector,audit:state.audit};
+    const backup = {schemaVersion:5,exportedAt,records:state.records,settings:state.settings,customers:state.customers,collector:state.collector,audit:state.audit};
     downloadBlob(JSON.stringify(backup, null, 2), `送拍工作台_完整备份_${exportedAt.slice(0, 10)}.json`, "application/json;charset=utf-8");
     localStorage.setItem(BACKUP_META_KEY, exportedAt);
     audit("下载完整备份", `${state.records.length} 条拍品`);
@@ -584,11 +782,11 @@
   }));
   $$('[data-close-dialog]').forEach((button) => button.addEventListener("click", () => button.closest("dialog")?.close("cancel")));
   $("#search").addEventListener("input", (event) => { state.query = event.target.value; render(); });
-  [["#filter-seller","seller"],["#filter-auction","auction"],["#filter-outcome","outcome"],["#filter-disposition","disposition"]].forEach(([selector, key]) => {
+  [["#filter-seller","seller"],["#filter-auction","auction"],["#filter-outcome","outcome"],["#filter-disposition","disposition"],["#filter-shipping","shipping"]].forEach(([selector, key]) => {
     $(selector).addEventListener("change", (event) => { state.filters[key] = event.target.value; state.selected.clear(); render(); });
   });
   $("#clear-filters").addEventListener("click", () => {
-    state.filters = {seller:"",auction:"",outcome:"",disposition:""};
+    state.filters = {seller:"",auction:"",outcome:"",disposition:"",shipping:""};
     state.query = "";
     $("#search").value = "";
     state.selected.clear();
@@ -618,6 +816,7 @@
     const record = state.records.find((item) => item.id === button.dataset.id);
     if (!record) return;
     if (button.dataset.action === "edit") openEditor(record.id);
+    if (button.dataset.action === "shipping") openShipping(record.id);
     if (button.dataset.action === "pickup") {
       requestPickup(record);
       save();
@@ -681,6 +880,106 @@
     save();
     render();
     notify(`已将 ${count} 条记录标记为已结账`);
+  });
+
+  $("#shipping-next").addEventListener("click", () => {
+    const record = nextShippingRecord();
+    if (record) openShipping(record.id);
+  });
+
+  $("#shipping-split-address").addEventListener("click", () => {
+    const record = state.records.find((item) => item.id === state.shippingId);
+    if (!record || record.outboundTrackingNumber) return;
+    const parsed = splitRecipientAddress(shippingForm.elements.recipientRaw.value);
+    Object.assign(record, parsed, {shippingCarrier:shippingForm.elements.shippingCarrier.value || carrierFor(record),addressReviewedAt:""});
+    audit("拆分收件地址", `Lot ${record.lot} · ${parsed.addressWarnings.length ? `缺 ${parsed.addressWarnings.join("、")}` : "待二次审核"}`);
+    renderShippingDialog(record);
+    render();
+    notify(parsed.addressWarnings.length ? "地址只完成了部分拆分，请修正红色提示项" : "地址已拆分，请逐项核对并完成二次审核", parsed.addressWarnings.length ? "info" : "success");
+  });
+
+  $("#shipping-review-address").addEventListener("click", () => {
+    const record = state.records.find((item) => item.id === state.shippingId);
+    if (!record || record.outboundTrackingNumber) return;
+    const values = addressValuesFromForm();
+    const gaps = addressMissing(values);
+    Object.assign(record, values, {addressStatus:gaps.length ? "needs_correction" : "reviewed",addressWarnings:gaps,addressReviewedAt:gaps.length ? "" : new Date().toISOString()});
+    if (gaps.length) {
+      audit("地址二审未通过", `Lot ${record.lot} · 缺 ${gaps.join("、")}`);
+      renderShippingDialog(record, false);
+      render();
+      notify(`还不能下单，请补充：${gaps.join("、")}`, "error");
+      return;
+    }
+    audit("确认地址二审", `Lot ${record.lot} · ${record.addressProvince}${record.addressCity}${record.addressDistrict}`);
+    renderShippingDialog(record, false);
+    render();
+    notify("地址二次审核已通过，可以进入物流下单");
+  });
+
+  shippingForm.addEventListener("input", (event) => {
+    const record = state.records.find((item) => item.id === state.shippingId);
+    if (!record || record.outboundTrackingNumber || !event.target.name) return;
+    if (["recipientRaw","recipientName","recipientPhone","addressProvince","addressCity","addressDistrict","addressDetail"].includes(event.target.name)) {
+      record[event.target.name] = event.target.name === "recipientPhone" ? event.target.value.replace(/\D/g, "") : event.target.value;
+      if (record.addressStatus === "reviewed") {
+        record.addressStatus = "pending_review";
+        record.addressReviewedAt = "";
+      }
+      save();
+      renderShippingDialog(record, false);
+      render();
+    }
+  });
+
+  shippingForm.elements.shippingCarrier.addEventListener("change", (event) => {
+    const record = state.records.find((item) => item.id === state.shippingId);
+    if (!record || record.outboundTrackingNumber) return;
+    record.shippingCarrier = event.target.value;
+    save();
+    renderShippingDialog(record, false);
+    render();
+  });
+
+  $("#shipping-create-order").addEventListener("click", () => {
+    const record = state.records.find((item) => item.id === state.shippingId);
+    if (!record || !isShippingCandidate(record) || record.addressStatus !== "reviewed" || record.outboundTrackingNumber) return;
+    record.shippingCarrier = shippingForm.elements.shippingCarrier.value || carrierFor(record);
+    const suffix = Math.random().toString(36).slice(2, 7).toUpperCase();
+    record.outboundTrackingNumber = `${record.shippingCarrier === "sf" ? "SF" : "CN"}-DEMO-OUT-${record.lot}-${suffix}`;
+    record.shippingOrderedAt = new Date().toISOString();
+    record.mxiqiShippingStatus = "pending";
+    audit("模拟物流下单", `Lot ${record.lot} · ${carrierLabel(record.shippingCarrier)} · ${record.outboundTrackingNumber}`);
+    renderShippingDialog(record);
+    render();
+    notify("已生成明确标识的演示运单号，不会提交真实物流平台", "info");
+  });
+
+  $("#shipping-copy-waybill").addEventListener("click", async () => {
+    const record = state.records.find((item) => item.id === state.shippingId);
+    if (!record?.outboundTrackingNumber) return;
+    try {
+      await copyText(record.outboundTrackingNumber);
+      record.waybillCopiedAt = new Date().toISOString();
+      record.mxiqiShippingStatus = record.mxiqiShippingStatus === "filled" ? "filled" : "pending";
+      audit("复制出库运单号", `Lot ${record.lot} · 待粘贴到麦稀奇`);
+      renderShippingDialog(record, false);
+      render();
+      notify("运单号已复制；粘贴到麦稀奇后，请回来确认已回填");
+    } catch {
+      notify("浏览器未允许复制，请手动选择运单号", "error");
+    }
+  });
+
+  $("#shipping-confirm-fill").addEventListener("click", () => {
+    const record = state.records.find((item) => item.id === state.shippingId);
+    if (!record?.outboundTrackingNumber || record.mxiqiShippingStatus === "filled") return;
+    record.mxiqiShippingStatus = "filled";
+    record.mxiqiFilledAt = new Date().toISOString();
+    audit("模拟确认麦稀奇回填", `Lot ${record.lot} · ${record.outboundTrackingNumber}`);
+    renderShippingDialog(record, false);
+    render();
+    notify("该订单已标记为回填完成；公开版没有向麦稀奇实际提交");
   });
 
   $("#new-record").addEventListener("click", () => openEditor());
@@ -1043,7 +1342,7 @@
   $("#export-settlement").addEventListener("click", exportSettlement);
   $("#export-settlement-image").addEventListener("click", exportSettlementImage);
 
-  if (localStorage.getItem(MIGRATION_KEY) !== "3") {
+  if (localStorage.getItem(MIGRATION_KEY) !== "4") {
     const sampleOverdue = state.records.find((record) => record.id === "d102");
     if (sampleOverdue && !sampleOverdue.paymentStatus) {
       sampleOverdue.paymentStatus = "待付款";
@@ -1052,9 +1351,25 @@
     }
     const samplePaid = state.records.find((record) => record.id === "d104");
     if (samplePaid && !samplePaid.paymentStatus) samplePaid.paymentStatus = "已付款";
+    const sampleAddressReview = state.records.find((record) => record.id === "d101");
+    if (sampleAddressReview && !sampleAddressReview.recipientRaw) Object.assign(sampleAddressReview, {
+      paymentStatus:"已付款",recipientRaw:"演示收件人 13800000001 上海市浦东新区世纪大道100号",recipientName:"演示收件人",recipientPhone:"13800000001",addressProvince:"上海市",addressCity:"上海市",addressDistrict:"浦东新区",addressDetail:"世纪大道100号",addressStatus:"pending_review",shippingCarrier:"sf",mxiqiShippingStatus:"",
+    });
+    if (samplePaid && !samplePaid.outboundTrackingNumber) Object.assign(samplePaid, {
+      recipientRaw:"体验客户 13800000004 北京市朝阳区建国路88号",recipientName:"体验客户",recipientPhone:"13800000004",addressProvince:"北京市",addressCity:"北京市",addressDistrict:"朝阳区",addressDetail:"建国路88号",addressStatus:"reviewed",shippingCarrier:"sf",outboundTrackingNumber:"SF-DEMO-OUT-104-0001",mxiqiShippingStatus:"filled",addressReviewedAt:"2026-07-20T09:00:00.000Z",shippingOrderedAt:"2026-07-20T09:05:00.000Z",mxiqiFilledAt:"2026-07-20T09:08:00.000Z",
+    });
+    const sampleAddressProblem = state.records.find((record) => record.id === "d105");
+    if (sampleAddressProblem && !sampleAddressProblem.recipientRaw) Object.assign(sampleAddressProblem, {
+      paymentStatus:"已付款",recipientRaw:"小王 13800000005 南山科技园科苑路",addressStatus:"needs_correction",shippingCarrier:"cainiao",mxiqiShippingStatus:"",
+    });
     state.records.forEach((record) => ensurePaymentTracking(record));
+    state.records.forEach((record) => {
+      record.shippingCarrier ||= record.carrier || carrierFor(record);
+      record.addressStatus ||= "";
+      record.mxiqiShippingStatus ||= "";
+    });
     state.records.filter((record) => !record.settled).forEach((record) => recalculateRecord(record));
-    localStorage.setItem(MIGRATION_KEY, "3");
+    localStorage.setItem(MIGRATION_KEY, "4");
     save();
   }
 

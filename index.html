@@ -17,6 +17,7 @@
       <nav class="nav-list" aria-label="主导航">
         <button class="nav-item active" data-stage="all"><span>▦</span> 拍品工作台</button>
         <button class="nav-item" data-stage="pickup"><span>⌁</span> 物流取件</button>
+        <button class="nav-item" data-stage="shipping"><span>↗</span> 发货复核</button>
         <button class="nav-item" data-stage="settlement"><span>¥</span> 结算复核</button>
         <button class="nav-item" id="open-collector"><span>↻</span> 采集控制</button>
         <button class="nav-item" id="open-settings"><span>⚙</span> 佣金规则</button>
@@ -48,7 +49,19 @@
         <button class="metric-card selected" data-stage="all"><span class="metric-label">全部拍品</span><strong id="metric-total">0</strong><small>当前浏览器</small></button>
         <button class="metric-card warning" data-stage="missing"><span class="metric-label">待补资料</span><strong id="metric-missing">0</strong><small>影响表格完整性</small></button>
         <button class="metric-card accent" data-stage="pickup"><span class="metric-label">待取件</span><strong id="metric-pickup">0</strong><small>成交后待处理</small></button>
+        <button class="metric-card shipping" data-stage="shipping"><span class="metric-label">待发货</span><strong id="metric-shipping">0</strong><small>已付款待回填单号</small></button>
         <button class="metric-card" data-stage="settlement"><span class="metric-label">待结算</span><strong id="metric-settlement">0</strong><small id="metric-amount">成交额 ¥0</small></button>
+      </section>
+
+      <section class="shipping-summary" id="shipping-summary" hidden>
+        <div class="shipping-summary-copy"><p class="eyebrow">出库发货提醒</p><h2><span id="shipping-pending-count">0</span> 单待处理</h2><p>先修正并二审收件地址，再下物流订单；产生运单号后复制到麦稀奇并确认回填。</p></div>
+        <div class="shipping-step-grid">
+          <div><small>地址待二审</small><b id="shipping-address-count">0</b></div>
+          <div><small>可以下单</small><b id="shipping-order-count">0</b></div>
+          <div><small>单号待回填</small><b id="shipping-fill-count">0</b></div>
+          <div><small>已完成</small><b id="shipping-complete-count">0</b></div>
+        </div>
+        <button class="btn primary" id="shipping-next">处理下一单</button>
       </section>
 
       <section class="settlement-summary" id="settlement-summary" hidden>
@@ -87,11 +100,12 @@
           <label><span>拍场</span><select id="filter-auction"><option value="">全部</option></select></label>
           <label><span>成交状态</span><select id="filter-outcome"><option value="">全部</option><option>待拍</option><option>成交</option><option>流拍</option><option>拖回</option></select></label>
           <label><span>付款/拖回</span><select id="filter-disposition"><option value="">全部</option><option value="overdue">超时未付款</option><option value="拖回/发回">拖回/发回</option><option value="拖回/再拍">拖回/再拍</option><option value="拖回/等待">拖回/等待</option><option value="拆单">拆单</option></select></label>
+          <label><span>发货状态</span><select id="filter-shipping"><option value="">全部</option><option value="needs_address">地址待二审</option><option value="ready_to_order">可以下单</option><option value="mxiqi_pending">单号待回填</option><option value="completed">已完成</option></select></label>
           <button class="text-button" id="clear-filters">清除筛选</button>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选可处理记录"></th><th>Lot / 拍品</th><th>送拍人</th><th>拍场与时间</th><th>最终价格</th><th>资料</th><th>物流</th><th>取件码</th><th>结算</th><th>操作</th></tr></thead>
+            <thead><tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选可处理记录"></th><th>Lot / 拍品</th><th>送拍人</th><th>拍场与时间</th><th>最终价格</th><th>资料</th><th>物流</th><th>取件码 / 运单</th><th>结算</th><th>操作</th></tr></thead>
             <tbody id="records-body"></tbody>
           </table>
         </div>
@@ -168,6 +182,39 @@
     </div><footer><button class="btn primary" value="default">完成</button></footer></form>
   </dialog>
 
+  <dialog id="shipping-dialog" class="dialog wide-dialog">
+    <form method="dialog" id="shipping-form"><header><div><p class="eyebrow">地址二审 · 出库发货</p><h2 id="shipping-title">发货复核</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
+      <div class="collector-notice"><b>当前为演示发货流程</b><p>不会向菜鸟、顺丰或麦稀奇提交真实数据。演示运单号带有 DEMO 标识；正式接通前可用“复制单号”完成人工粘贴。</p></div>
+      <ol class="shipping-flow" aria-label="发货流程">
+        <li id="shipping-step-payment"><span>1</span><div><b>确认已付款</b><small id="shipping-payment-state">待确认</small></div></li>
+        <li id="shipping-step-address"><span>2</span><div><b>地址拆分与二审</b><small id="shipping-address-state">待录入</small></div></li>
+        <li id="shipping-step-order"><span>3</span><div><b>物流下单</b><small id="shipping-order-state">尚未下单</small></div></li>
+        <li id="shipping-step-fill"><span>4</span><div><b>麦稀奇回填</b><small id="shipping-fill-state">尚无单号</small></div></li>
+      </ol>
+      <section class="form-section shipping-section"><div class="form-section-heading"><h3>收件地址拆分</h3><p id="shipping-address-badge">待录入</p></div>
+        <label class="field wide"><span>原始地址文字</span><textarea class="import-area shipping-address-raw" name="recipientRaw" placeholder="示例：张三 13800000000 上海市浦东新区世纪大道100号"></textarea></label>
+        <div class="shipping-inline-actions"><button class="btn secondary" type="button" id="shipping-split-address">智能拆分并进入二审</button><span>识别不出或识别错误时，可以直接修改下方各项。</span></div>
+        <div class="form-grid shipping-address-grid">
+          <label class="field"><span>收件人</span><input name="recipientName" autocomplete="off"></label>
+          <label class="field"><span>手机号</span><input name="recipientPhone" inputmode="numeric" autocomplete="off"></label>
+          <label class="field"><span>省</span><input name="addressProvince" autocomplete="off"></label>
+          <label class="field"><span>市</span><input name="addressCity" autocomplete="off"></label>
+          <label class="field"><span>区 / 县</span><input name="addressDistrict" autocomplete="off"></label>
+          <label class="field wide"><span>详细地址</span><input name="addressDetail" autocomplete="off"></label>
+        </div>
+        <div class="address-review-message" id="shipping-address-message">请录入或粘贴收件地址。</div>
+        <button class="btn primary" type="button" id="shipping-review-address">确认二次审核无误</button>
+      </section>
+      <section class="form-section shipping-section"><div class="form-section-heading"><h3>物流下单与单号回填</h3><p>地址二审通过后开放</p></div><div class="form-grid">
+        <label class="field"><span>承运商</span><select name="shippingCarrier"><option value="cainiao">菜鸟</option><option value="sf">顺丰</option></select></label>
+        <label class="field"><span>出库运单号</span><input name="outboundTrackingNumber" readonly placeholder="下单后生成"></label>
+      </div>
+      <p class="rule-preview" id="shipping-order-note">未完成地址二审，暂不能下单。</p>
+      <div class="shipping-inline-actions shipping-order-actions"><button class="btn secondary" type="button" id="shipping-create-order">模拟物流下单</button><button class="btn secondary" type="button" id="shipping-copy-waybill">复制单号，去麦稀奇粘贴</button><button class="btn primary" type="button" id="shipping-confirm-fill">模拟确认已回填</button></div>
+      </section>
+    </div><footer><button class="btn primary" value="default">完成</button></footer></form>
+  </dialog>
+
   <dialog id="settings-dialog" class="dialog">
     <form method="dialog" id="settings-form"><header><div><p class="eyebrow">计算规则</p><h2>佣金与生日月优惠</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
       <p class="modal-copy">默认规则应用于普通成交；客户生日月份与拍卖月份一致时，整个月自动改用生日月规则。已结账记录不会被重算。</p>
@@ -180,7 +227,7 @@
   <dialog id="backup-dialog" class="dialog">
     <form method="dialog"><header><div><p class="eyebrow">本地数据保障</p><h2>完整备份与恢复</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
       <div class="backup-status"><span class="backup-shield">✓</span><div><b>当前数据自动保存在这台设备</b><p id="backup-summary">正在读取数据状态…</p></div></div>
-      <p class="modal-copy">备份文件包含拍品、佣金规则、客户生日月份和操作记录。即使更换网址，也可以用备份文件恢复。清理浏览器数据前务必先下载备份。</p>
+      <p class="modal-copy">备份文件包含拍品、地址审核、发货回填、佣金规则、客户生日月份和操作记录。即使更换网址，也可以用备份文件恢复。清理浏览器数据前务必先下载备份。</p>
       <div class="backup-actions"><button class="btn primary" type="button" id="download-backup">下载完整备份</button><label class="btn secondary file-button">选择备份文件<input id="backup-file" type="file" accept="application/json,.json"></label><button class="btn secondary" type="button" id="restore-backup" disabled>恢复所选备份</button></div>
       <p class="backup-file-name" id="backup-file-name">尚未选择备份文件</p>
     </div><footer><button class="btn primary" value="default">完成</button></footer></form>
