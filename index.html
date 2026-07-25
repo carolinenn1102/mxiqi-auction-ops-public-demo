@@ -192,7 +192,7 @@
 
   <dialog id="connection-dialog" class="dialog wide-dialog">
     <form method="dialog"><header><div><p class="eyebrow">采集前置条件</p><h2>麦稀奇平台登录与连接</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
-      <div class="connection-security"><b>登录必须在麦稀奇官方页面完成</b><p>公开体验版不会要求、读取或保存真实密码、短信验证码、Cookie 和接口密钥。正式版由受控后端或本地连接器复用已授权会话。</p></div>
+      <div class="connection-security"><b>登录只在麦稀奇官方页面完成</b><p>本地采集助手复用当前 Chrome 中已经登录的官方会话；工作台和扩展都不会保存账号、密码、短信验证码或 Cookie。</p></div>
       <section class="connection-runtime-card">
         <div class="connection-runtime-head"><span class="connection-light" id="connection-light"></span><div><small>当前连接状态</small><b id="connection-runtime-status">未连接，采集已锁定</b><p id="connection-runtime-detail">请先选择登录方式并在官方页面完成登录。</p></div></div>
         <div class="connection-runtime-meta"><div><small>连接类型</small><b id="connection-runtime-type">无</b></div><div><small>最近检查</small><b id="connection-last-checked">尚未检查</b></div><div><small>会话保存</small><b>仅保存状态，不保存凭证</b></div></div>
@@ -203,23 +203,25 @@
         <label><input type="radio" name="connectionMethod" value="wechat"><span><b>微信登录</b><small>在官方页面扫码确认</small></span></label>
         <label><input type="radio" name="connectionMethod" value="qq"><span><b>QQ 登录</b><small>在官方页面完成授权</small></span></label>
       </div><p class="rule-preview">访问组织页面但没有会话时，会跳转到麦稀奇登录页。登录成功后，正式连接器才可以读取授权范围内的数据。</p></section>
-      <section class="connector-boundary"><div><span>正式连接器</span><b>尚未接入</b><p>需要客户账号、允许的访问方式及人工处理验证码。公开网页受跨站限制，不能直接读取麦稀奇登录 Cookie。</p></div><span class="chip neutral">等待联调</span></section>
-      <div class="connection-actions"><a class="btn secondary" href="https://www.mxiqi.com/user.login" target="_blank" rel="noopener noreferrer">打开麦稀奇官方登录页</a><button class="btn primary" type="button" id="connection-demo-login">建立演示登录会话</button><button class="btn secondary" type="button" id="connection-check">检查当前会话</button><button class="btn secondary danger" type="button" id="connection-logout">退出连接</button></div>
+      <section class="connector-boundary"><div><span>本地采集助手</span><b id="connector-boundary-status">等待检查</b><p id="connector-boundary-detail">安装一次后，公开工作台即可安全读取当前 Chrome 已授权的麦稀奇订单。</p></div><span class="chip neutral" id="connector-boundary-chip">未检查</span></section>
+      <ol class="connector-steps"><li><span>1</span><p><b>下载并安装采集助手</b><small>解压后在 Chrome 扩展管理页选择“加载已解压的扩展程序”。</small></p></li><li><span>2</span><p><b>在麦稀奇官网登录</b><small>手机号和密码只输入到麦稀奇官方页面。</small></p></li><li><span>3</span><p><b>回到这里检查登录</b><small>成功后即可立即刷新待发货或最近订单。</small></p></li></ol>
+      <div class="connection-actions"><a class="btn secondary" href="mxiqi-connector.zip" download>下载采集助手</a><button class="btn secondary" type="button" id="connection-open-login">打开麦稀奇官方登录</button><button class="btn primary" type="button" id="connection-check">检查真实登录</button><button class="btn secondary" type="button" id="connection-demo-login">仅体验演示</button><button class="btn secondary danger" type="button" id="connection-logout">断开网页连接</button></div>
     </div><footer><button class="btn primary" value="default">完成</button></footer></form>
   </dialog>
 
   <dialog id="collector-dialog" class="dialog wide-dialog">
     <form method="dialog"><header><div><p class="eyebrow">按需刷新</p><h2>麦稀奇数据采集控制</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
-      <div class="collector-notice"><b>当前为演示采集器</b><p>必须先建立登录连接才能运行。演示会话只解锁调度体验，不会登录或抓取麦稀奇真实数据。</p><button class="text-button" type="button" id="collector-open-connection">查看登录状态 →</button></div>
+      <div class="collector-notice"><b>支持真实订单同步与演示模式</b><p>真实连接时由本地采集助手读取麦稀奇订单；演示连接仍只检查本机示例数据。</p><button class="text-button" type="button" id="collector-open-connection">查看登录状态 →</button></div>
       <section class="collector-runtime-card">
         <div class="collector-state"><span class="collector-light" id="collector-light"></span><div><small>当前状态</small><b id="collector-runtime-status">已停止，不会自动请求</b></div></div>
         <div class="collector-runtime-grid"><div><small>上次刷新</small><b id="collector-last-run">尚未刷新</b></div><div><small>下次刷新</small><b id="collector-next-run">—</b></div><div><small>本机累计</small><b id="collector-run-count">0 次</b></div></div>
         <p class="collector-result" id="collector-last-result">未执行采集</p>
       </section>
-      <section class="rule-card"><h3>自动采集设置</h3><div class="form-grid">
+      <section class="rule-card"><h3>采集范围与自动刷新</h3><div class="form-grid">
+        <label class="field"><span>订单范围</span><select id="collector-scope"><option value="waitexpress">待发货订单（最快）</option><option value="recent">最近 5 页订单</option></select></label>
         <label class="field"><span>刷新间隔</span><select id="collector-interval"><option value="15">15 秒（短时快速）</option><option value="30">30 秒</option><option value="60">60 秒（推荐）</option><option value="300">5 分钟</option></select></label>
         <label class="field"><span>多久不操作自动停止</span><select id="collector-idle"><option value="5">5 分钟</option><option value="10">10 分钟（推荐）</option><option value="30">30 分钟</option><option value="60">60 分钟</option></select></label>
-      </div><p class="rule-preview">页面关闭后不会继续运行；自动模式下，鼠标、键盘或触摸长时间没有操作也会停止。</p></section>
+      </div><p class="rule-preview">自动刷新使用“待发货”时速度最快；最近订单最多读取 5 页。页面关闭或长时间不操作后会自动停止。</p></section>
       <div class="collector-actions"><button class="btn primary" type="button" id="collector-refresh">立即刷新一次</button><button class="btn secondary" type="button" id="collector-start">开始自动采集</button><button class="btn secondary danger" type="button" id="collector-stop" disabled>停止自动采集</button></div>
     </div><footer><button class="btn primary" value="default">完成</button></footer></form>
   </dialog>
@@ -278,6 +280,7 @@
   <div id="toast" class="toast" role="status" hidden></div>
   <script src="vendor/exceljs.min.js"></script>
   <script src="matching-core.js"></script>
+  <script src="connector-bridge.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

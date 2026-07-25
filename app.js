@@ -23,6 +23,7 @@
   const defaultCollector = {
     intervalSeconds: 60,
     idleMinutes: 10,
+    scope: "waitexpress",
     lastRunAt: "",
     runCount: 0,
     lastResult: "未执行采集",
@@ -35,6 +36,8 @@
     method: "password",
     connectedAt: "",
     lastCheckedAt: "",
+    connectorCheckedAt: "",
+    connectorInstalled: false,
     label: "",
   };
 
@@ -610,24 +613,34 @@
   }
 
   function upsert(records) {
+    let added = 0;
+    let updated = 0;
+    let accepted = 0;
     for (const incoming of records) {
       const lot = Number(incoming.lot);
       if (!Number.isInteger(lot) || lot <= 0 || !incoming.itemName) continue;
-      const index = state.records.findIndex((item) => Number(item.lot) === lot);
+      accepted += 1;
+      const platformItemKey = String(incoming.platformItemKey || "");
+      const index = platformItemKey
+        ? state.records.findIndex((item) => item.platformItemKey === platformItemKey)
+        : state.records.findIndex((item) => Number(item.lot) === lot && (!incoming.projectName || !item.projectName || item.projectName === incoming.projectName));
       if (index >= 0) {
         state.records[index] = {...state.records[index], ...incoming, id:state.records[index].id};
         ensurePaymentTracking(state.records[index]);
         recalculateRecord(state.records[index]);
+        updated += 1;
       } else {
         const record = {...incoming,id:uid(),received:incoming.received || "待确认",settled:Boolean(incoming.settled),carrier:incoming.carrier || "pending",logisticsStatus:incoming.logisticsStatus || "not_requested",pickupCode:incoming.pickupCode || ""};
         ensurePaymentTracking(record);
         recalculateRecord(record);
         state.records.push(record);
+        added += 1;
       }
     }
     state.assets = MxiqiAssets.rematchAssets(state.assets, state.records);
     save();
     render();
+    return {accepted, added, updated};
   }
 
   function updateRulePreviews() {
@@ -674,6 +687,39 @@
     $("#connection-check").disabled = false;
     $("#connection-logout").disabled = !connected;
     $$("input[name='connectionMethod']").forEach((input) => { input.disabled = connected; });
+    const connectorChecked = Boolean(state.connection.connectorCheckedAt);
+    const connectorInstalled = Boolean(state.connection.connectorInstalled);
+    $("#connector-boundary-status").textContent = connectorInstalled ? connected && !isDemo ? "已安装并连接" : "已安装，等待官网登录" : connectorChecked ? "未检测到采集助手" : "等待检查";
+    $("#connector-boundary-detail").textContent = connectorInstalled
+      ? connected && !isDemo ? `已连接${state.connection.label || "麦稀奇商家账号"}，可以同步真实订单。` : "采集助手可用；请在麦稀奇官方页面登录后重新检查。"
+      : connectorChecked ? "请下载并安装本地采集助手，然后刷新本页再检查。" : "安装一次后，公开工作台即可安全读取当前 Chrome 已授权的麦稀奇订单。";
+    $("#connector-boundary-chip").textContent = connectorInstalled ? connected && !isDemo ? "真实连接" : "已安装" : connectorChecked ? "未安装" : "未检查";
+    $("#connector-boundary-chip").classList.toggle("neutral", !(connectorInstalled && connected && !isDemo));
+    $("#connector-boundary-chip").classList.toggle("success", connectorInstalled && connected && !isDemo);
+  }
+
+  async function checkRealConnection({quiet = false} = {}) {
+    const checkedAt = new Date().toISOString();
+    try {
+      const result = await MxiqiConnector.ping();
+      state.connection = result.loggedIn
+        ? {status:"connected",mode:"connector",method:"password",connectedAt:state.connection.connectedAt || checkedAt,lastCheckedAt:checkedAt,connectorCheckedAt:checkedAt,connectorInstalled:true,label:result.orgName || "麦稀奇商家账号"}
+        : {status:"disconnected",mode:"connector",method:"password",connectedAt:"",lastCheckedAt:checkedAt,connectorCheckedAt:checkedAt,connectorInstalled:true,label:""};
+      audit("检查平台会话", result.loggedIn ? `真实连接成功 · ${result.orgName || "麦稀奇商家账号"}` : "采集助手已安装，麦稀奇官网尚未登录");
+      save();
+      renderConnectionPanel();
+      renderCollectorPanel();
+      if (!quiet) notify(result.loggedIn ? "麦稀奇真实登录已连接，可以开始同步" : "采集助手已安装，请先在麦稀奇官网登录", result.loggedIn ? "success" : "info");
+      return result.loggedIn;
+    } catch (error) {
+      state.connection = {...clone(defaultConnection),connectorCheckedAt:checkedAt,connectorInstalled:false,lastCheckedAt:checkedAt};
+      audit("检查平台会话", "未检测到本地采集助手");
+      save();
+      renderConnectionPanel();
+      renderCollectorPanel();
+      if (!quiet) notify(error.message || "未检测到麦稀奇采集助手", "error");
+      return false;
+    }
   }
 
   function openConnection() {
@@ -697,7 +743,8 @@
 
   function renderCollectorPanel() {
     const connected = isCollectorConnected();
-    const status = !connected ? "等待平台登录，采集已锁定" : collectorRuntime.busy ? "正在执行一次刷新…" : collectorRuntime.running ? `自动采集中 · 每 ${state.collector.intervalSeconds} 秒一次` : "已停止，不会自动请求";
+    const realConnection = state.connection.status === "connected";
+    const status = !connected ? "等待平台登录，采集已锁定" : collectorRuntime.busy ? "正在执行一次刷新…" : collectorRuntime.running ? `${realConnection ? "真实" : "演示"}自动采集中 · 每 ${state.collector.intervalSeconds} 秒一次` : `已停止 · ${realConnection ? "真实连接可用" : "演示连接"}`;
     $("#collector-runtime-status").textContent = status;
     $("#collector-last-run").textContent = collectorTime(state.collector.lastRunAt);
     $("#collector-next-run").textContent = collectorCountdown();
@@ -707,6 +754,7 @@
     $("#collector-start").disabled = collectorRuntime.running || !connected;
     $("#collector-stop").disabled = !collectorRuntime.running;
     $("#collector-refresh").disabled = collectorRuntime.busy || !connected;
+    $("#collector-scope").disabled = collectorRuntime.busy || collectorRuntime.running;
     $("#collector-interval").disabled = collectorRuntime.busy;
     $("#collector-idle").disabled = collectorRuntime.busy;
     $("#collector-sidebar-status").textContent = !connected ? "等待登录后采集" : collectorRuntime.busy ? "正在刷新数据" : collectorRuntime.running ? `自动采集 ${collectorCountdown()}` : "采集已停止";
@@ -726,9 +774,28 @@
     collectorRuntime.busy = true;
     renderCollectorPanel();
     try {
+      const now = new Date().toISOString();
+      if (state.connection.status === "connected") {
+        const requestedScope = trigger === "auto" ? "waitexpress" : state.collector.scope || "waitexpress";
+        const maxPages = requestedScope === "recent" ? 5 : 1;
+        const result = await MxiqiConnector.syncOrders({scope:requestedScope,maxPages});
+        if (result.requiresLogin) {
+          state.connection = {...clone(defaultConnection),mode:"connector",connectorInstalled:true,connectorCheckedAt:now,lastCheckedAt:now};
+          throw new Error("麦稀奇登录已失效，请重新登录后检查连接");
+        }
+        const stats = upsert(Array.isArray(result.records) ? result.records : []);
+        state.collector.adapter = "connector";
+        state.collector.lastRunAt = now;
+        state.collector.runCount = Number(state.collector.runCount || 0) + 1;
+        state.collector.lastResult = `真实同步完成：读取 ${result.pages || 0} 页、${stats.accepted} 件拍品，新增 ${stats.added} 条，更新 ${stats.updated} 条`;
+        audit(trigger === "auto" ? "自动同步麦稀奇" : "手动同步麦稀奇", `${stats.accepted} 件拍品 · 新增 ${stats.added} · 更新 ${stats.updated}`);
+        save();
+        notify(state.collector.lastResult, "success");
+        return true;
+      }
+
       await new Promise((resolve) => setTimeout(resolve, 550));
       const checked = state.records.length;
-      const now = new Date().toISOString();
       state.collector.lastRunAt = now;
       state.collector.runCount = Number(state.collector.runCount || 0) + 1;
       state.collector.lastResult = `演示刷新完成：检查 ${checked} 条本机拍品，真实数据源未连接，0 条变更`;
@@ -736,7 +803,9 @@
       save();
     } catch (error) {
       state.collector.lastResult = `刷新失败：${error.message || "未知错误"}`;
+      audit("麦稀奇同步失败", error.message || "未知错误");
       save();
+      notify(state.collector.lastResult, "error");
     } finally {
       collectorRuntime.busy = false;
       if (collectorRuntime.running) collectorRuntime.nextRunAt = Date.now() + Number(state.collector.intervalSeconds) * 1000;
@@ -754,6 +823,7 @@
     }
     state.collector.intervalSeconds = Number($("#collector-interval").value || 60);
     state.collector.idleMinutes = Number($("#collector-idle").value || 10);
+    state.collector.scope = $("#collector-scope").value || "waitexpress";
     collectorRuntime.running = true;
     collectorRuntime.lastActivityAt = Date.now();
     collectorRuntime.nextRunAt = Date.now() + state.collector.intervalSeconds * 1000;
@@ -785,6 +855,7 @@
   }
 
   function openCollector() {
+    $("#collector-scope").value = state.collector.scope || "waitexpress";
     $("#collector-interval").value = String(state.collector.intervalSeconds || 60);
     $("#collector-idle").value = String(state.collector.idleMinutes || 10);
     renderConnectionPanel();
@@ -1312,6 +1383,15 @@
     $("#collector-dialog").close("connection");
     openConnection();
   });
+  $("#connection-open-login").addEventListener("click", async () => {
+    try {
+      await MxiqiConnector.openLogin();
+      notify("已打开麦稀奇官方登录页，登录完成后回到这里检查", "info");
+    } catch (error) {
+      window.open("https://www.mxiqi.com/user.login", "_blank", "noopener,noreferrer");
+      notify("未检测到采集助手，已直接打开麦稀奇官方登录页", "info");
+    }
+  });
   $("#connection-demo-login").addEventListener("click", () => {
     const method = document.querySelector("input[name='connectionMethod']:checked")?.value || "password";
     const now = new Date().toISOString();
@@ -1322,27 +1402,11 @@
     renderCollectorPanel();
     notify("演示登录已建立，采集调度已解锁；真实数据源仍未连接", "info");
   });
-  $("#connection-check").addEventListener("click", () => {
-    state.connection.lastCheckedAt = new Date().toISOString();
-    if (!isCollectorConnected()) {
-      audit("检查平台会话", "未发现正式连接器，公开网页无法读取麦稀奇跨站会话");
-      save();
-      renderConnectionPanel();
-      notify("公开体验版无法读取麦稀奇登录 Cookie；需要正式本地连接器", "error");
-      return;
-    }
-    audit("检查平台会话", state.connection.status === "demo_connected" ? "演示会话有效，真实数据源未连接" : "正式会话检查完成");
-    save();
-    renderConnectionPanel();
-    notify(state.connection.status === "demo_connected" ? "演示会话有效；这不代表麦稀奇真实账号已登录" : "平台会话有效");
-  });
+  $("#connection-check").addEventListener("click", () => { void checkRealConnection(); });
   $("#connection-logout").addEventListener("click", () => {
     if (!isCollectorConnected()) return;
     if (collectorRuntime.running || collectorRuntime.busy) stopCollector("登录连接已退出，自动采集同步停止", false);
     state.connection = clone(defaultConnection);
-    state.assets = [];
-    state.assetFilter = "all";
-    state.assetQuery = "";
     audit("退出平台连接", "采集已锁定");
     save();
     renderConnectionPanel();
@@ -1354,9 +1418,9 @@
   $("#collector-refresh").addEventListener("click", () => { collectorRuntime.lastActivityAt = Date.now(); void runCollector("manual"); });
   $("#collector-start").addEventListener("click", startCollector);
   $("#collector-stop").addEventListener("click", () => stopCollector("已手动停止自动采集"));
-  [["#collector-interval","intervalSeconds"],["#collector-idle","idleMinutes"]].forEach(([selector, key]) => {
+  [["#collector-scope","scope"],["#collector-interval","intervalSeconds"],["#collector-idle","idleMinutes"]].forEach(([selector, key]) => {
     $(selector).addEventListener("change", (event) => {
-      state.collector[key] = Number(event.target.value);
+      state.collector[key] = key === "scope" ? String(event.target.value) : Number(event.target.value);
       if (collectorRuntime.running && key === "intervalSeconds") collectorRuntime.nextRunAt = Date.now() + state.collector.intervalSeconds * 1000;
       collectorRuntime.lastActivityAt = Date.now();
       save();
