@@ -53,12 +53,12 @@
         <button class="metric-card selected" data-stage="all"><span class="metric-label">全部拍品</span><strong id="metric-total">0</strong><small>当前浏览器</small></button>
         <button class="metric-card warning" data-stage="missing"><span class="metric-label">待补资料</span><strong id="metric-missing">0</strong><small>影响表格完整性</small></button>
         <button class="metric-card accent" data-stage="pickup"><span class="metric-label">待取件</span><strong id="metric-pickup">0</strong><small>成交后待处理</small></button>
-        <button class="metric-card shipping" data-stage="shipping"><span class="metric-label">待发货</span><strong id="metric-shipping">0</strong><small>已付款待回填单号</small></button>
+        <button class="metric-card shipping" data-stage="shipping"><span class="metric-label">待发货包裹</span><strong id="metric-shipping">0</strong><small>同一订单自动合并</small></button>
         <button class="metric-card" data-stage="settlement"><span class="metric-label">待结算</span><strong id="metric-settlement">0</strong><small id="metric-amount">成交额 ¥0</small></button>
       </section>
 
       <section class="shipping-summary" id="shipping-summary" hidden>
-        <div class="shipping-summary-copy"><p class="eyebrow">出库发货提醒</p><h2><span id="shipping-pending-count">0</span> 单待处理</h2><p>先修正并二审收件地址，再下物流订单；产生运单号后复制到麦稀奇并确认回填。</p></div>
+        <div class="shipping-summary-copy"><p class="eyebrow">出库发货提醒</p><h2><span id="shipping-pending-count">0</span> 个包裹待处理</h2><p>同一订单的拍品按一个包裹处理；先二审地址，再下物流订单并统一回填运单号。</p></div>
         <div class="shipping-step-grid">
           <div><small>地址待二审</small><b id="shipping-address-count">0</b></div>
           <div><small>可以下单</small><b id="shipping-order-count">0</b></div>
@@ -230,6 +230,7 @@
   <dialog id="shipping-dialog" class="dialog wide-dialog">
     <form method="dialog" id="shipping-form"><header><div><p class="eyebrow">地址二审 · 出库发货</p><h2 id="shipping-title">发货复核</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
       <div class="collector-notice"><b>当前为演示发货流程</b><p>不会向菜鸟、顺丰或麦稀奇提交真实数据。演示运单号带有 DEMO 标识；正式接通前可用“复制单号”完成人工粘贴。</p></div>
+      <details class="shipping-package-details"><summary><b id="shipping-package-summary">本包裹 1 件拍品</b><span>展开查看包裹内容</span></summary><div class="shipping-package-list" id="shipping-package-list"></div></details>
       <ol class="shipping-flow" aria-label="发货流程">
         <li id="shipping-step-payment"><span>1</span><div><b>确认已付款</b><small id="shipping-payment-state">待确认</small></div></li>
         <li id="shipping-step-address"><span>2</span><div><b>地址拆分与二审</b><small id="shipping-address-state">待录入</small></div></li>
@@ -281,6 +282,7 @@
   <div id="toast" class="toast" role="status" hidden></div>
   <script src="vendor/exceljs.min.js"></script>
   <script src="matching-core.js"></script>
+  <script src="package-core.js"></script>
   <script src="connector-bridge.js"></script>
   <script src="app.js"></script>
 </body>

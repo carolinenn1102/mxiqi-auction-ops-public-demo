@@ -70,8 +70,10 @@
     filters: {seller:"",auction:"",outcome:"",disposition:"",shipping:""},
     settlementScope: {seller:"",from:"",to:""},
     selected: new Set(),
+    expandedPackages: new Set(),
     editingId: "",
     shippingId: "",
+    shippingIds: [],
   };
 
   const $ = (selector) => document.querySelector(selector);
@@ -347,7 +349,7 @@
       const stage = state.stage === "all"
         || (state.stage === "missing" && missing(record).length)
         || (state.stage === "pickup" && Number(record.finalPrice) > 0 && !record.pickupCode)
-        || (state.stage === "shipping" && isShippingCandidate(record))
+        || (state.stage === "shipping" && isShippingCandidate(record) && shippingStage(record) !== "completed")
         || (state.stage === "settlement" && settlementRecords().some((item) => item.id === record.id));
       return search && filters && stage;
     });
@@ -419,8 +421,15 @@
   function renderShippingSummary() {
     const candidates = state.records.filter(isShippingCandidate);
     const counts = {needs_address:0,ready_to_order:0,mxiqi_pending:0,completed:0};
-    candidates.forEach((record) => { const stage = shippingStage(record); if (counts[stage] !== undefined) counts[stage] += 1; });
-    const pending = candidates.length - counts.completed;
+    const packages = MxiqiPackages.groupRecords(candidates);
+    packages.forEach((group) => {
+      const stages = group.records.map(shippingStage);
+      const stage = stages.includes("needs_address") ? "needs_address"
+        : stages.includes("ready_to_order") ? "ready_to_order"
+          : stages.includes("mxiqi_pending") ? "mxiqi_pending" : "completed";
+      counts[stage] += 1;
+    });
+    const pending = packages.length - counts.completed;
     $("#shipping-summary").hidden = state.stage !== "shipping";
     $("#shipping-pending-count").textContent = pending;
     $("#shipping-address-count").textContent = counts.needs_address;
@@ -431,20 +440,91 @@
     $("#shipping-next").textContent = pending ? "处理下一单" : "本批发货已完成";
   }
 
+  function recordsForPackageKey(key) {
+    return state.records.filter((record) => MxiqiPackages.packageKey(record) === key);
+  }
+
+  function activeShippingRecords() {
+    const ids = state.shippingIds?.length ? state.shippingIds : [state.shippingId];
+    return ids.map((id) => state.records.find((record) => record.id === id)).filter(Boolean);
+  }
+
+  function renderRecordRow(record, child = false) {
+    const gaps = missing(record);
+    const carrier = record.carrier || carrierFor(record);
+    const settlementDetail = Number(record.finalPrice) > 0
+      ? `${record.settlementAmount ? currency.format(record.settlementAmount) : "待计算"} · 佣金 ${currency.format(record.commissionAmount || 0)}`
+      : "";
+    const deliveryCode = record.outboundTrackingNumber || record.pickupCode || "";
+    const deliveryHint = record.outboundTrackingNumber
+      ? `${record.mxiqiShippingStatus === "filled" ? "麦稀奇已回填" : "出库单号待回填"} · ${addressStatusLabel(record.addressStatus)}`
+      : record.pickupCode ? "模拟取件码，不可寄件" : shippingStageLabel(record);
+    return `<tr class="${state.selected.has(record.id) ? "selected-row" : ""}${child ? " package-child-row" : ""}">
+      <td class="select-column"><input type="checkbox" data-select="${esc(record.id)}" ${state.selected.has(record.id) ? "checked" : ""} ${Number(record.finalPrice) <= 0 ? "disabled" : ""}></td>
+      <td><div class="lot-cell ${child ? "package-child-lot" : ""}"><span>${record.lot}</span><div><b>${esc(record.itemName)}</b><small>${esc(record.projectName || record.primaryCategory || "未设置项目")}</small></div></div></td>
+      <td><b class="${record.sellerWechat ? "" : "muted"}">${esc(record.sellerWechat || "待补")}</b><small>${esc(record.sellerPhone || "手机号待补")}</small><small>${esc(record.trackingNumber || "未填快递单号")}</small></td>
+      <td><b>${esc(record.auctionHouse || "待设置拍场")}</b><small>${esc(record.auctionAt || "待设置时间")}</small></td>
+      <td><b class="money">${Number(record.finalPrice) > 0 ? currency.format(record.finalPrice) : "待拍"}</b><small>${esc(record.finalOutcome || "状态待确认")}${record.paymentStatus ? ` · ${esc(record.paymentStatus)}` : ""}</small>${isPaymentOverdue(record) ? '<span class="chip overdue">超时未付款</span>' : ""}${record.returnDisposition ? `<span class="chip disposition">${esc(record.returnDisposition)}</span>` : ""}</td>
+      <td>${gaps.length ? `<button class="chip warning" data-action="edit" data-id="${esc(record.id)}" title="${esc(gaps.join("、"))}">缺 ${gaps.length} 项</button>` : '<span class="chip success">完整</span>'}</td>
+      <td><span class="carrier ${carrier}">${carrierLabel(carrier)}</span><small>${logisticsLabel(record.logisticsStatus)} · ${esc(shippingStageLabel(record))}</small></td>
+      <td>${deliveryCode ? `<code>${esc(deliveryCode)}</code>` : '<span class="muted">—</span>'}<small>${esc(deliveryHint)}</small></td>
+      <td>${record.settled ? '<span class="chip success">已结账</span>' : '<span class="chip neutral">未结账</span>'}<small>${esc(settlementDetail)}</small><small>${esc(record.promotion || "")}</small></td>
+      <td><div class="row-actions"><button data-action="edit" data-id="${esc(record.id)}">编辑</button><button data-action="pickup" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>取件</button><button data-action="manual" data-id="${esc(record.id)}">录码</button><button data-action="shipping" data-id="${esc(record.id)}" ${!isShippingCandidate(record) ? "disabled" : ""}>发货</button><button data-action="toggle-settle" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>${record.settled ? "撤销" : "结账"}</button></div></td>
+    </tr>`;
+  }
+
+  function renderPackageRow(group) {
+    const records = group.records;
+    const expanded = state.expandedPackages.has(group.key);
+    const selectable = records.filter((record) => Number(record.finalPrice) > 0);
+    const allSelected = selectable.length > 0 && selectable.every((record) => state.selected.has(record.id));
+    const total = records.reduce((sum, record) => sum + Number(record.finalPrice || 0), 0);
+    const totalCommission = records.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0);
+    const totalSettlement = records.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0);
+    const lots = records.map((record) => record.lot).join("、");
+    const orderId = MxiqiPackages.sameValue(records, "mxiqiOrderId");
+    const project = MxiqiPackages.sameValue(records, "projectName") || "多个拍场项目";
+    const buyerName = MxiqiPackages.sameValue(records, "buyerName");
+    const sellers = [...new Set(records.map((record) => record.sellerWechat).filter(Boolean))];
+    const sellerSummary = sellers.length === 1 ? sellers[0] : sellers.length ? `${sellers.length} 位送拍人` : "送拍人待匹配";
+    const carrierValues = [...new Set(records.map((record) => record.carrier || carrierFor(record)))];
+    const carrier = carrierValues.length === 1 ? carrierValues[0] : "pending";
+    const stageValues = [...new Set(records.map(shippingStageLabel))];
+    const deliveryCode = MxiqiPackages.sameValue(records, "outboundTrackingNumber") || MxiqiPackages.sameValue(records, "pickupCode");
+    const gapCount = records.reduce((sum, record) => sum + missing(record).length, 0);
+    const settledCount = records.filter((record) => record.settled).length;
+    const canShipPackage = records.every(isShippingCandidate);
+    const childRows = expanded ? records.map((record) => renderRecordRow(record, true)).join("") : "";
+    return `<tr class="package-summary-row${allSelected ? " selected-row" : ""}">
+      <td class="select-column"><input type="checkbox" data-package-select="${esc(group.key)}" ${allSelected ? "checked" : ""} ${selectable.length ? "" : "disabled"}></td>
+      <td><div class="package-heading"><button class="package-toggle" type="button" data-package-toggle="${esc(group.key)}" aria-expanded="${expanded}">${expanded ? "−" : "+"}</button><div><b>合并包裹 · ${records.length} 件</b><small>Lot ${esc(lots)}</small></div></div></td>
+      <td><b class="${sellers.length ? "" : "muted"}">${esc(sellerSummary)}</b><small>${buyerName ? `收件人：${esc(buyerName)}` : "收件信息随订单"}</small></td>
+      <td><b>${esc(project)}</b><small>${orderId ? `订单 ${esc(orderId)}` : "同一出库运单"}</small></td>
+      <td><b class="money">${currency.format(total)}</b><small>合计 ${records.length} 件 · 均价 ${currency.format(total / records.length)}</small></td>
+      <td>${gapCount ? `<span class="chip warning">共缺 ${gapCount} 项</span>` : '<span class="chip success">全部完整</span>'}</td>
+      <td><span class="carrier ${carrier}">${carrierValues.length === 1 ? carrierLabel(carrier) : "混合"}</span><small>${esc(stageValues.length === 1 ? stageValues[0] : `${stageValues.length} 种发货状态`)}</small></td>
+      <td>${deliveryCode ? `<code>${esc(deliveryCode)}</code>` : '<span class="muted">—</span>'}<small>${deliveryCode ? "整包共用单号" : "等待整包下单"}</small></td>
+      <td>${settledCount === records.length ? '<span class="chip success">整包已结账</span>' : `<span class="chip neutral">${settledCount}/${records.length} 已结账</span>`}<small>${currency.format(totalSettlement)} · 佣金 ${currency.format(totalCommission)}</small></td>
+      <td><div class="row-actions package-actions"><button data-package-toggle="${esc(group.key)}">${expanded ? "收起" : "展开"}</button><button data-package-shipping="${esc(group.key)}" ${canShipPackage ? "" : "disabled"}>整包发货</button></div></td>
+    </tr>${childRows}`;
+  }
+
   function render() {
     const records = state.records;
     renderFilterOptions();
     $("#metric-total").textContent = records.length;
     $("#metric-missing").textContent = records.filter((item) => missing(item).length).length;
     $("#metric-pickup").textContent = records.filter((item) => Number(item.finalPrice) > 0 && !item.pickupCode).length;
-    $("#metric-shipping").textContent = records.filter((item) => isShippingCandidate(item) && shippingStage(item) !== "completed").length;
+    $("#metric-shipping").textContent = MxiqiPackages.groupRecords(records.filter((item) => isShippingCandidate(item) && shippingStage(item) !== "completed")).length;
     $("#metric-settlement").textContent = records.filter((item) => Number(item.finalPrice) > 0 && !item.settled).length;
     $("#metric-amount").textContent = `成交额 ${currency.format(records.reduce((sum, item) => sum + Number(item.finalPrice || 0), 0))}`;
     $$('[data-stage]').forEach((button) => button.classList.toggle("selected", button.dataset.stage === state.stage));
     $$('.nav-item[data-stage]').forEach((button) => button.classList.toggle("active", button.dataset.stage === state.stage));
 
     const visible = visibleRecords();
-    $("#result-count").textContent = `${visible.length} 条结果`;
+    const packageGroups = MxiqiPackages.groupRecords(visible);
+    const mergedCount = packageGroups.filter((group) => group.isPackage).length;
+    $("#result-count").textContent = mergedCount ? `${packageGroups.length} 个包裹 · ${visible.length} 件拍品` : `${visible.length} 条结果`;
     const selectable = visible.filter((item) => Number(item.finalPrice) > 0);
     $("#select-all").checked = selectable.length > 0 && selectable.every((item) => state.selected.has(item.id));
     const selectedCount = state.selected.size;
@@ -462,29 +542,7 @@
       return;
     }
 
-    body.innerHTML = visible.map((record) => {
-      const gaps = missing(record);
-      const carrier = record.carrier || carrierFor(record);
-      const settlementDetail = Number(record.finalPrice) > 0
-        ? `${record.settlementAmount ? currency.format(record.settlementAmount) : "待计算"} · 佣金 ${currency.format(record.commissionAmount || 0)}`
-        : "";
-      const deliveryCode = record.outboundTrackingNumber || record.pickupCode || "";
-      const deliveryHint = record.outboundTrackingNumber
-        ? `${record.mxiqiShippingStatus === "filled" ? "麦稀奇已回填" : "出库单号待回填"} · ${addressStatusLabel(record.addressStatus)}`
-        : record.pickupCode ? "模拟取件码，不可寄件" : shippingStageLabel(record);
-      return `<tr class="${state.selected.has(record.id) ? "selected-row" : ""}">
-        <td class="select-column"><input type="checkbox" data-select="${esc(record.id)}" ${state.selected.has(record.id) ? "checked" : ""} ${Number(record.finalPrice) <= 0 ? "disabled" : ""}></td>
-        <td><div class="lot-cell"><span>${record.lot}</span><div><b>${esc(record.itemName)}</b><small>${esc(record.projectName || record.primaryCategory || "未设置项目")}</small></div></div></td>
-        <td><b class="${record.sellerWechat ? "" : "muted"}">${esc(record.sellerWechat || "待补")}</b><small>${esc(record.sellerPhone || "手机号待补")}</small><small>${esc(record.trackingNumber || "未填快递单号")}</small></td>
-        <td><b>${esc(record.auctionHouse || "待设置拍场")}</b><small>${esc(record.auctionAt || "待设置时间")}</small></td>
-        <td><b class="money">${Number(record.finalPrice) > 0 ? currency.format(record.finalPrice) : "待拍"}</b><small>${esc(record.finalOutcome || "状态待确认")}${record.paymentStatus ? ` · ${esc(record.paymentStatus)}` : ""}</small>${isPaymentOverdue(record) ? '<span class="chip overdue">超时未付款</span>' : ""}${record.returnDisposition ? `<span class="chip disposition">${esc(record.returnDisposition)}</span>` : ""}</td>
-        <td>${gaps.length ? `<button class="chip warning" data-action="edit" data-id="${esc(record.id)}" title="${esc(gaps.join("、"))}">缺 ${gaps.length} 项</button>` : '<span class="chip success">完整</span>'}</td>
-        <td><span class="carrier ${carrier}">${carrierLabel(carrier)}</span><small>${logisticsLabel(record.logisticsStatus)} · ${esc(shippingStageLabel(record))}</small></td>
-        <td>${deliveryCode ? `<code>${esc(deliveryCode)}</code>` : '<span class="muted">—</span>'}<small>${esc(deliveryHint)}</small></td>
-        <td>${record.settled ? '<span class="chip success">已结账</span>' : '<span class="chip neutral">未结账</span>'}<small>${esc(settlementDetail)}</small><small>${esc(record.promotion || "")}</small></td>
-        <td><div class="row-actions"><button data-action="edit" data-id="${esc(record.id)}">编辑</button><button data-action="pickup" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>取件</button><button data-action="manual" data-id="${esc(record.id)}">录码</button><button data-action="shipping" data-id="${esc(record.id)}" ${!isShippingCandidate(record) ? "disabled" : ""}>发货</button><button data-action="toggle-settle" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>${record.settled ? "撤销" : "结账"}</button></div></td>
-      </tr>`;
-    }).join("");
+    body.innerHTML = packageGroups.map((group) => group.isPackage ? renderPackageRow(group) : renderRecordRow(group.records[0])).join("");
   }
 
   function previewCommission() {
@@ -535,26 +593,34 @@
 
   function renderShippingDialog(record, populate = true) {
     if (populate) populateShippingForm(record);
-    const stage = shippingStage(record);
+    const members = activeShippingRecords();
+    const packageReady = members.length > 0 && members.every(isShippingCandidate);
+    const paidCount = members.filter(isShippingCandidate).length;
+    const addressReviewed = members.length > 0 && members.every((item) => item.addressStatus === "reviewed");
+    const commonWaybill = MxiqiPackages.sameValue(members, "outboundTrackingNumber");
+    const waybillConflict = members.some((item) => item.outboundTrackingNumber) && !commonWaybill;
     const addressGaps = addressMissing(record);
-    const hasWaybill = Boolean(record.outboundTrackingNumber);
-    const filled = record.mxiqiShippingStatus === "filled";
-    $("#shipping-title").textContent = `Lot ${record.lot} · ${record.itemName}`;
-    $("#shipping-payment-state").textContent = isShippingCandidate(record) ? "已付款，可进入发货" : "未付款，不可发货";
-    $("#shipping-address-state").textContent = addressStatusLabel(record.addressStatus);
-    $("#shipping-order-state").textContent = hasWaybill ? `${carrierLabel(record.shippingCarrier)} · 已生成单号` : record.addressStatus === "reviewed" ? "可以下单" : "等待地址二审";
+    const hasWaybill = Boolean(commonWaybill);
+    const filled = members.length > 0 && members.every((item) => item.mxiqiShippingStatus === "filled");
+    if (hasWaybill) shippingForm.elements.outboundTrackingNumber.value = commonWaybill;
+    $("#shipping-title").textContent = members.length > 1 ? `合并包裹 · ${members.length} 件拍品` : `Lot ${record.lot} · ${record.itemName}`;
+    $("#shipping-package-summary").textContent = `本包裹 ${members.length || 1} 件拍品${members.length > 1 ? ` · Lot ${members.map((item) => item.lot).join("、")}` : ""}`;
+    $("#shipping-package-list").innerHTML = members.map((item) => `<div class="shipping-package-item"><span>Lot ${item.lot}</span><b>${esc(item.itemName)}</b><small>${currency.format(item.finalPrice || 0)}</small></div>`).join("");
+    $("#shipping-payment-state").textContent = packageReady ? `${members.length} 件均已付款，可整包发货` : `${paidCount}/${members.length} 件满足发货条件`;
+    $("#shipping-address-state").textContent = addressReviewed ? "整包地址已二审" : addressStatusLabel(record.addressStatus);
+    $("#shipping-order-state").textContent = waybillConflict ? "包裹内单号不一致，需检查" : hasWaybill ? `${carrierLabel(record.shippingCarrier)} · 整包已生成单号` : addressReviewed ? "可以整包下单" : "等待地址二审";
     $("#shipping-fill-state").textContent = filled ? "已确认回填" : hasWaybill ? "复制后待确认" : "尚无单号";
-    $("#shipping-address-badge").textContent = addressStatusLabel(record.addressStatus);
-    setShippingStep("#shipping-step-payment", isShippingCandidate(record) ? "done" : "current");
-    setShippingStep("#shipping-step-address", record.addressStatus === "reviewed" ? "done" : isShippingCandidate(record) ? "current" : "");
-    setShippingStep("#shipping-step-order", hasWaybill ? "done" : record.addressStatus === "reviewed" ? "current" : "");
+    $("#shipping-address-badge").textContent = addressReviewed ? "整包地址已二审" : addressStatusLabel(record.addressStatus);
+    setShippingStep("#shipping-step-payment", packageReady ? "done" : "current");
+    setShippingStep("#shipping-step-address", addressReviewed ? "done" : packageReady ? "current" : "");
+    setShippingStep("#shipping-step-order", hasWaybill ? "done" : addressReviewed ? "current" : "");
     setShippingStep("#shipping-step-fill", filled ? "done" : hasWaybill ? "current" : "");
 
     const message = $("#shipping-address-message");
     message.className = "address-review-message";
-    if (record.addressStatus === "reviewed") {
+    if (addressReviewed) {
       message.classList.add("success");
-      message.textContent = "二次审核已通过。下单前仍请对照麦稀奇原始订单确认一次。";
+      message.textContent = `整包 ${members.length} 件共用该地址，二次审核已通过。下单前仍请对照麦稀奇原始订单确认一次。`;
     } else if (addressGaps.length) {
       message.classList.add("error");
       message.textContent = `还需补充或修正：${addressGaps.join("、")}。`;
@@ -562,33 +628,42 @@
       message.textContent = "拆分结果只作参考，请逐项核对后点击“确认二次审核无误”。";
     }
 
-    const addressLocked = hasWaybill;
+    const addressLocked = hasWaybill || waybillConflict;
     ["recipientRaw","recipientName","recipientPhone","addressProvince","addressCity","addressDistrict","addressDetail"].forEach((name) => { shippingForm.elements[name].disabled = addressLocked; });
-    shippingForm.elements.shippingCarrier.disabled = hasWaybill;
+    shippingForm.elements.shippingCarrier.disabled = addressLocked;
     $("#shipping-split-address").disabled = addressLocked;
     $("#shipping-review-address").disabled = addressLocked;
-    $("#shipping-create-order").disabled = !isShippingCandidate(record) || record.addressStatus !== "reviewed" || hasWaybill;
+    $("#shipping-create-order").disabled = !packageReady || !addressReviewed || hasWaybill || waybillConflict;
     $("#shipping-copy-waybill").disabled = !hasWaybill;
     $("#shipping-confirm-fill").disabled = !hasWaybill || filled;
     $("#shipping-confirm-fill").textContent = filled ? "已确认回填" : "模拟确认已回填";
-    $("#shipping-order-note").textContent = filled
+    $("#shipping-order-note").textContent = waybillConflict
+      ? "包裹内已有不同运单号，已停止整包操作；请展开明细人工核对。"
+      : filled
       ? `演示单号 ${record.outboundTrackingNumber} 已标记为麦稀奇回填完成。`
       : hasWaybill
         ? `已生成演示单号 ${record.outboundTrackingNumber}。请复制到麦稀奇，粘贴后再确认回填。`
-        : !isShippingCandidate(record)
-          ? "订单尚未确认付款，暂不能进入发货。"
-          : record.addressStatus !== "reviewed"
+        : !packageReady
+          ? "包裹内仍有拍品未满足发货条件，暂不能整包发货。"
+          : !addressReviewed
             ? "未完成地址二审，暂不能下单。"
-            : `地址已二审，可模拟向${carrierLabel(shippingForm.elements.shippingCarrier.value)}下单。`;
+            : `地址已二审，可将 ${members.length} 件拍品合并后模拟向${carrierLabel(shippingForm.elements.shippingCarrier.value)}下单。`;
+  }
+
+  function openShippingPackage(key) {
+    const records = recordsForPackageKey(key);
+    if (!records.length) return;
+    state.shippingIds = records.map((record) => record.id);
+    state.shippingId = records[0].id;
+    shippingForm.reset();
+    renderShippingDialog(records[0]);
+    shippingDialog.showModal();
   }
 
   function openShipping(id) {
     const record = state.records.find((item) => item.id === id);
     if (!record) return;
-    state.shippingId = id;
-    shippingForm.reset();
-    renderShippingDialog(record);
-    shippingDialog.showModal();
+    openShippingPackage(MxiqiPackages.packageKey(record));
   }
 
   async function copyText(value) {
@@ -1133,6 +1208,14 @@
     render();
   });
   $("#records-body").addEventListener("change", (event) => {
+    const packageKey = event.target.dataset.packageSelect;
+    if (packageKey) {
+      recordsForPackageKey(packageKey).filter((record) => Number(record.finalPrice) > 0).forEach((record) => {
+        event.target.checked ? state.selected.add(record.id) : state.selected.delete(record.id);
+      });
+      render();
+      return;
+    }
     const id = event.target.dataset.select;
     if (!id) return;
     event.target.checked ? state.selected.add(id) : state.selected.delete(id);
@@ -1140,6 +1223,18 @@
   });
 
   $("#records-body").addEventListener("click", (event) => {
+    const packageToggle = event.target.closest("[data-package-toggle]");
+    if (packageToggle) {
+      const key = packageToggle.dataset.packageToggle;
+      state.expandedPackages.has(key) ? state.expandedPackages.delete(key) : state.expandedPackages.add(key);
+      render();
+      return;
+    }
+    const packageShipping = event.target.closest("[data-package-shipping]");
+    if (packageShipping) {
+      openShippingPackage(packageShipping.dataset.packageShipping);
+      return;
+    }
     const button = event.target.closest("[data-action]");
     if (!button) return;
     const record = state.records.find((item) => item.id === button.dataset.id);
@@ -1217,44 +1312,51 @@
   });
 
   $("#shipping-split-address").addEventListener("click", () => {
-    const record = state.records.find((item) => item.id === state.shippingId);
-    if (!record || record.outboundTrackingNumber) return;
+    const records = activeShippingRecords();
+    const record = records[0];
+    if (!record || records.some((item) => item.outboundTrackingNumber)) return;
     const parsed = splitRecipientAddress(shippingForm.elements.recipientRaw.value);
-    Object.assign(record, parsed, {shippingCarrier:shippingForm.elements.shippingCarrier.value || carrierFor(record),addressReviewedAt:""});
-    audit("拆分收件地址", `Lot ${record.lot} · ${parsed.addressWarnings.length ? `缺 ${parsed.addressWarnings.join("、")}` : "待二次审核"}`);
+    records.forEach((item) => Object.assign(item, parsed, {shippingCarrier:shippingForm.elements.shippingCarrier.value || carrierFor(record),addressReviewedAt:""}));
+    audit("拆分包裹收件地址", `${records.length} 件 · ${parsed.addressWarnings.length ? `缺 ${parsed.addressWarnings.join("、")}` : "待二次审核"}`);
+    save();
     renderShippingDialog(record);
     render();
     notify(parsed.addressWarnings.length ? "地址只完成了部分拆分，请修正红色提示项" : "地址已拆分，请逐项核对并完成二次审核", parsed.addressWarnings.length ? "info" : "success");
   });
 
   $("#shipping-review-address").addEventListener("click", () => {
-    const record = state.records.find((item) => item.id === state.shippingId);
-    if (!record || record.outboundTrackingNumber) return;
+    const records = activeShippingRecords();
+    const record = records[0];
+    if (!record || records.some((item) => item.outboundTrackingNumber)) return;
     const values = addressValuesFromForm();
     const gaps = addressMissing(values);
-    Object.assign(record, values, {addressStatus:gaps.length ? "needs_correction" : "reviewed",addressWarnings:gaps,addressReviewedAt:gaps.length ? "" : new Date().toISOString()});
+    records.forEach((item) => Object.assign(item, values, {addressStatus:gaps.length ? "needs_correction" : "reviewed",addressWarnings:gaps,addressReviewedAt:gaps.length ? "" : new Date().toISOString()}));
+    save();
     if (gaps.length) {
-      audit("地址二审未通过", `Lot ${record.lot} · 缺 ${gaps.join("、")}`);
+      audit("包裹地址二审未通过", `${records.length} 件 · 缺 ${gaps.join("、")}`);
       renderShippingDialog(record, false);
       render();
       notify(`还不能下单，请补充：${gaps.join("、")}`, "error");
       return;
     }
-    audit("确认地址二审", `Lot ${record.lot} · ${record.addressProvince}${record.addressCity}${record.addressDistrict}`);
+    audit("确认包裹地址二审", `${records.length} 件 · ${record.addressProvince}${record.addressCity}${record.addressDistrict}`);
     renderShippingDialog(record, false);
     render();
     notify("地址二次审核已通过，可以进入物流下单");
   });
 
   shippingForm.addEventListener("input", (event) => {
-    const record = state.records.find((item) => item.id === state.shippingId);
-    if (!record || record.outboundTrackingNumber || !event.target.name) return;
+    const records = activeShippingRecords();
+    const record = records[0];
+    if (!record || records.some((item) => item.outboundTrackingNumber) || !event.target.name) return;
     if (["recipientRaw","recipientName","recipientPhone","addressProvince","addressCity","addressDistrict","addressDetail"].includes(event.target.name)) {
-      record[event.target.name] = event.target.name === "recipientPhone" ? event.target.value.replace(/\D/g, "") : event.target.value;
-      if (record.addressStatus === "reviewed") {
-        record.addressStatus = "pending_review";
-        record.addressReviewedAt = "";
-      }
+      records.forEach((item) => {
+        item[event.target.name] = event.target.name === "recipientPhone" ? event.target.value.replace(/\D/g, "") : event.target.value;
+        if (item.addressStatus === "reviewed") {
+          item.addressStatus = "pending_review";
+          item.addressReviewedAt = "";
+        }
+      });
       save();
       renderShippingDialog(record, false);
       render();
@@ -1262,36 +1364,45 @@
   });
 
   shippingForm.elements.shippingCarrier.addEventListener("change", (event) => {
-    const record = state.records.find((item) => item.id === state.shippingId);
-    if (!record || record.outboundTrackingNumber) return;
-    record.shippingCarrier = event.target.value;
+    const records = activeShippingRecords();
+    const record = records[0];
+    if (!record || records.some((item) => item.outboundTrackingNumber)) return;
+    records.forEach((item) => { item.shippingCarrier = event.target.value; });
     save();
     renderShippingDialog(record, false);
     render();
   });
 
   $("#shipping-create-order").addEventListener("click", () => {
-    const record = state.records.find((item) => item.id === state.shippingId);
-    if (!record || !isShippingCandidate(record) || record.addressStatus !== "reviewed" || record.outboundTrackingNumber) return;
-    record.shippingCarrier = shippingForm.elements.shippingCarrier.value || carrierFor(record);
+    const records = activeShippingRecords();
+    const record = records[0];
+    if (!record || !records.every(isShippingCandidate) || !records.every((item) => item.addressStatus === "reviewed") || records.some((item) => item.outboundTrackingNumber)) return;
+    const carrier = shippingForm.elements.shippingCarrier.value || carrierFor(record);
     const suffix = Math.random().toString(36).slice(2, 7).toUpperCase();
-    record.outboundTrackingNumber = `${record.shippingCarrier === "sf" ? "SF" : "CN"}-DEMO-OUT-${record.lot}-${suffix}`;
-    record.shippingOrderedAt = new Date().toISOString();
-    record.mxiqiShippingStatus = "pending";
-    audit("模拟物流下单", `Lot ${record.lot} · ${carrierLabel(record.shippingCarrier)} · ${record.outboundTrackingNumber}`);
+    const packageRef = String(record.mxiqiOrderId || record.lot).slice(-6);
+    const waybill = `${carrier === "sf" ? "SF" : "CN"}-DEMO-PKG-${packageRef}-${suffix}`;
+    const orderedAt = new Date().toISOString();
+    records.forEach((item) => Object.assign(item, {shippingCarrier:carrier,outboundTrackingNumber:waybill,shippingOrderedAt:orderedAt,mxiqiShippingStatus:"pending"}));
+    audit("模拟整包物流下单", `${records.length} 件 · ${carrierLabel(carrier)} · ${waybill}`);
+    save();
     renderShippingDialog(record);
     render();
-    notify("已生成明确标识的演示运单号，不会提交真实物流平台", "info");
+    notify(`已为 ${records.length} 件拍品生成同一个演示运单号，不会提交真实物流平台`, "info");
   });
 
   $("#shipping-copy-waybill").addEventListener("click", async () => {
-    const record = state.records.find((item) => item.id === state.shippingId);
+    const records = activeShippingRecords();
+    const record = records[0];
     if (!record?.outboundTrackingNumber) return;
     try {
       await copyText(record.outboundTrackingNumber);
-      record.waybillCopiedAt = new Date().toISOString();
-      record.mxiqiShippingStatus = record.mxiqiShippingStatus === "filled" ? "filled" : "pending";
-      audit("复制出库运单号", `Lot ${record.lot} · 待粘贴到麦稀奇`);
+      const copiedAt = new Date().toISOString();
+      records.forEach((item) => {
+        item.waybillCopiedAt = copiedAt;
+        item.mxiqiShippingStatus = item.mxiqiShippingStatus === "filled" ? "filled" : "pending";
+      });
+      audit("复制整包出库运单号", `${records.length} 件 · 待粘贴到麦稀奇`);
+      save();
       renderShippingDialog(record, false);
       render();
       notify("运单号已复制；粘贴到麦稀奇后，请回来确认已回填");
@@ -1301,14 +1412,16 @@
   });
 
   $("#shipping-confirm-fill").addEventListener("click", () => {
-    const record = state.records.find((item) => item.id === state.shippingId);
-    if (!record?.outboundTrackingNumber || record.mxiqiShippingStatus === "filled") return;
-    record.mxiqiShippingStatus = "filled";
-    record.mxiqiFilledAt = new Date().toISOString();
-    audit("模拟确认麦稀奇回填", `Lot ${record.lot} · ${record.outboundTrackingNumber}`);
+    const records = activeShippingRecords();
+    const record = records[0];
+    if (!record?.outboundTrackingNumber || records.every((item) => item.mxiqiShippingStatus === "filled")) return;
+    const filledAt = new Date().toISOString();
+    records.forEach((item) => Object.assign(item, {mxiqiShippingStatus:"filled",mxiqiFilledAt:filledAt}));
+    audit("模拟确认整包麦稀奇回填", `${records.length} 件 · ${record.outboundTrackingNumber}`);
+    save();
     renderShippingDialog(record, false);
     render();
-    notify("该订单已标记为回填完成；公开版没有向麦稀奇实际提交");
+    notify(`该包裹 ${records.length} 件拍品均已标记为回填完成；公开版没有向麦稀奇实际提交`);
   });
 
   $("#new-record").addEventListener("click", () => openEditor());
