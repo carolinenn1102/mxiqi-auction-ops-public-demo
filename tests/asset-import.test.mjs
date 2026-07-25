@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
+import fs from "node:fs/promises";
 import test from "node:test";
+import vm from "node:vm";
 
-const requireFromApp = createRequire(new URL("../../mxiqi_auction_ops/package.json", import.meta.url));
-const ExcelJS = requireFromApp("exceljs");
+const excelContext = vm.createContext({});
+excelContext.globalThis = excelContext;
+excelContext.self = excelContext;
+excelContext.window = excelContext;
+vm.runInContext(await fs.readFile(new URL("../vendor/exceljs.min.js", import.meta.url), "utf8"), excelContext);
+const ExcelJS = excelContext.ExcelJS;
+const excelRow = (values) => vm.runInContext(`JSON.parse(${JSON.stringify(JSON.stringify(values))})`, excelContext);
 await import("../matching-core.js");
 
 const { parseAssetWorkbook, rematchAssets } = globalThis.MxiqiAssets;
@@ -11,11 +17,11 @@ const { parseAssetWorkbook, rematchAssets } = globalThis.MxiqiAssets;
 test("parses consignment and grading sheets", () => {
   const workbook = new ExcelJS.Workbook();
   const consignment = workbook.addWorksheet("寄存");
-  consignment.addRow(["寄存", "用户", "寄存订单号", "订单日期", "收货地址", "拍品", null, "状态"]);
-  consignment.addRow([null, "体验客户 13900000001", "DEMO-C-001", new Date("2026-07-25"), "体验地址 13900000001", "Lot.8 演示纪念币", null, "在库"]);
+  consignment.addRow(excelRow(["寄存", "用户", "寄存订单号", "订单日期", "收货地址", "拍品", null, "状态"]));
+  consignment.addRow(excelRow([null, "体验客户 13900000001", "DEMO-C-001", 46228, "体验地址 13900000001", "Lot.8 演示纪念币", null, "在库"]));
   const grading = workbook.addWorksheet("送评");
-  grading.addRow(["微信名称/联系方式", "送评物品", "图片", "档", "送评单号", "送评日期", "是否出分", "是否返还", null]);
-  grading.addRow(["体验客户", "演示银币", null, "65", "DEMO-G-001", "0725", "出分", "返还", "上拍"]);
+  grading.addRow(excelRow(["微信名称/联系方式", "送评物品", "图片", "档", "送评单号", "送评日期", "是否出分", "是否返还", null]));
+  grading.addRow(excelRow(["体验客户", "演示银币", null, "65", "DEMO-G-001", "0725", "出分", "返还", "上拍"]));
 
   const parsed = parseAssetWorkbook(workbook, "演示寄存.xlsx");
   assert.deepEqual(new Set(parsed.kinds), new Set(["consignment", "grading"]));
@@ -27,11 +33,11 @@ test("parses consignment and grading sheets", () => {
 test("imports only the current inventory sheet", () => {
   const workbook = new ExcelJS.Workbook();
   const current = workbook.addWorksheet("整体");
-  current.addRow(["来源", "拍场号", "Lot号", "名称", "年份", "编号", "分数/裸币", "外拍价格", "到手价格", "备注", "状态", "售出渠道/价格（未扣手续费，运费）"]);
-  current.addRow(["HA", "DEMO-A", 12, "演示库存银币", 1888, "DEMO-ID-1", 64, 80, 620, null, "在库", null]);
+  current.addRow(excelRow(["来源", "拍场号", "Lot号", "名称", "年份", "编号", "分数/裸币", "外拍价格", "到手价格", "备注", "状态", "售出渠道/价格（未扣手续费，运费）"]));
+  current.addRow(excelRow(["HA", "DEMO-A", 12, "演示库存银币", 1888, "DEMO-ID-1", 64, 80, 620, null, "在库", null]));
   const sold = workbook.addWorksheet("已售出");
-  sold.addRow(["来源", "拍场号", "Lot号", "名称", "年份", "编号", "分数/裸币", "外拍价格", "到手价格"]);
-  sold.addRow(["HA", "DEMO-B", 13, "已售出演示银币", 1889, "DEMO-ID-2", 64, 90, 700]);
+  sold.addRow(excelRow(["来源", "拍场号", "Lot号", "名称", "年份", "编号", "分数/裸币", "外拍价格", "到手价格"]));
+  sold.addRow(excelRow(["HA", "DEMO-B", 13, "已售出演示银币", 1889, "DEMO-ID-2", 64, 90, 700]));
 
   const parsed = parseAssetWorkbook(workbook, "演示外拍.xlsx");
   assert.deepEqual(parsed.kinds, ["inventory"]);
