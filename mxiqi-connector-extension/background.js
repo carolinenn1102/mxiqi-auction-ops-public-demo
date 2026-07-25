@@ -73,8 +73,9 @@
   async function loginWithCredentials(mobile, password) {
     if (!/^1[3-9]\d{9}$/.test(String(mobile || ""))) throw new Error("请输入正确的 11 位手机号");
     if (!String(password || "")) throw new Error("请输入麦稀奇密码");
-    const tab = await chrome.tabs.create({url: "https://www.mxiqi.com/user.login?change=1", active: false});
-    await waitForTab(tab.id);
+    let tab = await chrome.tabs.create({url: "https://www.mxiqi.com/user.login?change=1", active: false});
+    tab = await waitForTab(tab.id);
+    if (/\/org(?:[./?]|$)/.test(tab.url || "")) return {loggedIn: true, reusedSession: true};
     const submitted = await chrome.tabs.sendMessage(tab.id, {type: "submitCredentials", mobile, password});
     if (!submitted?.ok || !submitted?.submitted) throw new Error(submitted?.error || "登录表单提交失败");
     const result = await waitForLoginResult(tab.id);
