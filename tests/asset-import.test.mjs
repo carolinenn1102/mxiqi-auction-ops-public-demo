@@ -1,0 +1,81 @@
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import test from "node:test";
+
+const requireFromApp = createRequire(new URL("../../mxiqi_auction_ops/package.json", import.meta.url));
+const ExcelJS = requireFromApp("exceljs");
+await import("../matching-core.js");
+
+const { parseAssetWorkbook, rematchAssets } = globalThis.MxiqiAssets;
+
+test("parses consignment and grading sheets", () => {
+  const workbook = new ExcelJS.Workbook();
+  const consignment = workbook.addWorksheet("寄存");
+  consignment.addRow(["寄存", "用户", "寄存订单号", "订单日期", "收货地址", "拍品", null, "状态"]);
+  consignment.addRow([null, "体验客户 13900000001", "DEMO-C-001", new Date("2026-07-25"), "体验地址 13900000001", "Lot.8 演示纪念币", null, "在库"]);
+  const grading = workbook.addWorksheet("送评");
+  grading.addRow(["微信名称/联系方式", "送评物品", "图片", "档", "送评单号", "送评日期", "是否出分", "是否返还", null]);
+  grading.addRow(["体验客户", "演示银币", null, "65", "DEMO-G-001", "0725", "出分", "返还", "上拍"]);
+
+  const parsed = parseAssetWorkbook(workbook, "演示寄存.xlsx");
+  assert.deepEqual(new Set(parsed.kinds), new Set(["consignment", "grading"]));
+  assert.equal(parsed.assets.length, 2);
+  assert.equal(parsed.assets[0].sellerPhone, "13900000001");
+  assert.equal(parsed.assets[0].orderDate, "2026-07-25");
+});
+
+test("imports only the current inventory sheet", () => {
+  const workbook = new ExcelJS.Workbook();
+  const current = workbook.addWorksheet("整体");
+  current.addRow(["来源", "拍场号", "Lot号", "名称", "年份", "编号", "分数/裸币", "外拍价格", "到手价格", "备注", "状态", "售出渠道/价格（未扣手续费，运费）"]);
+  current.addRow(["HA", "DEMO-A", 12, "演示库存银币", 1888, "DEMO-ID-1", 64, 80, 620, null, "在库", null]);
+  const sold = workbook.addWorksheet("已售出");
+  sold.addRow(["来源", "拍场号", "Lot号", "名称", "年份", "编号", "分数/裸币", "外拍价格", "到手价格"]);
+  sold.addRow(["HA", "DEMO-B", 13, "已售出演示银币", 1889, "DEMO-ID-2", 64, 90, 700]);
+
+  const parsed = parseAssetWorkbook(workbook, "演示外拍.xlsx");
+  assert.deepEqual(parsed.kinds, ["inventory"]);
+  assert.equal(parsed.assets.length, 1);
+  assert.equal(parsed.assets[0].sourceSheet, "整体");
+  assert.equal(parsed.assets[0].gradingId, "DEMO-ID-1");
+});
+
+test("uses phone first and routes ambiguous candidates to manual review", () => {
+  const asset = {
+    id: "a1",
+    assetKey: "a1",
+    itemName: "没有名称相似度的寄存物品",
+    sellerPhone: "13900000001",
+    sellerWechat: "体验客户",
+    matchStatus: "unmatched",
+    matchedRecordId: "",
+  };
+  const unique = rematchAssets([asset], [
+    { id: "r1", lot: 1, itemName: "旧订单", sellerWechat: "体验客户", sellerPhone: "13900000001" },
+  ])[0];
+  assert.equal(unique.matchStatus, "auto");
+  assert.equal(unique.matchedRecordId, "r1");
+  assert.match(unique.matchReason, /手机号一致/);
+
+  const ambiguous = rematchAssets([asset], [
+    { id: "r1", lot: 1, itemName: "甲", sellerWechat: "其它", sellerPhone: "13900000001" },
+    { id: "r2", lot: 2, itemName: "乙", sellerWechat: "其它", sellerPhone: "13900000001" },
+  ])[0];
+  assert.equal(ambiguous.matchStatus, "review");
+});
+
+test("preserves a valid manual match when rematching", () => {
+  const result = rematchAssets([{
+    id: "a1",
+    assetKey: "a1",
+    itemName: "寄存物品",
+    matchStatus: "manual",
+    matchedRecordId: "r2",
+    matchReason: "人工确认",
+  }], [
+    { id: "r1", lot: 1, itemName: "寄存物品" },
+    { id: "r2", lot: 2, itemName: "其它" },
+  ])[0];
+  assert.equal(result.matchStatus, "manual");
+  assert.equal(result.matchedRecordId, "r2");
+});

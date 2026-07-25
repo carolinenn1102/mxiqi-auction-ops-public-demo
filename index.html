@@ -16,6 +16,7 @@
       <div class="brand"><span class="brand-mark">拍</span><span><b>送拍运营台</b><small>PUBLIC DEMO</small></span></div>
       <nav class="nav-list" aria-label="主导航">
         <button class="nav-item active" data-stage="all"><span>▦</span> 拍品工作台</button>
+        <button class="nav-item" id="open-assets"><span>▤</span> 寄存与库存</button>
         <button class="nav-item" data-stage="pickup"><span>⌁</span> 物流取件</button>
         <button class="nav-item" data-stage="shipping"><span>↗</span> 发货复核</button>
         <button class="nav-item" data-stage="settlement"><span>¥</span> 结算复核</button>
@@ -138,6 +139,7 @@
         </div></section>
         <section class="form-section"><div class="form-section-heading"><h3>送拍与结算</h3><p>用于送拍业务跟踪表</p></div><div class="form-grid">
           <label class="field"><span>送拍人（微信名）</span><input name="sellerWechat"></label>
+          <label class="field"><span>送拍人手机号</span><input name="sellerPhone" type="tel" inputmode="numeric" autocomplete="off" placeholder="用于匹配寄存和麦稀奇账号"></label>
           <label class="field"><span>联系时间</span><input name="contactedAt" type="date"></label>
           <label class="field"><span>盒子币编号</span><input name="coinBoxId"></label>
           <label class="field"><span>快递单号</span><input name="trackingNumber"></label>
@@ -158,11 +160,30 @@
 
   <dialog id="import-dialog" class="dialog">
     <form method="dialog" id="import-form"><header><h2>导入拍品数据</h2><button class="icon-close" type="button" value="cancel" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
-      <p class="modal-copy">支持送拍跟踪表、麦稀奇 v3.7 `.xlsx` 和 JSON 数组。体验数据只写入当前浏览器。</p>
+      <p class="modal-copy">支持送拍跟踪表、麦稀奇 v3.7 `.xlsx` 和 JSON 数组。寄存、送评和外拍库存请使用左侧“寄存与库存”。体验数据只写入当前浏览器。</p>
       <label class="file-drop"><input id="excel-file" type="file" accept=".xlsx"><span class="file-icon">⇧</span><b id="file-name">选择 .xlsx 文件</b><small>自动识别两种模板，重复 Lot 会更新</small></label>
       <div class="divider"><span>或者粘贴 JSON</span></div>
       <textarea id="json-input" class="import-area" placeholder='[{"lot":106,"itemName":"拍品名称","finalPrice":680}]'></textarea>
     </div><footer><button class="btn secondary" type="button" value="cancel" data-close-dialog>取消</button><button class="btn primary" id="run-import" value="default">导入并校验</button></footer></form>
+  </dialog>
+
+  <dialog id="asset-dialog" class="dialog asset-dialog">
+    <form method="dialog"><header><div><p class="eyebrow">寄存 · 送评 · 当前库存</p><h2>库存导入与订单匹配</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
+      <div class="asset-security"><b>真实资料只保存在当前浏览器</b><p>不会把手机号、地址或库存明细上传到公开仓库。支持“寄存记录、送评记录.xlsx”和“外拍.xlsx”；外拍只导入“整体”当前库存，不读取“已售出”。</p></div>
+      <section class="asset-import-panel">
+        <label class="file-drop asset-file-drop"><input id="asset-excel-file" type="file" accept=".xlsx" multiple><span class="file-icon">⇧</span><b id="asset-file-name">选择寄存或外拍 Excel</b><small>可一次选择两份文件；重复记录会更新，不会重复新增</small></label>
+        <div class="asset-import-actions"><button class="btn secondary" type="button" id="asset-rematch">重新自动匹配</button><span>规则：手机号优先，其次评级编号、送拍人和拍品名称。</span></div>
+      </section>
+      <section class="asset-metrics" aria-label="匹配汇总">
+        <button type="button" data-asset-filter="all"><span>全部</span><b id="asset-total">0</b></button>
+        <button type="button" data-asset-filter="auto"><span>自动匹配</span><b id="asset-auto">0</b></button>
+        <button type="button" data-asset-filter="manual"><span>人工匹配</span><b id="asset-manual">0</b></button>
+        <button type="button" data-asset-filter="review"><span>待确认</span><b id="asset-review">0</b></button>
+        <button type="button" data-asset-filter="unmatched"><span>未匹配</span><b id="asset-unmatched">0</b></button>
+      </section>
+      <div class="asset-toolbar"><label><span>⌕</span><input id="asset-search" type="search" placeholder="搜索手机号、订单号、编号或拍品"></label><button class="text-button" type="button" id="asset-clear-filter">显示全部</button></div>
+      <div class="asset-table-wrap"><table class="asset-table"><thead><tr><th>类型 / 来源</th><th>物品</th><th>送拍人 / 手机号</th><th>订单 / 成本</th><th>匹配状态</th><th>匹配到此前订单</th></tr></thead><tbody id="asset-body"><tr><td colspan="6" class="empty-state">尚未导入寄存或库存数据。</td></tr></tbody></table></div>
+    </div><footer><span class="asset-footer-note" id="asset-footer-note">等待导入</span><button class="btn primary" value="default">完成</button></footer></form>
   </dialog>
 
   <dialog id="audit-dialog" class="dialog">
@@ -248,7 +269,7 @@
   <dialog id="backup-dialog" class="dialog">
     <form method="dialog"><header><div><p class="eyebrow">本地数据保障</p><h2>完整备份与恢复</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
       <div class="backup-status"><span class="backup-shield">✓</span><div><b>当前数据自动保存在这台设备</b><p id="backup-summary">正在读取数据状态…</p></div></div>
-      <p class="modal-copy">备份文件包含拍品、地址审核、发货回填、平台连接状态、佣金规则、客户生日月份和操作记录，但不包含密码、验证码或 Cookie。清理浏览器数据前务必先下载备份。</p>
+      <p class="modal-copy">备份文件包含拍品、寄存/送评/库存、匹配结果、地址审核、发货回填、平台连接状态、佣金规则、客户生日月份和操作记录，但不包含密码、验证码或 Cookie。清理浏览器数据前务必先下载备份。</p>
       <div class="backup-actions"><button class="btn primary" type="button" id="download-backup">下载完整备份</button><label class="btn secondary file-button">选择备份文件<input id="backup-file" type="file" accept="application/json,.json"></label><button class="btn secondary" type="button" id="restore-backup" disabled>恢复所选备份</button></div>
       <p class="backup-file-name" id="backup-file-name">尚未选择备份文件</p>
     </div><footer><button class="btn primary" value="default">完成</button></footer></form>
@@ -256,6 +277,7 @@
 
   <div id="toast" class="toast" role="status" hidden></div>
   <script src="vendor/exceljs.min.js"></script>
+  <script src="matching-core.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

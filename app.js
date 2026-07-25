@@ -7,6 +7,7 @@
   const CUSTOMERS_KEY = "mxiqi-public-demo-customers-v2";
   const COLLECTOR_KEY = "mxiqi-public-demo-collector-v1";
   const CONNECTION_KEY = "mxiqi-public-demo-connection-v1";
+  const ASSETS_KEY = "mxiqi-public-demo-assets-v1";
   const MIGRATION_KEY = "mxiqi-public-demo-schema";
   const BACKUP_META_KEY = "mxiqi-public-demo-last-backup";
 
@@ -38,8 +39,8 @@
   };
 
   const seedCustomers = {
-    "林先生·上海": { birthdayMonth: 7 },
-    "周女士": { birthdayMonth: 12 },
+    "林先生·上海": { birthdayMonth: 7, phone: "13900001001" },
+    "周女士": { birthdayMonth: 12, phone: "13900001004" },
   };
 
   const seedRecords = [
@@ -58,6 +59,9 @@
     customers: loadObject(CUSTOMERS_KEY, seedCustomers),
     collector: loadObject(COLLECTOR_KEY, defaultCollector),
     connection: loadObject(CONNECTION_KEY, defaultConnection),
+    assets: loadArray(ASSETS_KEY, []),
+    assetFilter: "all",
+    assetQuery: "",
     stage: "all",
     query: "",
     filters: {seller:"",auction:"",outcome:"",disposition:"",shipping:""},
@@ -80,6 +84,7 @@
   const shippingDialog = $("#shipping-dialog");
   const shippingForm = $("#shipping-form");
   const connectionDialog = $("#connection-dialog");
+  const assetDialog = $("#asset-dialog");
   let pendingBackupFile = null;
   const collectorRuntime = {running:false,busy:false,nextRunAt:0,lastActivityAt:Date.now()};
 
@@ -108,6 +113,7 @@
     localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(state.customers));
     localStorage.setItem(COLLECTOR_KEY, JSON.stringify(state.collector));
     localStorage.setItem(CONNECTION_KEY, JSON.stringify(state.connection));
+    localStorage.setItem(ASSETS_KEY, JSON.stringify(state.assets));
   }
 
   function uid() {
@@ -142,6 +148,7 @@
   function missing(record) {
     return [
       !record.sellerWechat && "送拍人",
+      record.sellerWechat && !record.sellerPhone && "送拍人手机号",
       !record.contactedAt && "联系时间",
       !record.trackingNumber && "快递单号",
       !record.itemName && "拍品名称",
@@ -328,7 +335,7 @@
   function visibleRecords() {
     const query = state.query.trim().toLowerCase();
     return state.records.filter((record) => {
-      const search = !query || [record.lot,record.itemName,record.sellerWechat,record.auctionHouse,record.trackingNumber,record.pickupCode,record.outboundTrackingNumber,record.recipientName,record.recipientPhone,record.recipientRaw,record.promotion].join(" ").toLowerCase().includes(query);
+      const search = !query || [record.lot,record.itemName,record.sellerWechat,record.sellerPhone,record.auctionHouse,record.trackingNumber,record.pickupCode,record.outboundTrackingNumber,record.recipientName,record.recipientPhone,record.recipientRaw,record.promotion].join(" ").toLowerCase().includes(query);
       const filters = (!state.filters.seller || record.sellerWechat === state.filters.seller)
         && (!state.filters.auction || record.auctionHouse === state.filters.auction)
         && (!state.filters.outcome || record.finalOutcome === state.filters.outcome)
@@ -465,7 +472,7 @@
       return `<tr class="${state.selected.has(record.id) ? "selected-row" : ""}">
         <td class="select-column"><input type="checkbox" data-select="${esc(record.id)}" ${state.selected.has(record.id) ? "checked" : ""} ${Number(record.finalPrice) <= 0 ? "disabled" : ""}></td>
         <td><div class="lot-cell"><span>${record.lot}</span><div><b>${esc(record.itemName)}</b><small>${esc(record.projectName || record.primaryCategory || "未设置项目")}</small></div></div></td>
-        <td><b class="${record.sellerWechat ? "" : "muted"}">${esc(record.sellerWechat || "待补")}</b><small>${esc(record.trackingNumber || "未填快递单号")}</small></td>
+        <td><b class="${record.sellerWechat ? "" : "muted"}">${esc(record.sellerWechat || "待补")}</b><small>${esc(record.sellerPhone || "手机号待补")}</small><small>${esc(record.trackingNumber || "未填快递单号")}</small></td>
         <td><b>${esc(record.auctionHouse || "待设置拍场")}</b><small>${esc(record.auctionAt || "待设置时间")}</small></td>
         <td><b class="money">${Number(record.finalPrice) > 0 ? currency.format(record.finalPrice) : "待拍"}</b><small>${esc(record.finalOutcome || "状态待确认")}${record.paymentStatus ? ` · ${esc(record.paymentStatus)}` : ""}</small>${isPaymentOverdue(record) ? '<span class="chip overdue">超时未付款</span>' : ""}${record.returnDisposition ? `<span class="chip disposition">${esc(record.returnDisposition)}</span>` : ""}</td>
         <td>${gaps.length ? `<button class="chip warning" data-action="edit" data-id="${esc(record.id)}" title="${esc(gaps.join("、"))}">缺 ${gaps.length} 项</button>` : '<span class="chip success">完整</span>'}</td>
@@ -502,6 +509,7 @@
       if (!element.name) return;
       let value = record[element.name];
       if (element.name === "birthdayMonth") value = birthdayMonthFor(record) || "";
+      if (element.name === "sellerPhone") value = record.sellerPhone || state.customers[record.sellerWechat]?.phone || "";
       if (element.type === "checkbox") element.checked = Boolean(value);
       else element.value = value ?? "";
     });
@@ -617,6 +625,7 @@
         state.records.push(record);
       }
     }
+    state.assets = MxiqiAssets.rematchAssets(state.assets, state.records);
     save();
     render();
   }
@@ -783,12 +792,100 @@
     $("#collector-dialog").showModal();
   }
 
+  function assetStatusLabel(value) {
+    return ({auto:"自动匹配",manual:"人工匹配",review:"待人工确认",unmatched:"未匹配"})[value] || "未匹配";
+  }
+
+  function assetSourceLabel(asset) {
+    return `${MxiqiAssets.TYPE_LABELS[asset.assetType] || "资料"} · ${asset.sourceSheet || "工作表"}`;
+  }
+
+  function assetVisibleRows() {
+    const query = state.assetQuery.trim().toLowerCase();
+    return state.assets.filter((asset) => {
+      const matchesStatus = state.assetFilter === "all" || asset.matchStatus === state.assetFilter;
+      const searchText = [asset.itemName,asset.sellerWechat,asset.sellerPhone,asset.consignmentOrderNo,asset.gradingOrderNo,asset.gradingId,asset.auctionNumber,asset.lot,asset.sourceFile,asset.status].join(" ").toLowerCase();
+      return matchesStatus && (!query || searchText.includes(query));
+    });
+  }
+
+  function renderAssetPanel() {
+    const counts = {auto:0,manual:0,review:0,unmatched:0};
+    state.assets.forEach((asset) => { counts[asset.matchStatus] = (counts[asset.matchStatus] || 0) + 1; });
+    $("#asset-total").textContent = state.assets.length;
+    $("#asset-auto").textContent = counts.auto;
+    $("#asset-manual").textContent = counts.manual;
+    $("#asset-review").textContent = counts.review;
+    $("#asset-unmatched").textContent = counts.unmatched;
+    $$('[data-asset-filter]').forEach((button) => button.classList.toggle("active", button.dataset.assetFilter === state.assetFilter));
+    $("#asset-search").value = state.assetQuery;
+    const visible = assetVisibleRows();
+    $("#asset-footer-note").textContent = state.assets.length
+      ? `显示 ${visible.length} / ${state.assets.length} 条 · ${counts.review + counts.unmatched} 条需要人工处理`
+      : "等待导入";
+    const body = $("#asset-body");
+    if (!visible.length) {
+      body.innerHTML = `<tr><td colspan="6" class="empty-state">${state.assets.length ? "当前筛选下没有记录。" : "尚未导入寄存或库存数据。"}</td></tr>`;
+      return;
+    }
+    const recordOptions = state.records.slice().sort((a, b) => Number(a.lot) - Number(b.lot)).map((record) =>
+      `<option value="${esc(record.id)}">Lot ${esc(record.lot)} · ${esc(record.sellerWechat || "待补送拍人")} · ${esc(record.sellerPhone || "无手机号")} · ${esc(record.itemName)}</option>`
+    ).join("");
+    body.innerHTML = visible.map((asset) => {
+      const orderDetail = asset.consignmentOrderNo ? `寄存单 ${asset.consignmentOrderNo}`
+        : asset.gradingOrderNo ? `送评单 ${asset.gradingOrderNo}`
+        : [asset.auctionNumber && `拍场 ${asset.auctionNumber}`, asset.lot && `Lot ${asset.lot}`].filter(Boolean).join(" · ") || "无订单编号";
+      const amountDetail = asset.assetType === "inventory" ? `到手 ${currency.format(asset.landedCost || 0)} · 外拍 ${currency.format(asset.purchasePrice || 0)}` : (asset.orderDate || asset.gradingDate || "日期未填");
+      return `<tr>
+        <td><span class="asset-type ${esc(asset.assetType)}">${esc(assetSourceLabel(asset))}</span><small>${esc(asset.sourceFile)} · 第 ${esc(asset.sourceRow)} 行</small></td>
+        <td><b>${esc(asset.itemName)}</b><small>${esc([asset.gradingId && `编号 ${asset.gradingId}`,asset.gradingScore,asset.issueYear].filter(Boolean).join(" · ") || asset.status || "")}</small></td>
+        <td><b>${esc(asset.sellerWechat || "库存未关联人员")}</b><small>${esc(asset.sellerPhone || "手机号待补")}</small></td>
+        <td><b>${esc(orderDetail)}</b><small>${esc(amountDetail)}</small></td>
+        <td><span class="match-badge ${esc(asset.matchStatus)}">${esc(assetStatusLabel(asset.matchStatus))}</span><small>${esc(asset.matchReason || "")}</small></td>
+        <td><select class="asset-match-select" data-asset-match="${esc(asset.id)}"><option value="">不匹配 / 稍后处理</option>${recordOptions}</select></td>
+      </tr>`;
+    }).join("");
+    visible.forEach((asset) => {
+      const select = body.querySelector(`[data-asset-match="${CSS.escape(asset.id)}"]`);
+      if (select) select.value = ["auto", "manual"].includes(asset.matchStatus) ? asset.matchedRecordId || "" : "";
+    });
+  }
+
+  function openAssets() {
+    state.assets = MxiqiAssets.rematchAssets(state.assets, state.records);
+    save();
+    renderAssetPanel();
+    assetDialog.showModal();
+  }
+
+  async function importAssetFiles(files) {
+    if (!files.length) return;
+    let incoming = [];
+    const kindLabels = new Set();
+    for (const file of files) {
+      if (!file.name.toLowerCase().endsWith(".xlsx")) throw new Error(`${file.name} 不是 .xlsx 文件`);
+      if (file.size > 8 * 1024 * 1024) throw new Error(`${file.name} 超过 8MB`);
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(await file.arrayBuffer());
+      const parsed = MxiqiAssets.parseAssetWorkbook(workbook, file.name);
+      incoming.push(...parsed.assets);
+      parsed.kinds.forEach((kind) => kindLabels.add(MxiqiAssets.TYPE_LABELS[kind] || kind));
+    }
+    state.assets = MxiqiAssets.mergeAssets(state.assets, incoming);
+    state.assets = MxiqiAssets.rematchAssets(state.assets, state.records);
+    save();
+    audit("导入寄存库存", `${incoming.length} 条 · ${[...kindLabels].join("、")}`);
+    renderAssetPanel();
+    updateBackupSummary();
+    notify(`已导入 ${incoming.length} 条${[...kindLabels].join("、")}数据并完成首轮匹配`);
+  }
+
   function updateBackupSummary() {
     const lastBackup = localStorage.getItem(BACKUP_META_KEY);
     const customerCount = Object.values(state.customers).filter((customer) => Number(customer.birthdayMonth) > 0).length;
     const shippingPending = state.records.filter((record) => isShippingCandidate(record) && shippingStage(record) !== "completed").length;
     const connectionLabel = isCollectorConnected() ? state.connection.status === "demo_connected" ? "演示登录已连接" : "平台已连接" : "平台未登录";
-    $("#backup-summary").textContent = `${state.records.length} 条拍品 · ${customerCount} 位客户已设生日月 · ${shippingPending} 单待发货 · ${connectionLabel} · 采集间隔 ${state.collector.intervalSeconds} 秒${lastBackup ? ` · 上次备份 ${new Date(lastBackup).toLocaleString("zh-CN")}` : " · 尚未下载过备份"}`;
+    $("#backup-summary").textContent = `${state.records.length} 条拍品 · ${state.assets.length} 条寄存/库存 · ${customerCount} 位客户已设生日月 · ${shippingPending} 单待发货 · ${connectionLabel} · 采集间隔 ${state.collector.intervalSeconds} 秒${lastBackup ? ` · 上次备份 ${new Date(lastBackup).toLocaleString("zh-CN")}` : " · 尚未下载过备份"}`;
   }
 
   function openBackup() {
@@ -812,7 +909,7 @@
 
   function downloadBackup() {
     const exportedAt = new Date().toISOString();
-    const backup = {schemaVersion:6,exportedAt,records:state.records,settings:state.settings,customers:state.customers,collector:state.collector,connection:state.connection,audit:state.audit};
+    const backup = {schemaVersion:7,exportedAt,records:state.records,assets:state.assets,settings:state.settings,customers:state.customers,collector:state.collector,connection:state.connection,audit:state.audit};
     downloadBlob(JSON.stringify(backup, null, 2), `送拍工作台_完整备份_${exportedAt.slice(0, 10)}.json`, "application/json;charset=utf-8");
     localStorage.setItem(BACKUP_META_KEY, exportedAt);
     audit("下载完整备份", `${state.records.length} 条拍品`);
@@ -826,12 +923,14 @@
       const backup = JSON.parse(await pendingBackupFile.text());
       if (!backup || !Array.isArray(backup.records)) throw new Error("备份文件格式不正确");
       state.records = backup.records.map((record) => ({...record,id:record.id || uid()}));
+      state.assets = Array.isArray(backup.assets) ? backup.assets.map((asset) => ({...asset,id:asset.id || uid()})) : [];
       state.settings = backup.settings && typeof backup.settings === "object" ? {...defaultSettings, ...backup.settings} : clone(defaultSettings);
       state.customers = backup.customers && typeof backup.customers === "object" ? backup.customers : {};
       state.collector = backup.collector && typeof backup.collector === "object" ? {...defaultCollector, ...backup.collector} : clone(defaultCollector);
       const restoredConnection = backup.connection && typeof backup.connection === "object" ? {...defaultConnection, ...backup.connection} : clone(defaultConnection);
       state.connection = restoredConnection.status === "demo_connected" ? restoredConnection : clone(defaultConnection);
       state.audit = Array.isArray(backup.audit) ? backup.audit : [];
+      state.assets = MxiqiAssets.rematchAssets(state.assets, state.records);
       collectorRuntime.running = false;
       collectorRuntime.busy = false;
       collectorRuntime.nextRunAt = 0;
@@ -842,7 +941,7 @@
       renderConnectionPanel();
       renderCollectorPanel();
       backupDialog.close();
-      notify(`已恢复 ${state.records.length} 条拍品及全部规则`);
+      notify(`已恢复 ${state.records.length} 条拍品、${state.assets.length} 条寄存/库存及全部规则`);
     } catch (error) {
       notify(error.message || "备份恢复失败", "error");
     }
@@ -1063,7 +1162,13 @@
     const existing = state.records.find((item) => item.id === state.editingId) || {};
     const birthdayMonth = Number(data.get("birthdayMonth") || 0);
     const sellerWechat = String(data.get("sellerWechat") || "").trim();
-    if (sellerWechat) state.customers[sellerWechat] = {birthdayMonth};
+    const sellerPhoneInput = String(data.get("sellerPhone") || "").trim();
+    const sellerPhone = MxiqiAssets.normalizePhone(sellerPhoneInput);
+    if (sellerPhoneInput && !sellerPhone) {
+      notify("送拍人手机号应为 11 位中国大陆手机号", "error");
+      return;
+    }
+    if (sellerWechat) state.customers[sellerWechat] = {birthdayMonth, phone:sellerPhone};
     const record = {
       ...existing,
       id: existing.id || uid(),
@@ -1082,6 +1187,7 @@
       primaryCategory: String(data.get("primaryCategory") || ""),
       secondaryCategory: String(data.get("secondaryCategory") || ""),
       sellerWechat,
+      sellerPhone,
       birthdayMonth,
       contactedAt: String(data.get("contactedAt") || ""),
       coinBoxId: String(data.get("coinBoxId") || ""),
@@ -1107,11 +1213,71 @@
     if (index >= 0) state.records[index] = record;
     else state.records.push({...record,carrier:"pending",logisticsStatus:"not_requested",pickupCode:""});
     state.records.filter((item) => !item.settled && item.sellerWechat === sellerWechat).forEach((item) => recalculateRecord(item));
+    state.assets = MxiqiAssets.rematchAssets(state.assets, state.records);
     audit("保存拍品", `Lot ${record.lot} · ${record.itemName}`);
     save();
     editDialog.close();
     render();
     notify(`Lot ${record.lot} 已保存，佣金已自动计算`);
+  });
+
+  $("#open-assets").addEventListener("click", openAssets);
+  $("#asset-excel-file").addEventListener("change", async (event) => {
+    const files = [...event.target.files];
+    $("#asset-file-name").textContent = files.length ? files.map((file) => file.name).join("、") : "选择寄存或外拍 Excel";
+    if (!files.length) return;
+    try {
+      await importAssetFiles(files);
+      event.target.value = "";
+    } catch (error) {
+      notify(error.message || "寄存/库存导入失败", "error");
+    }
+  });
+  $("#asset-rematch").addEventListener("click", () => {
+    state.assets = MxiqiAssets.rematchAssets(state.assets, state.records);
+    audit("重新匹配寄存库存", `${state.assets.length} 条资料`);
+    save();
+    renderAssetPanel();
+    notify("已重新执行自动匹配；人工确认结果保持不变", "info");
+  });
+  $$('[data-asset-filter]').forEach((button) => button.addEventListener("click", () => {
+    state.assetFilter = button.dataset.assetFilter;
+    renderAssetPanel();
+  }));
+  $("#asset-search").addEventListener("input", (event) => {
+    state.assetQuery = event.target.value;
+    renderAssetPanel();
+  });
+  $("#asset-clear-filter").addEventListener("click", () => {
+    state.assetFilter = "all";
+    state.assetQuery = "";
+    renderAssetPanel();
+  });
+  $("#asset-body").addEventListener("change", (event) => {
+    const assetId = event.target.dataset.assetMatch;
+    if (!assetId) return;
+    const asset = state.assets.find((item) => item.id === assetId);
+    if (!asset) return;
+    const record = state.records.find((item) => item.id === event.target.value);
+    if (!record) {
+      asset.matchedRecordId = "";
+      asset.matchStatus = "unmatched";
+      asset.matchScore = 0;
+      asset.matchReason = "用户选择稍后处理";
+      audit("取消寄存库存匹配", asset.itemName);
+    } else {
+      asset.matchedRecordId = record.id;
+      asset.matchStatus = "manual";
+      asset.matchScore = 999;
+      asset.matchReason = `人工确认 · Lot ${record.lot}`;
+      if (!record.sellerPhone && asset.sellerPhone) record.sellerPhone = asset.sellerPhone;
+      if (!record.sellerWechat && asset.sellerWechat && asset.sellerWechat !== "手机号用户") record.sellerWechat = asset.sellerWechat;
+      if (record.sellerWechat) state.customers[record.sellerWechat] = {...(state.customers[record.sellerWechat] || {}), phone:record.sellerPhone || ""};
+      audit("人工匹配寄存库存", `${asset.itemName} → Lot ${record.lot}`);
+    }
+    save();
+    render();
+    renderAssetPanel();
   });
 
   $("#open-import").addEventListener("click", () => importDialog.showModal());
@@ -1174,6 +1340,9 @@
     if (!isCollectorConnected()) return;
     if (collectorRuntime.running || collectorRuntime.busy) stopCollector("登录连接已退出，自动采集同步停止", false);
     state.connection = clone(defaultConnection);
+    state.assets = [];
+    state.assetFilter = "all";
+    state.assetQuery = "";
     audit("退出平台连接", "采集已锁定");
     save();
     renderConnectionPanel();
@@ -1250,7 +1419,7 @@
     render();
     renderConnectionPanel();
     renderCollectorPanel();
-    notify("已恢复示例数据、默认规则和未登录状态");
+    notify("已恢复示例拍品，寄存/库存已清空，规则和登录状态已重置");
   });
 
   function norm(value) {
@@ -1318,6 +1487,18 @@
         if (lot > 0 && projectName) records.push(compact({lot,itemName:projectName,projectName,lotLabel,auctionHouse:lotLabel.split(/[\/／]/)[0].trim(),sellerWechat:textAt(row,found.map,"送拍人（微信名）","送拍人微信名"),contactedAt:textAt(row,found.map,"联系时间"),coinBoxId:textAt(row,found.map,"盒子币编号"),trackingNumber:textAt(row,found.map,"快递单号"),auctionAt:textAt(row,found.map,"上拍时间（拍卖时间）","上拍时间拍卖时间"),received:textAt(row,found.map,"是/否收到","是否收到") || "待确认",finalOutcome:outcome.includes("拖回") ? "拖回" : numberAt(row,found.map,"拍出价格/拖回") > 0 ? "成交" : "",finalPrice:outcome.includes("拖回") ? 0 : numberAt(row,found.map,"拍出价格/拖回"),settled:textAt(row,found.map,"是/否已结账","是否已结账") === "是",settlementNote:textAt(row,found.map,"结账")}));
       }
     }
+    if (found.kind === "tracker" && column(found.map, "送拍人手机号", "手机号")) {
+      let recordIndex = 0;
+      for (let rowNo = found.rowNo + 1; rowNo <= found.sheet.rowCount; rowNo += 1) {
+        const row = found.sheet.getRow(rowNo);
+        const lotLabel = textAt(row, found.map, "拍场/Lot", "拍场Lot");
+        const projectName = textAt(row, found.map, "送拍项目");
+        if (lotFromLabel(lotLabel) > 0 && projectName && records[recordIndex]) {
+          records[recordIndex].sellerPhone = MxiqiAssets.normalizePhone(textAt(row, found.map, "送拍人手机号", "手机号"));
+          recordIndex += 1;
+        }
+      }
+    }
     return records;
   }
 
@@ -1325,9 +1506,9 @@
     try {
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet("Sheet1");
-      const headers = ["送拍人（微信名）","联系时间","送拍项目","盒子币编号","快递单号","上拍时间（拍卖时间）","拍场/Lot","是/否收到","拍出价格/拖回","送拍佣金","结款金额","是/否已结账","适用优惠方案","结账","利润（不包含邮费）"];
+      const headers = ["送拍人（微信名）","送拍人手机号","联系时间","送拍项目","盒子币编号","快递单号","上拍时间（拍卖时间）","拍场/Lot","是/否收到","拍出价格/拖回","送拍佣金","结款金额","是/否已结账","适用优惠方案","结账","利润（不包含邮费）"];
       sheet.addRow([null, ...headers]);
-      state.records.forEach((record) => sheet.addRow([null,record.sellerWechat || null,record.contactedAt || null,record.projectName || record.itemName,record.coinBoxId || null,record.trackingNumber || null,record.auctionAt || null,record.lotLabel || `${record.auctionHouse || ""} / Lot ${record.lot}`,record.received || "待确认",record.finalOutcome === "拖回" ? "拖回" : record.finalPrice || null,record.commissionAmount || null,record.settlementAmount || null,record.settled ? "是" : "否",record.promotion || null,record.settlementNote || null,record.profit || null]));
+      state.records.forEach((record) => sheet.addRow([null,record.sellerWechat || null,record.sellerPhone || null,record.contactedAt || null,record.projectName || record.itemName,record.coinBoxId || null,record.trackingNumber || null,record.auctionAt || null,record.lotLabel || `${record.auctionHouse || ""} / Lot ${record.lot}`,record.received || "待确认",record.finalOutcome === "拖回" ? "拖回" : record.finalPrice || null,record.commissionAmount || null,record.settlementAmount || null,record.settled ? "是" : "否",record.promotion || null,record.settlementNote || null,record.profit || null]));
       sheet.getRow(1).font = {bold:true};
       sheet.views = [{state:"frozen",ySplit:1}];
       downloadBlob(await workbook.xlsx.writeBuffer(), `送拍跟踪表_体验版_${new Date().toISOString().slice(0,10)}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -1459,7 +1640,7 @@
   $("#export-settlement").addEventListener("click", exportSettlement);
   $("#export-settlement-image").addEventListener("click", exportSettlementImage);
 
-  if (localStorage.getItem(MIGRATION_KEY) !== "5") {
+  if (localStorage.getItem(MIGRATION_KEY) !== "6") {
     const sampleOverdue = state.records.find((record) => record.id === "d102");
     if (sampleOverdue && !sampleOverdue.paymentStatus) {
       sampleOverdue.paymentStatus = "待付款";
@@ -1486,9 +1667,15 @@
       record.mxiqiShippingStatus ||= "";
     });
     state.records.filter((record) => !record.settled).forEach((record) => recalculateRecord(record));
+    const demoPhones = {d101:"13900001001",d102:"13900001002",d103:"13900001003",d104:"13900001004"};
+    state.records.forEach((record) => {
+      record.sellerPhone ||= state.customers[record.sellerWechat]?.phone || demoPhones[record.id] || "";
+      if (record.sellerWechat && record.sellerPhone) state.customers[record.sellerWechat] = {...(state.customers[record.sellerWechat] || {}), phone:record.sellerPhone};
+    });
+    state.assets = Array.isArray(state.assets) ? MxiqiAssets.rematchAssets(state.assets, state.records) : [];
     state.connection = {...defaultConnection, ...state.connection};
     if (!["disconnected","demo_connected"].includes(state.connection.status)) state.connection = clone(defaultConnection);
-    localStorage.setItem(MIGRATION_KEY, "5");
+    localStorage.setItem(MIGRATION_KEY, "6");
     save();
   }
 
