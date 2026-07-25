@@ -43,10 +43,30 @@
     };
   }
 
+  function setInputValue(input, value) {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    if (setter) setter.call(input, value);
+    else input.value = value;
+    input.dispatchEvent(new Event("input", {bubbles: true}));
+    input.dispatchEvent(new Event("change", {bubbles: true}));
+  }
+
+  function submitCredentials({mobile, password}) {
+    const mobileInput = document.querySelector('input[name="mobile"], input[placeholder="输入手机号"]');
+    const passwordInput = document.querySelector('input[name="password"], input[placeholder="输入密码"]');
+    const submitButton = document.querySelector('#wrap-login button[type="submit"], #wrap-login input[type="submit"], button[type="submit"]');
+    if (!mobileInput || !passwordInput || !submitButton) throw new Error("麦稀奇登录表单结构已变化，请改用官方页面登录");
+    setInputValue(mobileInput, mobile);
+    setInputValue(passwordInput, password);
+    setTimeout(() => submitButton.click(), 0);
+    return {submitted: true};
+  }
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     (async () => {
       if (message?.type === "checkSession") return checkSession();
       if (message?.type === "scrapeOrders") return scrapeOrders(message);
+      if (message?.type === "submitCredentials") return submitCredentials(message);
       throw new Error("不支持的采集命令");
     })().then((result) => sendResponse({ok: true, ...result})).catch((error) => sendResponse({ok: false, error: error.message || "采集失败"}));
     return true;

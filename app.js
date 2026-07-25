@@ -643,6 +643,13 @@
     return {accepted, added, updated};
   }
 
+  function removeDefaultDemoRecords() {
+    const demoIds = new Set(["d101", "d102", "d103", "d104", "d105"]);
+    const before = state.records.length;
+    state.records = state.records.filter((record) => !demoIds.has(record.id));
+    return before - state.records.length;
+  }
+
   function updateRulePreviews() {
     const data = new FormData(settingsForm);
     $("#default-rule-preview").textContent = `示例：成交价 ¥1,000 时，${formatRule(data.get("defaultCommissionType"), Number(data.get("defaultCommissionValue") || 0))}。`;
@@ -722,6 +729,84 @@
     }
   }
 
+  async function loginAndSync() {
+    const mobileInput = $("#mxiqi-mobile");
+    const passwordInput = $("#mxiqi-password");
+    const loginButton = $("#connection-login-submit");
+    const loginCard = document.querySelector(".connector-login-card");
+    const loginNote = $("#connection-login-note");
+    const mobile = mobileInput.value.trim();
+    const password = passwordInput.value;
+
+    if (!/^1[3-9]\d{9}$/.test(mobile)) {
+      notify("请输入正确的 11 位手机号", "error");
+      mobileInput.focus();
+      return false;
+    }
+    if (!password) {
+      notify("请输入麦稀奇密码", "error");
+      passwordInput.focus();
+      return false;
+    }
+
+    loginButton.disabled = true;
+    loginCard?.classList.add("busy");
+    loginButton.textContent = "正在登录麦稀奇…";
+    loginNote.textContent = "正在把凭证交给本地采集助手，并仅提交到麦稀奇官网。";
+
+    try {
+      const loginResult = await MxiqiConnector.login({mobile, password});
+      passwordInput.value = "";
+      if (!loginResult.loggedIn) {
+        loginNote.textContent = "麦稀奇要求额外验证，请在刚打开的官方页面完成后，再回到这里检查登录。";
+        notify("需要在麦稀奇官方页面完成验证码或其他确认", "info");
+        return false;
+      }
+
+      const checkedAt = new Date().toISOString();
+      const session = await MxiqiConnector.ping();
+      if (!session.loggedIn) throw new Error("登录完成，但会话检查未通过");
+      state.connection = {
+        status: "connected",
+        mode: "connector",
+        method: "password",
+        connectedAt: checkedAt,
+        lastCheckedAt: checkedAt,
+        connectorCheckedAt: checkedAt,
+        connectorInstalled: true,
+        label: session.orgName || "麦稀奇商家账号",
+      };
+      state.collector.scope = "waitexpress";
+      mobileInput.value = "";
+      audit("项目内登录麦稀奇", "真实会话已建立；登录凭证未保存");
+      save();
+      renderConnectionPanel();
+      renderCollectorPanel();
+
+      const synced = await runCollector("manual");
+      if (!synced) return false;
+      state.stage = "all";
+      state.query = "";
+      state.filters = {seller:"",auction:"",outcome:"",disposition:"",shipping:""};
+      state.selected.clear();
+      save();
+      render();
+      connectionDialog.close("synced");
+      notify("登录成功，麦稀奇真实待发货数据已显示在项目表格中", "success");
+      return true;
+    } catch (error) {
+      passwordInput.value = "";
+      loginNote.textContent = "密码已从页面清空；请确认采集助手已安装，或改用官方登录页完成验证。";
+      notify(error.message || "登录并抓取失败", "error");
+      return false;
+    } finally {
+      passwordInput.value = "";
+      loginButton.disabled = false;
+      loginCard?.classList.remove("busy");
+      loginButton.textContent = "登录并抓取待发货";
+    }
+  }
+
   function openConnection() {
     const method = state.connection.method || "password";
     $$("input[name='connectionMethod']").forEach((input) => { input.checked = input.value === method; });
@@ -783,6 +868,7 @@
           state.connection = {...clone(defaultConnection),mode:"connector",connectorInstalled:true,connectorCheckedAt:now,lastCheckedAt:now};
           throw new Error("麦稀奇登录已失效，请重新登录后检查连接");
         }
+        removeDefaultDemoRecords();
         const stats = upsert(Array.isArray(result.records) ? result.records : []);
         state.collector.adapter = "connector";
         state.collector.lastRunAt = now;
@@ -1391,6 +1477,12 @@
       window.open("https://www.mxiqi.com/user.login", "_blank", "noopener,noreferrer");
       notify("未检测到采集助手，已直接打开麦稀奇官方登录页", "info");
     }
+  });
+  $("#connection-login-submit").addEventListener("click", () => { void loginAndSync(); });
+  $("#mxiqi-password").addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    void loginAndSync();
   });
   $("#connection-demo-login").addEventListener("click", () => {
     const method = document.querySelector("input[name='connectionMethod']:checked")?.value || "password";

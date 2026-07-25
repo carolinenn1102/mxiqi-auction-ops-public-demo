@@ -40,6 +40,7 @@
     extensionId: EXTENSION_ID,
     ping: () => send({type: "ping"}, 20_000),
     openLogin: () => send({type: "openLogin"}, 20_000),
+    login: ({mobile, password}) => send({type: "login", mobile, password}, 60_000),
     syncOrders: ({scope = "waitexpress", maxPages = 1} = {}) => send({
       type: "syncOrders",
       scope,

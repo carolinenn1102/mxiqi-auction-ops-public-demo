@@ -46,3 +46,14 @@ test("connector source contains no account credential fields or client secrets",
   assert.doesNotMatch(source, /accountPassword|savedPassword|clientSecret/i);
   assert.doesNotMatch(source, /password\s*[:=]\s*["'][^"']+/i);
 });
+
+test("project login is relayed without persistence", () => {
+  const bridge = fs.readFileSync(path.join(root, "connector-bridge.js"), "utf8");
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  const background = fs.readFileSync(path.join(extensionRoot, "background.js"), "utf8");
+  assert.match(bridge, /login:\s*\(\{mobile,\s*password\}\)/);
+  assert.match(background, /loginWithCredentials/);
+  assert.match(background, /url\.hostname === "127\.0\.0\.1"/);
+  assert.match(app, /passwordInput\.value\s*=\s*""/);
+  assert.doesNotMatch(app, /localStorage\.setItem\([^)]*password/i);
+});
