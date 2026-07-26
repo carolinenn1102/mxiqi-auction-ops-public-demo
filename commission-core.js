@@ -14,15 +14,20 @@
       .filter(Boolean);
   }
 
-  function calculate({gross = 0, birthdayMonth = 0, auctionMonth = 0, settings = {}} = {}) {
+  function calculate({gross = 0, birthdayMonth = 0, auctionMonth = 0, title = "", isReturn = false, settings = {}} = {}) {
     const price = Math.max(0, Number(gross) || 0);
+    if (isReturn) {
+      const value = Math.max(0, Number(settings.returnHandlingFee) || 0);
+      return {amount:money(value),label:"拖回处理费",isBirthday:false,isLowPrice:false,isBoxRebate:false,isReturn:true,type:"fixed",value};
+    }
     const isBirthday = Boolean(Number(birthdayMonth) && Number(birthdayMonth) === Number(auctionMonth));
+    const isBoxRebate = isBirthday && hasBoxRebate({gross:price,title,settings});
     const isLowPrice = !isBirthday && price < Number(settings.lowPriceThreshold || 0);
     const type = isBirthday ? settings.birthdayCommissionType : isLowPrice ? "fixed" : settings.defaultCommissionType;
     const value = Number(isBirthday ? settings.birthdayCommissionValue : isLowPrice ? settings.lowPriceFee : settings.defaultCommissionValue) || 0;
-    const label = isBirthday ? settings.birthdayLabel || "生日月优惠" : isLowPrice ? "低价固定佣金" : "普通佣金";
+    const label = isBoxRebate ? `${settings.birthdayLabel || "生日月返佣"}（盒子达标）` : isBirthday ? settings.birthdayLabel || "生日月优惠" : isLowPrice ? "低价固定佣金" : "普通佣金";
     const amount = money(type === "fixed" ? value : price * value / 100);
-    return {amount:Math.min(amount, price),label,isBirthday,isLowPrice,type,value};
+    return {amount:Math.min(amount, price),label,isBirthday,isLowPrice,isBoxRebate,isReturn:false,type,value};
   }
 
   function hasBoxRebate({gross = 0, title = "", settings = {}} = {}) {

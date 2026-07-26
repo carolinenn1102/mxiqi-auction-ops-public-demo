@@ -67,3 +67,10 @@ test("connector supports exact historical order-number lookup", () => {
   assert.match(content, /org\.order\.list\/all\?keywords=/);
   assert.match(content, /record\.mxiqiOrderId/);
 });
+
+test("connector supports the Mxiqi wait-confirm settlement scope", () => {
+  const content = fs.readFileSync(path.join(extensionRoot, "content.js"), "utf8");
+  assert.match(content, /scope === "waitconfirm"/);
+  assert.match(content, /safeScope === "waitconfirm" \? 20/);
+  assert.match(content, /org\.order\.list\/\$\{safeScope\}/);
+});

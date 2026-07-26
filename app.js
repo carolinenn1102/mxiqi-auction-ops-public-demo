@@ -17,10 +17,11 @@
     lowPriceThreshold: 100,
     lowPriceFee: 5,
     birthdayCommissionType: "percent",
-    birthdayCommissionValue: 5,
-    birthdayLabel: "生日月优惠",
+    birthdayCommissionValue: -2,
+    birthdayLabel: "生日月返佣",
     boxRebateThreshold: 1000,
     boxRebateKeywords: "NGC,PCGS",
+    returnHandlingFee: 8,
     sfThreshold: 1000,
   };
 
@@ -51,11 +52,11 @@
   };
 
   const seedRecords = [
-    {id:"d101",lot:101,itemName:"PMG 67EPQ 2024年龙年纪念钞",sellerWechat:"林先生·上海",contactedAt:"2026-07-12",projectName:"纪念钞专场",coinBoxId:"HX-DEMO-101",trackingNumber:"SF-DEMO-101-0001",auctionAt:"2026-07-28 20:00",auctionHouse:"夏日钱币精选",lotLabel:"A场 / Lot 101",received:"是",finalOutcome:"成交",finalPrice:1680,paymentStatus:"已付款",commissionAmount:84,settlementAmount:1596,profit:84,promotion:"生日月优惠 · 5%",startPrice:1000,primaryCategory:"钞票",secondaryCategory:"纪念钞",settled:false,carrier:"sf",carrierOverride:"",logisticsStatus:"ready",pickupCode:"DEMO-SF-101-A7K2",logisticsNote:"公开体验模拟码",recipientRaw:"演示收件人 13800000001 上海市浦东新区世纪大道100号",recipientName:"演示收件人",recipientPhone:"13800000001",addressProvince:"上海市",addressCity:"上海市",addressDistrict:"浦东新区",addressDetail:"世纪大道100号",addressStatus:"pending_review",shippingCarrier:"sf",mxiqiShippingStatus:""},
-    {id:"d102",lot:102,itemName:"袁世凯像民国三年壹圆 银元",sellerWechat:"藏泉阁",contactedAt:"2026-07-13",projectName:"机制币专场",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-28 20:00",auctionHouse:"夏日钱币精选",lotLabel:"A场 / Lot 102",received:"是",finalOutcome:"成交",finalPrice:860,paymentStatus:"待付款",paymentDueAt:"2026-07-21T20:00",returnDisposition:"拖回/等待",commissionAmount:68.8,settlementAmount:791.2,profit:68.8,promotion:"普通佣金 · 8%",startPrice:500,primaryCategory:"硬币",secondaryCategory:"银元",settled:false,carrier:"cainiao",carrierOverride:"",logisticsStatus:"simulation_ready",pickupCode:"DEMO-CN-102-P8Q2",logisticsNote:"公开体验模拟码"},
-    {id:"d103",lot:103,itemName:"T46 庚申年猴票 四方联",sellerWechat:"邮缘收藏",contactedAt:"2026-07-14",projectName:"经典邮票专场",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-29 19:30",auctionHouse:"邮品臻选",lotLabel:"B场 / Lot 103",received:"待确认",finalOutcome:"待拍",finalPrice:0,commissionAmount:0,settlementAmount:0,profit:0,startPrice:2200,primaryCategory:"邮票",secondaryCategory:"JT邮票",settled:false,carrier:"pending",carrierOverride:"",logisticsStatus:"not_requested",pickupCode:"",logisticsNote:""},
-    {id:"d104",lot:104,itemName:"清乾隆青花缠枝莲纹盘",sellerWechat:"周女士",contactedAt:"2026-07-15",projectName:"古器物专场",coinBoxId:"",trackingNumber:"SF-DEMO-104-0001",auctionAt:"2026-07-30 20:00",auctionHouse:"东方古美术",lotLabel:"C场 / Lot 104",received:"是",finalOutcome:"成交",finalPrice:3260,paymentStatus:"已付款",commissionAmount:260.8,settlementAmount:2999.2,profit:260.8,promotion:"普通佣金 · 8%",startPrice:1800,primaryCategory:"陶瓷",secondaryCategory:"旧藏瓷器",settled:true,settledAt:"2026-07-20T08:30:00.000Z",settlementNote:"已转账",carrier:"sf",carrierOverride:"",logisticsStatus:"simulation_ready",pickupCode:"DEMO-SF-104-K3M8",logisticsNote:"公开体验模拟码",recipientRaw:"体验客户 13800000004 北京市朝阳区建国路88号",recipientName:"体验客户",recipientPhone:"13800000004",addressProvince:"北京市",addressCity:"北京市",addressDistrict:"朝阳区",addressDetail:"建国路88号",addressStatus:"reviewed",shippingCarrier:"sf",outboundTrackingNumber:"SF-DEMO-OUT-104-0001",mxiqiShippingStatus:"filled",addressReviewedAt:"2026-07-20T09:00:00.000Z",shippingOrderedAt:"2026-07-20T09:05:00.000Z",mxiqiFilledAt:"2026-07-20T09:08:00.000Z"},
-    {id:"d105",lot:105,itemName:"1980年中国奥委会纪念铜章",sellerWechat:"",contactedAt:"",projectName:"章牌杂项",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-30 20:00",auctionHouse:"东方古美术",lotLabel:"C场 / Lot 105",received:"否",finalOutcome:"成交",finalPrice:420,paymentStatus:"已付款",commissionAmount:33.6,settlementAmount:386.4,profit:33.6,promotion:"普通佣金 · 8%",startPrice:100,primaryCategory:"章牌",secondaryCategory:"纪念章",settled:false,carrier:"cainiao",carrierOverride:"",logisticsStatus:"not_requested",pickupCode:"",logisticsNote:"",recipientRaw:"小王 13800000005 南山科技园科苑路",addressStatus:"needs_correction",shippingCarrier:"cainiao",mxiqiShippingStatus:""},
+    {id:"d101",lot:101,itemName:"NGC PMG 67EPQ 2024年龙年纪念钞",sellerWechat:"林先生·上海",contactedAt:"2026-07-12",projectName:"世界币章拍卖（第75期）",coinBoxId:"HX-DEMO-101",trackingNumber:"SF-DEMO-101-0001",auctionAt:"2026-07-28 20:00",auctionHouse:"麦稀奇",lotLabel:"A场 / Lot 101",received:"是",finalOutcome:"成交",finalPrice:2500,paymentStatus:"已付款",commissionAmount:-50,settlementAmount:2550,profit:-50,promotion:"生日月返佣（盒子达标） · -2%",startPrice:1000,primaryCategory:"钞票",secondaryCategory:"纪念钞",settled:false,carrier:"sf",carrierOverride:"",logisticsStatus:"ready",pickupCode:"DEMO-SF-101-A7K2",logisticsNote:"公开体验模拟码",recipientRaw:"演示收件人 13800000001 上海市浦东新区世纪大道100号",recipientName:"演示收件人",recipientPhone:"13800000001",addressProvince:"上海市",addressCity:"上海市",addressDistrict:"浦东新区",addressDetail:"世纪大道100号",addressStatus:"pending_review",shippingCarrier:"sf",mxiqiShippingStatus:""},
+    {id:"d102",lot:102,itemName:"袁世凯像民国三年壹圆 银元",sellerWechat:"藏泉阁",contactedAt:"2026-07-13",projectName:"世界币章拍卖（第75期）",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-28 20:00",auctionHouse:"麦稀奇",lotLabel:"A场 / Lot 102",received:"是",finalOutcome:"成交",finalPrice:860,paymentStatus:"待付款",paymentDueAt:"2026-07-21T20:00",returnDisposition:"拖回/等待",commissionAmount:8,settlementAmount:-8,profit:8,promotion:"拖回处理费 · ¥8.00",startPrice:500,primaryCategory:"硬币",secondaryCategory:"银元",settled:false,carrier:"cainiao",carrierOverride:"",logisticsStatus:"simulation_ready",pickupCode:"DEMO-CN-102-P8Q2",logisticsNote:"公开体验模拟码"},
+    {id:"d103",lot:103,itemName:"T46 庚申年猴票 四方联",sellerWechat:"邮缘收藏",contactedAt:"2026-07-14",projectName:"世界币章拍卖（第75期）",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-29 19:30",auctionHouse:"麦稀奇",lotLabel:"B场 / Lot 103",received:"待确认",finalOutcome:"待拍",finalPrice:0,commissionAmount:0,settlementAmount:0,profit:0,startPrice:2200,primaryCategory:"邮票",secondaryCategory:"JT邮票",settled:false,carrier:"pending",carrierOverride:"",logisticsStatus:"not_requested",pickupCode:"",logisticsNote:""},
+    {id:"d104",lot:104,itemName:"清乾隆青花缠枝莲纹盘",sellerWechat:"周女士",contactedAt:"2026-07-15",projectName:"长期征集拍品（第74期）",coinBoxId:"",trackingNumber:"SF-DEMO-104-0001",auctionAt:"2026-07-30 20:00",auctionHouse:"麦稀奇",lotLabel:"C场 / Lot 104",received:"是",finalOutcome:"成交",finalPrice:3260,paymentStatus:"已付款",commissionAmount:260.8,settlementAmount:2999.2,profit:260.8,promotion:"普通佣金 · 8%",startPrice:1800,primaryCategory:"陶瓷",secondaryCategory:"旧藏瓷器",settled:true,settledAt:"2026-07-20T08:30:00.000Z",settlementNote:"已转账",carrier:"sf",carrierOverride:"",logisticsStatus:"simulation_ready",pickupCode:"DEMO-SF-104-K3M8",logisticsNote:"公开体验模拟码",recipientRaw:"体验客户 13800000004 北京市朝阳区建国路88号",recipientName:"体验客户",recipientPhone:"13800000004",addressProvince:"北京市",addressCity:"北京市",addressDistrict:"朝阳区",addressDetail:"建国路88号",addressStatus:"reviewed",shippingCarrier:"sf",outboundTrackingNumber:"SF-DEMO-OUT-104-0001",mxiqiShippingStatus:"filled",addressReviewedAt:"2026-07-20T09:00:00.000Z",shippingOrderedAt:"2026-07-20T09:05:00.000Z",mxiqiFilledAt:"2026-07-20T09:08:00.000Z"},
+    {id:"d105",lot:105,itemName:"1980年中国奥委会纪念铜章",sellerWechat:"",contactedAt:"",projectName:"长期征集拍品（第74期）",coinBoxId:"",trackingNumber:"",auctionAt:"2026-07-30 20:00",auctionHouse:"麦稀奇",lotLabel:"C场 / Lot 105",received:"否",finalOutcome:"成交",finalPrice:420,paymentStatus:"已付款",commissionAmount:33.6,settlementAmount:386.4,profit:33.6,promotion:"普通佣金 · 8%",startPrice:100,primaryCategory:"章牌",secondaryCategory:"纪念章",settled:false,carrier:"cainiao",carrierOverride:"",logisticsStatus:"not_requested",pickupCode:"",logisticsNote:"",recipientRaw:"小王 13800000005 南山科技园科苑路",addressStatus:"needs_correction",shippingCarrier:"cainiao",mxiqiShippingStatus:""},
   ];
 
   const clone = (value) => typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value));
@@ -168,9 +169,9 @@
       !record.lotLabel && "拍场/Lot",
       record.received === "待确认" && "是否收到",
       !record.finalOutcome && "成交状态",
-      record.finalOutcome === "成交" && Number(record.finalPrice) <= 0 && "最终价格",
-      record.finalOutcome === "成交" && !(record.buyerName || record.recipientName) && "买家",
-      record.finalOutcome === "成交" && !(record.buyerPhone || record.recipientPhone) && "买家手机号",
+      record.finalOutcome === "成交" && !isReturnRecord(record) && Number(record.finalPrice) <= 0 && "最终价格",
+      record.finalOutcome === "成交" && !isReturnRecord(record) && !(record.buyerName || record.recipientName) && "买家",
+      record.finalOutcome === "成交" && !isReturnRecord(record) && !(record.buyerPhone || record.recipientPhone) && "买家手机号",
     ].filter(Boolean);
   }
 
@@ -183,20 +184,36 @@
     return Number(record.birthdayMonth || state.customers[record.sellerWechat]?.birthdayMonth || 0);
   }
 
+  function isReturnRecord(record) {
+    return MxiqiWorkflow.isReturnRecord(record);
+  }
+
+  function auctionPeriod(record) {
+    return MxiqiWorkflow.auctionPeriod(record);
+  }
+
+  function settlementGross(record) {
+    return MxiqiWorkflow.settlementGross(record);
+  }
+
+  function isSettlementEligible(record) {
+    return MxiqiWorkflow.isSettlementEligible(record);
+  }
+
   function formatRule(type, value) {
     return type === "fixed" ? `每件 ${currency.format(value || 0)}` : `成交价的 ${Number(value || 0)}%`;
   }
 
   function commissionPlan(record) {
-    const gross = Math.max(0, Number(record.finalPrice) || 0);
-    const plan = MxiqiCommission.calculate({gross,birthdayMonth:birthdayMonthFor(record),auctionMonth:auctionMonth(record),settings:state.settings});
+    const gross = settlementGross(record);
+    const plan = MxiqiCommission.calculate({gross,birthdayMonth:birthdayMonthFor(record),auctionMonth:auctionMonth(record),title:record.itemName,isReturn:isReturnRecord(record),settings:state.settings});
     return {...plan,label:`${plan.label} · ${plan.type === "fixed" ? currency.format(plan.value) : `${plan.value}%`}`};
   }
 
   function recalculateRecord(record, force = false) {
-    const gross = Math.max(0, Number(record.finalPrice) || 0);
+    const gross = settlementGross(record);
     if (record.settled && !force) return record;
-    if (!gross || record.finalOutcome === "拖回") {
+    if (!isSettlementEligible(record)) {
       record.commissionAmount = 0;
       record.settlementAmount = 0;
       record.profit = 0;
@@ -224,7 +241,7 @@
   }
 
   function isShippingCandidate(record) {
-    return record.finalOutcome === "成交" && Number(record.finalPrice) > 0 && record.paymentStatus === "已付款" && record.returnDisposition !== "拖回/发回";
+    return record.finalOutcome === "成交" && Number(record.finalPrice) > 0 && record.paymentStatus === "已付款" && !isReturnRecord(record);
   }
 
   function shippingStage(record) {
@@ -304,7 +321,7 @@
   }
 
   function soldRecords() {
-    return state.records.filter((record) => Number(record.finalPrice) > 0 && record.finalOutcome !== "拖回");
+    return state.records.filter(isSettlementEligible);
   }
 
   function isPaymentOverdue(record) {
@@ -324,11 +341,19 @@
     return MxiqiCommission.hasBoxRebate({gross:record.finalPrice,title:record.itemName,settings:state.settings});
   }
 
+  function hasAppliedBoxRebate(record) {
+    return hasBoxRebateSignal(record) && birthdayMonthFor(record) === auctionMonth(record);
+  }
+
   function promotionBadges(record) {
     const badges = [];
+    if (isReturnRecord(record)) badges.push(`<span class="chip neutral">拖回扣 ${currency.format(state.settings.returnHandlingFee || 0)}</span>`);
     const birthday = birthdayMonthFor(record);
     if (birthday && birthday === auctionMonth(record)) badges.push('<span class="chip birthday">生日月</span>');
-    if (hasBoxRebateSignal(record)) badges.push('<span class="chip box-rebate">盒子返 1</span>');
+    if (hasBoxRebateSignal(record)) {
+      const rebate = Math.abs(Number(state.settings.birthdayCommissionValue || 0));
+      badges.push(`<span class="chip box-rebate">${hasAppliedBoxRebate(record) && rebate ? `盒子返 ${rebate}%` : "盒子达标"}</span>`);
+    }
     return badges.length ? `<div class="promotion-badges">${badges.join("")}</div>` : "";
   }
 
@@ -355,6 +380,7 @@
     return soldRecords().filter((record) => {
       const date = datePart(record.auctionAt);
       return (!state.settlementScope.seller || record.sellerWechat === state.settlementScope.seller)
+        && (!state.filters.auction || auctionPeriod(record) === state.filters.auction)
         && (!state.settlementScope.from || (date && date >= state.settlementScope.from))
         && (!state.settlementScope.to || (date && date <= state.settlementScope.to));
     });
@@ -363,11 +389,11 @@
   function visibleRecords() {
     const query = state.query.trim().toLowerCase();
     return state.records.filter((record) => {
-      const search = !query || [record.lot,record.itemName,record.sellerWechat,record.sellerPhone,record.auctionHouse,record.trackingNumber,record.pickupCode,record.outboundTrackingNumber,record.recipientName,record.recipientPhone,record.recipientRaw,record.promotion].join(" ").toLowerCase().includes(query);
+      const search = !query || [record.lot,record.itemName,record.projectName,record.sellerWechat,record.sellerPhone,record.buyerName,record.buyerPhone,record.auctionHouse,record.trackingNumber,record.pickupCode,record.outboundTrackingNumber,record.recipientName,record.recipientPhone,record.recipientRaw,record.promotion].join(" ").toLowerCase().includes(query);
       const filters = (!state.filters.seller || record.sellerWechat === state.filters.seller)
-        && (!state.filters.auction || record.auctionHouse === state.filters.auction)
+        && (!state.filters.auction || auctionPeriod(record) === state.filters.auction)
         && (!state.filters.status || recordStatus(record) === state.filters.status)
-        && (!state.filters.shipping || shippingStage(record) === state.filters.shipping);
+        && (!state.filters.shipping || (["shipped","unshipped"].includes(state.filters.shipping) ? MxiqiWorkflow.shippingBucket(record) === state.filters.shipping : shippingStage(record) === state.filters.shipping));
       const stage = state.stage === "all"
         || (state.stage === "missing" && missing(record).length)
         || (state.stage === "pickup" && Number(record.finalPrice) > 0 && !record.pickupCode)
@@ -385,7 +411,7 @@
 
   function renderFilterOptions() {
     const sellers = [...new Set(state.records.map((record) => record.sellerWechat).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-CN"));
-    const auctions = [...new Set(state.records.map((record) => record.auctionHouse).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-CN"));
+    const auctions = [...new Set(state.records.map(auctionPeriod).filter((value) => value !== "期数待补"))].sort((a, b) => a.localeCompare(b, "zh-CN", {numeric:true}));
     setDynamicOptions("#filter-seller", sellers, "全部", state.filters.seller);
     setDynamicOptions("#filter-auction", auctions, "全部", state.filters.auction);
     $("#filter-status").value = state.filters.status;
@@ -398,7 +424,8 @@
   function renderSellerSummary() {
     const periodRecords = soldRecords().filter((record) => {
       const date = datePart(record.auctionAt);
-      return (!state.settlementScope.from || (date && date >= state.settlementScope.from))
+      return (!state.filters.auction || auctionPeriod(record) === state.filters.auction)
+        && (!state.settlementScope.from || (date && date >= state.settlementScope.from))
         && (!state.settlementScope.to || (date && date <= state.settlementScope.to));
     });
     const grouped = new Map();
@@ -407,7 +434,7 @@
       const current = grouped.get(seller) || {seller,phone:record.sellerPhone || "",count:0,gross:0,payable:0,pending:0};
       if (!current.phone && record.sellerPhone) current.phone = record.sellerPhone;
       current.count += 1;
-      current.gross += Number(record.finalPrice || 0);
+      current.gross += settlementGross(record);
       current.payable += Number(record.settlementAmount || 0);
       if (!record.settled) current.pending += 1;
       grouped.set(seller, current);
@@ -425,7 +452,7 @@
     $("#settled-count").textContent = settled.length;
     $("#sold-count").textContent = sold.length;
     $("#settlement-progress").style.width = `${percent}%`;
-    $("#settlement-gross").textContent = currency.format(sold.reduce((sum, record) => sum + Number(record.finalPrice || 0), 0));
+    $("#settlement-gross").textContent = currency.format(sold.reduce((sum, record) => sum + settlementGross(record), 0));
     $("#settlement-commission").textContent = currency.format(sold.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0));
     $("#settlement-payable").textContent = currency.format(sold.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0));
     $("#settlement-hint").textContent = remaining ? `还有 ${remaining} 条待确认，全部结账后开放结算表导出。` : "本批成交记录已全部结账，可以导出结算表。";
@@ -477,7 +504,7 @@
     const buyerName = record.buyerName || record.recipientName || "";
     const buyerPhone = record.buyerPhone || record.recipientPhone || "";
     const recipientDetail = record.recipientName && record.recipientName !== buyerName ? `收件人：${record.recipientName}` : (record.recipientPhone && record.recipientPhone !== buyerPhone ? `收件手机：${record.recipientPhone}` : "");
-    const settlementDetail = Number(record.finalPrice) > 0
+    const settlementDetail = isSettlementEligible(record)
       ? `${record.settlementAmount ? currency.format(record.settlementAmount) : "待计算"} · 佣金 ${currency.format(record.commissionAmount || 0)}`
       : "";
     const deliveryCode = record.outboundTrackingNumber || record.pickupCode || "";
@@ -489,13 +516,13 @@
       <td><div class="lot-cell ${child ? "package-child-lot" : ""}"><span>${record.lot}</span><div><b>${esc(record.itemName)}</b><small>${esc(record.projectName || record.primaryCategory || "未设置项目")}</small></div></div></td>
       <td class="role-cell"><span class="role-label">送拍人 / 结算对象</span><b class="${record.sellerWechat ? "" : "muted"}">${esc(record.sellerWechat || "待补")}</b><small>${esc(record.sellerPhone || "送拍人手机号待补")}</small><small>${esc(record.trackingNumber || "未填寄入快递单号")}</small></td>
       <td class="role-cell"><span class="role-label">买家 / 发货对象</span><b class="${buyerName ? "" : "muted"}">${esc(buyerName || (Number(record.finalPrice) > 0 ? "待同步买家" : "尚未成交"))}</b><small>${esc(buyerPhone || (Number(record.finalPrice) > 0 ? "买家手机号待同步" : "—"))}</small>${recipientDetail ? `<small>${esc(recipientDetail)}</small>` : ""}</td>
-      <td><b>${esc(record.auctionHouse || "待设置拍场")}</b><small>${esc(record.auctionAt || "待设置时间")}</small></td>
+      <td><b>${esc(auctionPeriod(record))}</b><small>${esc(record.projectName || record.auctionHouse || "项目待补")} · ${esc(record.auctionAt || "待设置时间")}</small></td>
       <td><b class="money">${Number(record.finalPrice) > 0 ? currency.format(record.finalPrice) : "待拍"}</b><small>${esc(recordStatus(record))}${record.paymentStatus ? ` · ${esc(record.paymentStatus)}` : ""}</small>${promotionBadges(record)}</td>
       <td>${gaps.length ? `<button class="chip warning" data-action="edit" data-id="${esc(record.id)}" title="${esc(gaps.join("、"))}">缺 ${gaps.length} 项</button>` : '<span class="chip success">完整</span>'}</td>
       <td><span class="carrier ${carrier}">${carrierLabel(carrier)}</span><small>${logisticsLabel(record.logisticsStatus)} · ${esc(shippingStageLabel(record))}</small></td>
       <td>${deliveryCode ? `<code>${esc(deliveryCode)}</code>` : '<span class="muted">—</span>'}<small>${esc(deliveryHint)}</small></td>
       <td>${record.settled ? '<span class="chip success">已结账</span>' : '<span class="chip neutral">未结账</span>'}<small>${esc(settlementDetail)}</small><small>${esc(record.promotion || "")}</small>${promotionBadges(record)}</td>
-      <td><div class="row-actions"><button data-action="edit" data-id="${esc(record.id)}">编辑</button><button data-action="pickup" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>取件</button><button data-action="manual" data-id="${esc(record.id)}">录码</button><button data-action="shipping" data-id="${esc(record.id)}" ${!isShippingCandidate(record) ? "disabled" : ""}>发货</button><button data-action="toggle-settle" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>${record.settled ? "撤销" : "结账"}</button></div></td>
+      <td><div class="row-actions"><button data-action="edit" data-id="${esc(record.id)}">编辑</button><button data-action="pickup" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>取件</button><button data-action="manual" data-id="${esc(record.id)}">录码</button><button data-action="shipping" data-id="${esc(record.id)}" ${!isShippingCandidate(record) ? "disabled" : ""}>发货</button><button data-action="toggle-settle" data-id="${esc(record.id)}" ${!isSettlementEligible(record) ? "disabled" : ""}>${record.settled ? "撤销" : "结账"}</button></div></td>
     </tr>`;
   }
 
@@ -554,15 +581,17 @@
       $("#records-head").innerHTML = '<tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选当前结算记录"></th><th>送拍人 / 手机号</th><th>拍品 / Lot</th><th>拍卖期数与时间</th><th>成交总额</th><th>优惠标识</th><th>佣金</th><th>应结金额</th><th>结账进度</th><th>操作</th></tr>';
       return;
     }
-    $("#records-head").innerHTML = '<tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选当前记录"></th><th>Lot / 拍品</th><th>送拍人</th><th>买家 / 收件人</th><th>拍场与时间</th><th>最终价格</th><th>资料</th><th>物流</th><th>取件码 / 运单</th><th>结算</th><th>操作</th></tr>';
+    $("#records-head").innerHTML = '<tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选当前记录"></th><th>Lot / 拍品</th><th>送拍人</th><th>买家 / 收件人</th><th>拍卖期数与时间</th><th>最终价格</th><th>资料</th><th>物流</th><th>取件码 / 运单</th><th>结算</th><th>操作</th></tr>';
   }
 
   function settlementBadgeSummary(records) {
     const birthdayCount = records.filter((record) => birthdayMonthFor(record) && birthdayMonthFor(record) === auctionMonth(record)).length;
-    const boxCount = records.filter(hasBoxRebateSignal).length;
+    const boxCount = records.filter(hasAppliedBoxRebate).length;
+    const returnCount = records.filter(isReturnRecord).length;
     const badges = [];
     if (birthdayCount) badges.push(`<span class="chip birthday">生日月 ${birthdayCount} 件</span>`);
-    if (boxCount) badges.push(`<span class="chip box-rebate">盒子返 1 · ${boxCount} 件</span>`);
+    if (boxCount) badges.push(`<span class="chip box-rebate">盒子返 ${Math.abs(Number(state.settings.birthdayCommissionValue || 0))}% · ${boxCount} 件</span>`);
+    if (returnCount) badges.push(`<span class="chip neutral">拖回扣费 · ${returnCount} Lot</span>`);
     return badges.length ? `<div class="promotion-badges">${badges.join("")}</div>` : '<span class="muted">无特殊标识</span>';
   }
 
@@ -571,8 +600,8 @@
       <td class="select-column"><input type="checkbox" data-select="${esc(record.id)}" ${state.selected.has(record.id) ? "checked" : ""}></td>
       <td><small>同上</small></td>
       <td><b>Lot ${esc(record.lot)}</b><small>${esc(record.itemName)}</small></td>
-      <td><b>${esc(record.projectName || record.auctionHouse || "拍场待补")}</b><small>${esc(record.auctionAt || record.platformOrderDate || "时间待补")}</small></td>
-      <td><b class="money">${currency.format(record.finalPrice || 0)}</b><small>${esc(recordStatus(record))}</small></td>
+      <td><b>${esc(auctionPeriod(record))}</b><small>${esc(record.projectName || record.auctionHouse || "项目待补")} · ${esc(record.auctionAt || record.platformOrderDate || "时间待补")}</small></td>
+      <td><b class="money">${currency.format(settlementGross(record))}</b><small>${esc(recordStatus(record))}${isReturnRecord(record) ? " · 不计成交额" : ""}</small></td>
       <td>${promotionBadges(record) || '<span class="muted">—</span>'}<small>${esc(record.promotion || "普通规则")}</small></td>
       <td><b>${currency.format(record.commissionAmount || 0)}</b></td>
       <td><b class="money">${currency.format(record.settlementAmount || 0)}</b></td>
@@ -585,12 +614,12 @@
     const records = group.records;
     const expanded = state.expandedSettlements.has(group.key);
     const allSelected = records.length > 0 && records.every((record) => state.selected.has(record.id));
-    const gross = records.reduce((sum, record) => sum + Number(record.finalPrice || 0), 0);
+    const gross = records.reduce((sum, record) => sum + settlementGross(record), 0);
     const commission = records.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0);
     const payable = records.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0);
     const settledCount = records.filter((record) => record.settled).length;
     const lots = records.map((record) => record.lot).join("、");
-    const periods = [...new Set(records.map((record) => record.projectName || record.auctionHouse).filter(Boolean))].join("、") || "拍场待补";
+    const periods = [...new Set(records.map(auctionPeriod).filter(Boolean))].join("、") || "期数待补";
     const dates = [...new Set(records.map((record) => datePart(record.auctionAt || record.platformOrderDate)).filter(Boolean))].join("、") || "时间待补";
     const children = expanded ? records.map(renderSettlementItemRow).join("") : "";
     return `<tr class="settlement-group-row ${allSelected ? "selected-row" : ""}">
@@ -615,8 +644,8 @@
     $("#metric-missing").textContent = records.filter((item) => missing(item).length).length;
     $("#metric-pickup").textContent = records.filter((item) => Number(item.finalPrice) > 0 && !item.pickupCode).length;
     $("#metric-shipping").textContent = MxiqiPackages.groupRecords(records.filter((item) => isShippingCandidate(item) && shippingStage(item) !== "completed")).length;
-    $("#metric-settlement").textContent = records.filter((item) => Number(item.finalPrice) > 0 && !item.settled).length;
-    $("#metric-amount").textContent = `成交额 ${currency.format(records.reduce((sum, item) => sum + Number(item.finalPrice || 0), 0))}`;
+    $("#metric-settlement").textContent = records.filter((item) => isSettlementEligible(item) && !item.settled).length;
+    $("#metric-amount").textContent = `成交额 ${currency.format(records.reduce((sum, item) => sum + settlementGross(item), 0))}`;
     $$('[data-stage]').forEach((button) => button.classList.toggle("selected", button.dataset.stage === state.stage));
     $$('.nav-item[data-stage]').forEach((button) => button.classList.toggle("active", button.dataset.stage === state.stage));
 
@@ -866,7 +895,10 @@
     const data = new FormData(settingsForm);
     $("#default-rule-preview").textContent = `示例：成交价 ¥1,000 时，${formatRule(data.get("defaultCommissionType"), Number(data.get("defaultCommissionValue") || 0))}。`;
     $("#low-price-rule-preview").textContent = `普通成交价低于 ${currency.format(Number(data.get("lowPriceThreshold") || 0))} 时，每件收取 ${currency.format(Number(data.get("lowPriceFee") || 0))}；生日月规则优先。`;
-    $("#birthday-rule-preview").textContent = `生日月份内，${formatRule(data.get("birthdayCommissionType"), Number(data.get("birthdayCommissionValue") || 0))}，整月自动应用。`;
+    const birthdayValue = Number(data.get("birthdayCommissionValue") || 0);
+    $("#birthday-rule-preview").textContent = birthdayValue < 0
+      ? `生日月份内按 ${birthdayValue}% 返佣；示例：成交 ¥2,500，应结 ${currency.format(2500 - 2500 * birthdayValue / 100)}。`
+      : `生日月份内，${formatRule(data.get("birthdayCommissionType"), birthdayValue)}，整月自动应用。`;
   }
 
   function openSettings() {
@@ -1052,6 +1084,7 @@
     $("#collector-start").disabled = collectorRuntime.running || !connected;
     $("#collector-stop").disabled = !collectorRuntime.running;
     $("#collector-refresh").disabled = collectorRuntime.busy || !connected;
+    $("#sync-settlement-orders").disabled = collectorRuntime.busy || !realConnection;
     $("#collector-scope").disabled = collectorRuntime.busy || collectorRuntime.running;
     $("#collector-interval").disabled = collectorRuntime.busy;
     $("#collector-idle").disabled = collectorRuntime.busy;
@@ -1074,8 +1107,8 @@
     try {
       const now = new Date().toISOString();
       if (state.connection.status === "connected") {
-        const requestedScope = trigger === "auto" ? "waitexpress" : state.collector.scope || "waitexpress";
-        const maxPages = requestedScope === "recent" ? 5 : 1;
+        const requestedScope = trigger === "settlement" ? "waitconfirm" : trigger === "auto" ? "waitexpress" : state.collector.scope || "waitexpress";
+        const maxPages = requestedScope === "waitconfirm" ? 20 : requestedScope === "recent" ? 5 : 1;
         const result = await MxiqiConnector.syncOrders({scope:requestedScope,maxPages});
         if (result.requiresLogin) {
           state.connection = {...clone(defaultConnection),mode:"connector",connectorInstalled:true,connectorCheckedAt:now,lastCheckedAt:now};
@@ -1087,7 +1120,7 @@
         state.collector.lastRunAt = now;
         state.collector.runCount = Number(state.collector.runCount || 0) + 1;
         state.collector.lastResult = `真实同步完成：读取 ${result.pages || 0} 页、${stats.accepted} 件拍品，新增 ${stats.added} 条，更新 ${stats.updated} 条`;
-        audit(trigger === "auto" ? "自动同步麦稀奇" : "手动同步麦稀奇", `${stats.accepted} 件拍品 · 新增 ${stats.added} · 更新 ${stats.updated}`);
+        audit(trigger === "auto" ? "自动同步麦稀奇" : trigger === "settlement" ? "同步麦稀奇待确认" : "手动同步麦稀奇", `${stats.accepted} 件拍品 · 新增 ${stats.added} · 更新 ${stats.updated}`);
         save();
         notify(state.collector.lastResult, "success");
         return true;
@@ -1472,7 +1505,7 @@
         notify("人工取件码已保存在当前浏览器");
       }
     }
-    if (button.dataset.action === "toggle-settle" && Number(record.finalPrice) > 0) {
+    if (button.dataset.action === "toggle-settle" && isSettlementEligible(record)) {
       if (record.settled) {
         record.settled = false;
         record.settledAt = "";
@@ -1524,7 +1557,7 @@
   });
   $("#batch-settle").addEventListener("click", () => {
     let count = 0;
-    state.records.filter((item) => state.selected.has(item.id) && Number(item.finalPrice) > 0 && !item.settled).forEach((item) => {
+    state.records.filter((item) => state.selected.has(item.id) && isSettlementEligible(item) && !item.settled).forEach((item) => {
       recalculateRecord(item, true);
       item.settled = true;
       item.settledAt = new Date().toISOString();
@@ -1882,6 +1915,10 @@
   });
 
   $("#open-collector").addEventListener("click", openCollector);
+  $("#sync-settlement-orders").addEventListener("click", () => {
+    collectorRuntime.lastActivityAt = Date.now();
+    void runCollector("settlement");
+  });
   $("#collector-refresh").addEventListener("click", () => { collectorRuntime.lastActivityAt = Date.now(); void runCollector("manual"); });
   $("#collector-start").addEventListener("click", startCollector);
   $("#collector-stop").addEventListener("click", () => stopCollector("已手动停止自动采集"));
@@ -1909,10 +1946,11 @@
       lowPriceThreshold: Math.max(0, Number(data.get("lowPriceThreshold") || 0)),
       lowPriceFee: Math.max(0, Number(data.get("lowPriceFee") || 0)),
       birthdayCommissionType: String(data.get("birthdayCommissionType")),
-      birthdayCommissionValue: Math.max(0, Number(data.get("birthdayCommissionValue") || 0)),
-      birthdayLabel: String(data.get("birthdayLabel") || "生日月优惠").trim(),
+      birthdayCommissionValue: Math.max(-100, Math.min(100, Number(data.get("birthdayCommissionValue") || 0))),
+      birthdayLabel: String(data.get("birthdayLabel") || "生日月返佣").trim(),
       boxRebateThreshold: Math.max(0, Number(data.get("boxRebateThreshold") || 0)),
       boxRebateKeywords: String(data.get("boxRebateKeywords") || "NGC,PCGS").trim(),
+      returnHandlingFee: Math.max(0, Number(data.get("returnHandlingFee") || 0)),
       sfThreshold: Math.max(0, Number(data.get("sfThreshold") || 0)),
     };
     state.records.filter((record) => !record.settled).forEach((record) => recalculateRecord(record));
@@ -2082,9 +2120,10 @@
         ["送拍结算汇总"],
         ["导出时间", new Date().toLocaleString("zh-CN")],
         ["送拍人范围", state.settlementScope.seller || "全部送拍人"],
+        ["拍卖期数", state.filters.auction || "全部期数"],
         ["拍卖时间范围", `${state.settlementScope.from || "不限"} 至 ${state.settlementScope.to || "不限"}`],
         ["成交件数", sold.length],
-        ["成交总额", sold.reduce((sum, record) => sum + Number(record.finalPrice || 0), 0)],
+        ["成交总额", sold.reduce((sum, record) => sum + settlementGross(record), 0)],
         ["佣金合计", sold.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0)],
         ["应结金额", sold.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0)],
       ]);
@@ -2092,14 +2131,14 @@
       summary.addRow(["送拍人","送拍人手机号","拍品数","Lot","拍卖期数与时间","成交总额","佣金合计","应结金额"]);
       settlementGroups(sold).forEach((group) => {
         const records = group.records;
-        const periods = [...new Set(records.map((record) => [record.projectName || record.auctionHouse || "拍场待补", datePart(record.auctionAt || record.platformOrderDate) || "时间待补"].join(" · ")))];
+        const periods = [...new Set(records.map((record) => [auctionPeriod(record), datePart(record.auctionAt || record.platformOrderDate) || "时间待补"].join(" · ")))];
         summary.addRow([
           group.seller,
           group.phone || "",
           records.length,
           records.map((record) => record.lot).join("、"),
           periods.join("；"),
-          records.reduce((sum, record) => sum + Number(record.finalPrice || 0), 0),
+          records.reduce((sum, record) => sum + settlementGross(record), 0),
           records.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0),
           records.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0),
         ]);
@@ -2113,10 +2152,10 @@
       summary.getColumn(7).width = 14;
       summary.getColumn(8).width = 14;
       summary.getRow(1).font = {bold:true,size:16};
-      summary.getRow(10).font = {bold:true};
+      summary.getRow(11).font = {bold:true};
       const detail = workbook.addWorksheet("结算明细");
       detail.addRow(["送拍人","送拍人手机号","Lot","拍品名称","拍卖期数/项目","拍卖时间","成交价","买家付款","拍品状态","优惠标识","佣金规则","送拍佣金","应结金额","结账时间","结账说明"]);
-      settlementGroups(sold).forEach((group) => group.records.forEach((record) => detail.addRow([group.seller,group.phone || "",record.lot,record.itemName,record.projectName || record.auctionHouse || "",record.auctionAt || record.platformOrderDate || "",record.finalPrice,record.paymentStatus || "",recordStatus(record),[birthdayMonthFor(record) === auctionMonth(record) ? "生日月" : "",hasBoxRebateSignal(record) ? "盒子返 1" : ""].filter(Boolean).join("、"),record.promotion || "",record.commissionAmount || 0,record.settlementAmount || 0,record.settledAt ? new Date(record.settledAt).toLocaleString("zh-CN") : "",record.settlementNote || ""])));
+      settlementGroups(sold).forEach((group) => group.records.forEach((record) => detail.addRow([group.seller,group.phone || "",record.lot,record.itemName,auctionPeriod(record),record.auctionAt || record.platformOrderDate || "",settlementGross(record),record.paymentStatus || "",recordStatus(record),[birthdayMonthFor(record) === auctionMonth(record) ? "生日月" : "",hasAppliedBoxRebate(record) ? `盒子返 ${Math.abs(Number(state.settings.birthdayCommissionValue || 0))}%` : hasBoxRebateSignal(record) ? "盒子达标" : "",isReturnRecord(record) ? `拖回扣 ${currency.format(state.settings.returnHandlingFee || 0)}` : ""].filter(Boolean).join("、"),record.promotion || "",record.commissionAmount || 0,record.settlementAmount || 0,record.settledAt ? new Date(record.settledAt).toLocaleString("zh-CN") : "",record.settlementNote || ""])));
       detail.getRow(1).font = {bold:true};
       detail.views = [{state:"frozen",ySplit:1}];
       [18,18,8,32,24,20,14,14,16,16,20,14,14,21,24].forEach((width, index) => { detail.getColumn(index + 1).width = width; });
@@ -2150,7 +2189,7 @@
     context.fillStyle = "#314b57";
     context.font = '20px "Microsoft YaHei", sans-serif';
     context.fillText(`送拍人：${state.settlementScope.seller || "全部"}　时间：${state.settlementScope.from || "不限"} 至 ${state.settlementScope.to || "不限"}`, 50, 158);
-    const gross = sold.reduce((sum, record) => sum + Number(record.finalPrice || 0), 0);
+    const gross = sold.reduce((sum, record) => sum + settlementGross(record), 0);
     const commission = sold.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0);
     const payable = sold.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0);
     context.font = 'bold 22px "Microsoft YaHei", sans-serif';
@@ -2179,7 +2218,7 @@
       context.fillRect(40, y, width - 80, rowHeight);
       context.fillStyle = "#213944";
       context.font = '15px "Microsoft YaHei", sans-serif';
-      const values = [record.lot,truncate(record.itemName,22),truncate(record.sellerWechat || "待补",10),truncate(record.auctionAt,16),currency.format(record.finalPrice || 0),currency.format(record.commissionAmount || 0),currency.format(record.settlementAmount || 0),truncate(record.returnDisposition || "已结账",8)];
+      const values = [record.lot,truncate(record.itemName,22),truncate(record.sellerWechat || "待补",10),truncate(record.auctionAt,16),currency.format(settlementGross(record)),currency.format(record.commissionAmount || 0),currency.format(record.settlementAmount || 0),truncate(record.returnDisposition || "已结账",8)];
       values.forEach((value, columnIndex) => context.fillText(String(value), columns[columnIndex].x + 8, y + 29));
     });
     context.fillStyle = "#7b898f";
@@ -2198,7 +2237,27 @@
   $("#export-settlement").addEventListener("click", exportSettlement);
   $("#export-settlement-image").addEventListener("click", exportSettlementImage);
 
-  if (localStorage.getItem(MIGRATION_KEY) !== "6") {
+  if (localStorage.getItem(MIGRATION_KEY) !== "7") {
+    if (Number(state.settings.birthdayCommissionValue) === 5 && state.settings.birthdayLabel === "生日月优惠") {
+      state.settings.birthdayCommissionValue = -2;
+      state.settings.birthdayLabel = "生日月返佣";
+    }
+    const samplePeriods = {
+      d101:"世界币章拍卖（第75期）",
+      d102:"世界币章拍卖（第75期）",
+      d103:"世界币章拍卖（第75期）",
+      d104:"长期征集拍品（第74期）",
+      d105:"长期征集拍品（第74期）",
+    };
+    state.records.forEach((record) => {
+      if (!samplePeriods[record.id]) return;
+      record.projectName = samplePeriods[record.id];
+      record.auctionHouse = "麦稀奇";
+      if (record.id === "d101") {
+        record.itemName = "NGC PMG 67EPQ 2024年龙年纪念钞";
+        record.finalPrice = 2500;
+      }
+    });
     const sampleOverdue = state.records.find((record) => record.id === "d102");
     if (sampleOverdue && !sampleOverdue.paymentStatus) {
       sampleOverdue.paymentStatus = "待付款";
@@ -2233,7 +2292,7 @@
     state.assets = Array.isArray(state.assets) ? MxiqiAssets.rematchAssets(state.assets, state.records) : [];
     state.connection = {...defaultConnection, ...state.connection};
     if (!["disconnected","demo_connected"].includes(state.connection.status)) state.connection = clone(defaultConnection);
-    localStorage.setItem(MIGRATION_KEY, "6");
+    localStorage.setItem(MIGRATION_KEY, "7");
     save();
   }
 
