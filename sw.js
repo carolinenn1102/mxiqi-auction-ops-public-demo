@@ -1,4 +1,4 @@
-const CACHE_NAME = "mxiqi-ops-demo-v12";
+const CACHE_NAME = "mxiqi-ops-demo-v13";
 const APP_ASSETS = [
   "./",
   "./index.html",
@@ -6,6 +6,7 @@ const APP_ASSETS = [
   "./app.js",
   "./matching-core.js",
   "./package-core.js",
+  "./commission-core.js",
   "./connector-bridge.js",
   "./manifest.webmanifest",
   "./vendor/exceljs.min.js",

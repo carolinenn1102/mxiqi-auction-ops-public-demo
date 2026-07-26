@@ -57,3 +57,13 @@ test("project login is relayed without persistence", () => {
   assert.match(app, /passwordInput\.value\s*=\s*""/);
   assert.doesNotMatch(app, /localStorage\.setItem\([^)]*password/i);
 });
+
+test("connector supports exact historical order-number lookup", () => {
+  const bridge = fs.readFileSync(path.join(root, "connector-bridge.js"), "utf8");
+  const background = fs.readFileSync(path.join(extensionRoot, "background.js"), "utf8");
+  const content = fs.readFileSync(path.join(extensionRoot, "content.js"), "utf8");
+  assert.match(bridge, /syncOrdersByNumbers/);
+  assert.match(background, /scrapeOrdersByNumbers/);
+  assert.match(content, /org\.order\.list\/all\?keywords=/);
+  assert.match(content, /record\.mxiqiOrderId/);
+});

@@ -43,6 +43,38 @@
     };
   }
 
+  async function scrapeOrdersByNumbers({orderNumbers = []} = {}) {
+    const numbers = [...new Set((Array.isArray(orderNumbers) ? orderNumbers : [])
+      .map((value) => String(value || "").trim())
+      .filter((value) => /^\d{14,30}$/.test(value)))]
+      .slice(0, 50);
+    const records = [];
+    const foundOrders = [];
+    const missingOrderNumbers = [];
+
+    for (const orderNumber of numbers) {
+      const result = await fetchDocument(`/org.order.list/all?keywords=${encodeURIComponent(orderNumber)}&page=1&aftersale=0`);
+      if (result.requiresLogin) return {requiresLogin: true, records: []};
+      const matches = MxiqiPageParser.parseOrderDocument(result.doc).records.filter((record) => String(record.mxiqiOrderId) === orderNumber);
+      if (matches.length) {
+        records.push(...matches);
+        foundOrders.push(orderNumber);
+      } else {
+        missingOrderNumbers.push(orderNumber);
+      }
+      if (numbers.length > 1) await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+
+    const unique = new Map(records.map((record) => [record.platformItemKey, record]));
+    return {
+      requiresLogin: false,
+      records: [...unique.values()],
+      searched: numbers.length,
+      foundOrders,
+      missingOrderNumbers,
+    };
+  }
+
   function setInputValue(input, value) {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     if (setter) setter.call(input, value);
@@ -66,6 +98,7 @@
     (async () => {
       if (message?.type === "checkSession") return checkSession();
       if (message?.type === "scrapeOrders") return scrapeOrders(message);
+      if (message?.type === "scrapeOrdersByNumbers") return scrapeOrdersByNumbers(message);
       if (message?.type === "submitCredentials") return submitCredentials(message);
       throw new Error("不支持的采集命令");
     })().then((result) => sendResponse({ok: true, ...result})).catch((error) => sendResponse({ok: false, error: error.message || "采集失败"}));

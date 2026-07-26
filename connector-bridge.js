@@ -46,5 +46,9 @@
       scope,
       maxPages,
     }, 120_000),
+    syncOrdersByNumbers: ({orderNumbers = []} = {}) => send({
+      type: "syncOrdersByNumbers",
+      orderNumbers,
+    }, 180_000),
   });
 })();

@@ -100,6 +100,10 @@
       const result = await sendToMxiqi({type: "scrapeOrders", scope: message.scope, maxPages: message.maxPages}, {create: true, active: false});
       return {ok: true, ...result};
     }
+    if (message?.type === "syncOrdersByNumbers") {
+      const result = await sendToMxiqi({type: "scrapeOrdersByNumbers", orderNumbers: message.orderNumbers}, {create: true, active: false});
+      return {ok: true, ...result};
+    }
     throw new Error("不支持的连接器命令");
   }
 

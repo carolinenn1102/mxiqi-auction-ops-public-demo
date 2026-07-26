@@ -96,20 +96,19 @@
       <section class="data-panel">
         <div class="panel-heading"><div><h2>拍品明细</h2><p>平台字段、送拍资料、物流与结算状态集中复核</p></div><span class="public-pill">浏览器本地数据</span></div>
         <div class="toolbar">
-          <label class="search-box"><span>⌕</span><input id="search" placeholder="搜索 Lot、拍品、送拍人、单号或取件码"></label>
-          <div class="bulk-actions"><span class="result-count" id="result-count">0 条结果</span><span class="selection-count" id="selection-count" hidden></span><button class="btn ghost" id="batch-pickup" hidden>批量申请取件</button><button class="text-button" id="clear-selection" hidden>取消选择</button></div>
+          <label class="search-box"><span>⌕</span><input id="search" placeholder="搜索 Lot、拍品、送拍人、买家、单号或取件码"></label>
+          <div class="bulk-actions"><span class="result-count" id="result-count">0 条结果</span><span class="selection-count" id="selection-count" hidden></span><button class="btn ghost" id="batch-pickup" hidden>批量申请取件</button><button class="btn ghost" id="batch-shipping" hidden>批量发货</button><button class="btn ghost danger" id="batch-delete" hidden>批量删除</button><button class="text-button" id="clear-selection" hidden>取消选择</button></div>
         </div>
         <div class="advanced-filters" aria-label="拍品筛选">
           <label><span>送拍人</span><select id="filter-seller"><option value="">全部</option></select></label>
           <label><span>拍场</span><select id="filter-auction"><option value="">全部</option></select></label>
-          <label><span>成交状态</span><select id="filter-outcome"><option value="">全部</option><option>待拍</option><option>成交</option><option>流拍</option><option>拖回</option></select></label>
-          <label><span>付款/拖回</span><select id="filter-disposition"><option value="">全部</option><option value="overdue">超时未付款</option><option value="拖回/发回">拖回/发回</option><option value="拖回/再拍">拖回/再拍</option><option value="拖回/等待">拖回/等待</option><option value="拆单">拆单</option></select></label>
+          <label><span>拍品状态</span><select id="filter-status"><option value="">全部</option><option>待拍</option><option>成交</option><option>流拍</option><option>超时未付款</option><option>拖回/发回</option><option>拖回/再拍</option><option>拖回/等待</option><option>拆单/成交</option></select></label>
           <label><span>发货状态</span><select id="filter-shipping"><option value="">全部</option><option value="needs_address">地址待二审</option><option value="ready_to_order">可以下单</option><option value="mxiqi_pending">单号待回填</option><option value="completed">已完成</option></select></label>
           <button class="text-button" id="clear-filters">清除筛选</button>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选可处理记录"></th><th>Lot / 拍品</th><th>送拍人</th><th>拍场与时间</th><th>最终价格</th><th>资料</th><th>物流</th><th>取件码 / 运单</th><th>结算</th><th>操作</th></tr></thead>
+            <thead id="records-head"><tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选当前记录"></th><th>Lot / 拍品</th><th>送拍人</th><th>买家 / 收件人</th><th>拍场与时间</th><th>最终价格</th><th>资料</th><th>物流</th><th>取件码 / 运单</th><th>结算</th><th>操作</th></tr></thead>
             <tbody id="records-body"></tbody>
           </table>
         </div>
@@ -153,6 +152,13 @@
           <label class="field switch-field"><span>结账状态</span><label><input name="settled" type="checkbox"> 已结账</label></label>
           <label class="field"><span>承运商</span><select name="carrierOverride"><option value="">自动判断</option><option value="sf">顺丰</option><option value="cainiao">菜鸟</option></select></label>
         </div></section>
+        <section class="form-section buyer-section"><div class="form-section-heading"><h3>买家与收件人</h3><p>由麦稀奇订单同步；发货只使用这里的资料，不使用送拍人手机号</p></div><div class="form-grid">
+          <label class="field"><span>买家账号</span><input name="buyerName" placeholder="麦稀奇中拍人"></label>
+          <label class="field"><span>买家登录手机号</span><input name="buyerPhone" type="tel" inputmode="numeric" autocomplete="off"></label>
+          <label class="field"><span>收件人</span><input name="recipientName" autocomplete="off"></label>
+          <label class="field"><span>收件手机号</span><input name="recipientPhone" type="tel" inputmode="numeric" autocomplete="off"></label>
+          <label class="field wide"><span>麦稀奇订单号</span><input name="mxiqiOrderId" readonly></label>
+        </div></section>
       </div>
       <footer><button class="btn secondary" type="button" value="cancel" data-close-dialog>取消</button><button class="btn primary" id="save-record" value="default">保存记录</button></footer>
     </form>
@@ -160,7 +166,7 @@
 
   <dialog id="import-dialog" class="dialog">
     <form method="dialog" id="import-form"><header><h2>导入拍品数据</h2><button class="icon-close" type="button" value="cancel" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
-      <p class="modal-copy">支持送拍跟踪表、麦稀奇 v3.7 `.xlsx` 和 JSON 数组。寄存、送评和外拍库存请使用左侧“寄存与库存”。体验数据只写入当前浏览器。</p>
+      <p class="modal-copy">支持送拍跟踪表、麦稀奇 v3.7 `.xlsx` 和 JSON 数组。寄存与外拍库存请使用左侧“寄存与库存”；“送评”附表暂不导入。体验数据只写入当前浏览器。</p>
       <label class="file-drop"><input id="excel-file" type="file" accept=".xlsx"><span class="file-icon">⇧</span><b id="file-name">选择 .xlsx 文件</b><small>自动识别两种模板，重复 Lot 会更新</small></label>
       <div class="divider"><span>或者粘贴 JSON</span></div>
       <textarea id="json-input" class="import-area" placeholder='[{"lot":106,"itemName":"拍品名称","finalPrice":680}]'></textarea>
@@ -168,11 +174,11 @@
   </dialog>
 
   <dialog id="asset-dialog" class="dialog asset-dialog">
-    <form method="dialog"><header><div><p class="eyebrow">寄存 · 送评 · 当前库存</p><h2>库存导入与订单匹配</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
-      <div class="asset-security"><b>真实资料只保存在当前浏览器</b><p>不会把手机号、地址或库存明细上传到公开仓库。支持“寄存记录、送评记录.xlsx”和“外拍.xlsx”；外拍只导入“整体”当前库存，不读取“已售出”。</p></div>
+    <form method="dialog"><header><div><p class="eyebrow">寄存 · 当前库存</p><h2>寄存库存导入与送拍匹配</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
+      <div class="asset-security"><b>真实资料只保存在当前浏览器</b><p>“寄存记录、送评记录.xlsx”只读取第一张“寄存”，第二张“送评”暂不导入；“外拍.xlsx”只读取“整体”，不读取“已售出”。</p></div>
       <section class="asset-import-panel">
         <label class="file-drop asset-file-drop"><input id="asset-excel-file" type="file" accept=".xlsx" multiple><span class="file-icon">⇧</span><b id="asset-file-name">选择寄存或外拍 Excel</b><small>可一次选择两份文件；重复记录会更新，不会重复新增</small></label>
-        <div class="asset-import-actions"><button class="btn secondary" type="button" id="asset-rematch">重新自动匹配</button><span>规则：手机号优先，其次评级编号、送拍人和拍品名称。</span></div>
+        <div class="asset-import-actions"><button class="btn secondary" type="button" id="asset-sync-orders">按寄存单号回补麦稀奇订单</button><button class="btn secondary" type="button" id="asset-rematch">重新自动匹配</button><span>寄存资料按送拍人手机号或寄存单号关联；麦稀奇订单中的买家手机号只用于发货，不参与送拍人匹配。</span></div>
       </section>
       <section class="asset-metrics" aria-label="匹配汇总">
         <button type="button" data-asset-filter="all"><span>全部</span><b id="asset-total">0</b></button>
@@ -182,7 +188,7 @@
         <button type="button" data-asset-filter="unmatched"><span>未匹配</span><b id="asset-unmatched">0</b></button>
       </section>
       <div class="asset-toolbar"><label><span>⌕</span><input id="asset-search" type="search" placeholder="搜索手机号、订单号、编号或拍品"></label><button class="text-button" type="button" id="asset-clear-filter">显示全部</button></div>
-      <div class="asset-table-wrap"><table class="asset-table"><thead><tr><th>类型 / 来源</th><th>物品</th><th>送拍人 / 手机号</th><th>订单 / 成本</th><th>匹配状态</th><th>匹配到此前订单</th></tr></thead><tbody id="asset-body"><tr><td colspan="6" class="empty-state">尚未导入寄存或库存数据。</td></tr></tbody></table></div>
+      <div class="asset-table-wrap"><table class="asset-table"><thead><tr><th>类型 / 来源</th><th>物品</th><th>送拍人 / 手机号</th><th>寄存单 / 成本</th><th>匹配状态</th><th>关联到送拍记录</th></tr></thead><tbody id="asset-body"><tr><td colspan="6" class="empty-state">尚未导入寄存或库存数据。</td></tr></tbody></table></div>
     </div><footer><span class="asset-footer-note" id="asset-footer-note">等待导入</span><button class="btn primary" value="default">完成</button></footer></form>
   </dialog>
 
@@ -258,14 +264,16 @@
       <p class="rule-preview" id="shipping-order-note">未完成地址二审，暂不能下单。</p>
       <div class="shipping-inline-actions shipping-order-actions"><button class="btn secondary" type="button" id="shipping-create-order">模拟物流下单</button><button class="btn secondary" type="button" id="shipping-copy-waybill">复制单号，去麦稀奇粘贴</button><button class="btn primary" type="button" id="shipping-confirm-fill">模拟确认已回填</button></div>
       </section>
-    </div><footer><button class="btn primary" value="default">完成</button></footer></form>
+    </div><footer><span class="shipping-queue-note" id="shipping-queue-note" hidden></span><button class="btn secondary" type="button" id="shipping-next-package" hidden>下一个包裹</button><button class="btn primary" value="default">完成</button></footer></form>
   </dialog>
 
   <dialog id="settings-dialog" class="dialog">
     <form method="dialog" id="settings-form"><header><div><p class="eyebrow">计算规则</p><h2>佣金与生日月优惠</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
-      <p class="modal-copy">默认规则应用于普通成交；客户生日月份与拍卖月份一致时，整个月自动改用生日月规则。已结账记录不会被重算。</p>
+      <p class="modal-copy">客户生日月份与拍卖月份一致时，整个月优先使用生日月规则；普通成交低于设定门槛时使用低价固定佣金，其余使用默认佣金。已结账记录不会被重算。</p>
       <section class="rule-card"><h3>默认送拍佣金</h3><div class="form-grid"><label class="field"><span>计算方式</span><select name="defaultCommissionType"><option value="percent">按成交价百分比</option><option value="fixed">每件固定金额</option></select></label><label class="field"><span>数值</span><input name="defaultCommissionValue" type="number" min="0" step="0.01" required></label></div><p class="rule-preview" id="default-rule-preview"></p></section>
+      <section class="rule-card"><h3>低价拍品固定佣金</h3><div class="form-grid"><label class="field"><span>成交价低于</span><input name="lowPriceThreshold" type="number" min="0" step="0.01" required></label><label class="field"><span>每件收取</span><input name="lowPriceFee" type="number" min="0" step="0.01" required></label></div><p class="rule-preview" id="low-price-rule-preview"></p></section>
       <section class="rule-card"><h3>生日月优惠</h3><div class="form-grid"><label class="field"><span>计算方式</span><select name="birthdayCommissionType"><option value="percent">按成交价百分比</option><option value="fixed">每件固定金额</option></select></label><label class="field"><span>数值</span><input name="birthdayCommissionValue" type="number" min="0" step="0.01" required></label><label class="field wide"><span>优惠名称</span><input name="birthdayLabel" required></label></div><p class="rule-preview" id="birthday-rule-preview"></p></section>
+      <section class="rule-card"><h3>盒子返佣识别</h3><div class="form-grid"><label class="field"><span>成交价达到</span><input name="boxRebateThreshold" type="number" min="0" step="0.01" required></label><label class="field"><span>标题关键词</span><input name="boxRebateKeywords" placeholder="NGC, PCGS" required></label></div><p class="rule-preview">命中后先显示“盒子返 1”标识；具体返佣金额待规则确认后再参与金额计算。</p></section>
       <section class="rule-card"><h3>物流自动判断</h3><div class="form-grid"><label class="field wide"><span>最终价格达到此金额时默认顺丰</span><input name="sfThreshold" type="number" min="0" step="1" required></label></div></section>
     </div><footer><button class="btn secondary" type="button" data-close-dialog>取消</button><button class="btn primary" value="default">保存并重算未结账记录</button></footer></form>
   </dialog>
@@ -273,7 +281,7 @@
   <dialog id="backup-dialog" class="dialog">
     <form method="dialog"><header><div><p class="eyebrow">本地数据保障</p><h2>完整备份与恢复</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
       <div class="backup-status"><span class="backup-shield">✓</span><div><b>当前数据自动保存在这台设备</b><p id="backup-summary">正在读取数据状态…</p></div></div>
-      <p class="modal-copy">备份文件包含拍品、寄存/送评/库存、匹配结果、地址审核、发货回填、平台连接状态、佣金规则、客户生日月份和操作记录，但不包含密码、验证码或 Cookie。清理浏览器数据前务必先下载备份。</p>
+      <p class="modal-copy">备份文件包含拍品、寄存/库存、匹配结果、地址审核、发货回填、平台连接状态、佣金规则、客户生日月份和操作记录，但不包含密码、验证码或 Cookie。清理浏览器数据前务必先下载备份。</p>
       <div class="backup-actions"><button class="btn primary" type="button" id="download-backup">下载完整备份</button><label class="btn secondary file-button">选择备份文件<input id="backup-file" type="file" accept="application/json,.json"></label><button class="btn secondary" type="button" id="restore-backup" disabled>恢复所选备份</button></div>
       <p class="backup-file-name" id="backup-file-name">尚未选择备份文件</p>
     </div><footer><button class="btn primary" value="default">完成</button></footer></form>
@@ -283,6 +291,7 @@
   <script src="vendor/exceljs.min.js"></script>
   <script src="matching-core.js"></script>
   <script src="package-core.js"></script>
+  <script src="commission-core.js"></script>
   <script src="connector-bridge.js"></script>
   <script src="app.js"></script>
 </body>

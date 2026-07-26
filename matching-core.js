@@ -230,19 +230,13 @@
         kinds.add("consignment");
         continue;
       }
-      const grading = findHeader(sheet, (headers) => column(headers, "微信名称/联系方式") && column(headers, "送评物品"));
-      if (grading) {
-        assets.push(...parseGradingSheet(sheet, fileName, grading.rowNumber, grading.headers));
-        kinds.add("grading");
-        continue;
-      }
       const inventory = findHeader(sheet, (headers) => column(headers, "名称") && column(headers, "编号") && column(headers, "到手价格"));
       if (inventory && (sheet.name === "整体" || !workbook.worksheets.some((item) => item.name === "整体"))) {
         assets.push(...parseInventorySheet(sheet, fileName, inventory.rowNumber, inventory.headers));
         kinds.add("inventory");
       }
     }
-    if (!assets.length) throw new Error("无法识别寄存、送评或外拍当前库存工作表");
+    if (!assets.length) throw new Error("无法识别第一张“寄存”或外拍“整体”工作表；“送评”暂不导入");
     return { assets, kinds: [...kinds] };
   }
 
@@ -274,7 +268,7 @@
     let score = 0;
     const reasons = [];
     const assetPhone = normalizePhone(asset.sellerPhone);
-    const recordPhones = [record.sellerPhone, record.recipientPhone].map(normalizePhone).filter(Boolean);
+    const recordPhones = [record.sellerPhone].map(normalizePhone).filter(Boolean);
     if (assetPhone && recordPhones.includes(assetPhone)) {
       score += 100;
       reasons.push("手机号一致");
@@ -300,7 +294,7 @@
       score += 20;
       reasons.push("Lot 一致");
     }
-    if (asset.consignmentOrderNo && String(asset.consignmentOrderNo) === String(record.consignmentOrderNo || "")) {
+    if (asset.consignmentOrderNo && [record.consignmentOrderNo, record.mxiqiOrderId].some((value) => String(asset.consignmentOrderNo) === String(value || ""))) {
       score += 80;
       reasons.push("寄存订单号一致");
     }

@@ -14,7 +14,7 @@ await import("../matching-core.js");
 
 const { parseAssetWorkbook, rematchAssets } = globalThis.MxiqiAssets;
 
-test("parses consignment and grading sheets", () => {
+test("imports consignment and intentionally skips the second grading sheet", () => {
   const workbook = new ExcelJS.Workbook();
   const consignment = workbook.addWorksheet("寄存");
   consignment.addRow(excelRow(["寄存", "用户", "寄存订单号", "订单日期", "收货地址", "拍品", null, "状态"]));
@@ -24,8 +24,8 @@ test("parses consignment and grading sheets", () => {
   grading.addRow(excelRow(["体验客户", "演示银币", null, "65", "DEMO-G-001", "0725", "出分", "返还", "上拍"]));
 
   const parsed = parseAssetWorkbook(workbook, "演示寄存.xlsx");
-  assert.deepEqual(new Set(parsed.kinds), new Set(["consignment", "grading"]));
-  assert.equal(parsed.assets.length, 2);
+  assert.deepEqual(parsed.kinds, ["consignment"]);
+  assert.equal(parsed.assets.length, 1);
   assert.equal(parsed.assets[0].sellerPhone, "13900000001");
   assert.equal(parsed.assets[0].orderDate, "2026-07-25");
 });
@@ -68,6 +68,38 @@ test("uses phone first and routes ambiguous candidates to manual review", () => 
     { id: "r2", lot: 2, itemName: "乙", sellerWechat: "其它", sellerPhone: "13900000001" },
   ])[0];
   assert.equal(ambiguous.matchStatus, "review");
+});
+
+test("never treats the buyer phone as the consignor phone", () => {
+  const asset = {
+    id: "a1",
+    assetKey: "a1",
+    itemName: "寄存物品",
+    sellerPhone: "13900000001",
+    sellerWechat: "送拍人甲",
+    matchStatus: "unmatched",
+    matchedRecordId: "",
+  };
+  const result = rematchAssets([asset], [
+    { id: "r1", lot: 1, itemName: "完全不同", buyerPhone: "13900000001", sellerWechat: "送拍人乙" },
+  ])[0];
+  assert.equal(result.matchStatus, "unmatched");
+});
+
+test("matches a consignment order number to a synchronized Mxiqi order", () => {
+  const result = rematchAssets([{
+    id: "a1",
+    assetKey: "a1",
+    itemName: "截图拍品",
+    consignmentOrderNo: "20260521220802456582",
+    matchStatus: "unmatched",
+    matchedRecordId: "",
+  }], [
+    { id: "r1", lot: 8, itemName: "麦稀奇拍品", mxiqiOrderId: "20260521220802456582" },
+  ])[0];
+  assert.equal(result.matchStatus, "auto");
+  assert.equal(result.matchedRecordId, "r1");
+  assert.match(result.matchReason, /寄存订单号一致/);
 });
 
 test("preserves a valid manual match when rematching", () => {
