@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="theme-color" content="#102735">
   <title>送拍运营工作台 · 公开体验版</title>
-  <link rel="stylesheet" href="styles.css?v=15">
+  <link rel="stylesheet" href="styles.css?v=16">
   <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
@@ -201,8 +201,11 @@
         <button type="button" data-asset-filter="review"><span>待确认</span><b id="asset-review">0</b></button>
         <button type="button" data-asset-filter="unmatched"><span>未匹配</span><b id="asset-unmatched">0</b></button>
       </section>
-      <div class="asset-toolbar"><label><span>⌕</span><input id="asset-search" type="search" placeholder="搜索手机号、订单号、编号或拍品"></label><button class="text-button" type="button" id="asset-clear-filter">显示全部</button></div>
-      <div class="asset-table-wrap"><table class="asset-table"><thead><tr><th>类型 / 来源</th><th>物品</th><th>送拍人 / 手机号</th><th>寄存单 / 成本</th><th>匹配状态</th><th>关联到送拍记录</th></tr></thead><tbody id="asset-body"><tr><td colspan="6" class="empty-state">尚未导入寄存或库存数据。</td></tr></tbody></table></div>
+      <div class="asset-toolbar">
+        <label><span>⌕</span><input id="asset-search" type="search" placeholder="搜索手机号、订单号、编号或拍品"></label>
+        <div class="asset-toolbar-actions"><button class="text-button" type="button" id="asset-clear-filter">显示全部</button><span class="selection-count" id="asset-selection-count" hidden></span><button class="btn ghost danger" type="button" id="asset-batch-delete" hidden>批量删除</button><button class="text-button" type="button" id="asset-clear-selection" hidden>取消选择</button></div>
+      </div>
+      <div class="asset-table-wrap"><table class="asset-table"><thead><tr><th class="select-column"><input id="asset-select-all" type="checkbox" aria-label="全选当前筛选的寄存库存记录"></th><th>类型 / 来源</th><th>物品</th><th>送拍人 / 手机号</th><th>寄存单 / 成本</th><th>匹配状态</th><th>关联到送拍记录</th></tr></thead><tbody id="asset-body"><tr><td colspan="7" class="empty-state">尚未导入寄存或库存数据。</td></tr></tbody></table></div>
     </div><footer><span class="asset-footer-note" id="asset-footer-note">等待导入</span><button class="btn primary" value="default">完成</button></footer></form>
   </dialog>
 
@@ -309,6 +312,6 @@
   <script src="workflow-core.js?v=15"></script>
   <script src="commission-core.js?v=15"></script>
   <script src="connector-bridge.js?v=15"></script>
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>

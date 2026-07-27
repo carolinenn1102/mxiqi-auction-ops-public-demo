@@ -73,6 +73,7 @@
     assets: loadArray(ASSETS_KEY, []),
     assetFilter: "all",
     assetQuery: "",
+    selectedAssets: new Set(),
     stage: "all",
     query: "",
     filters: {seller:"",auction:"",status:"",shipping:""},
@@ -1275,6 +1276,10 @@
   }
 
   function renderAssetPanel() {
+    const currentAssetIds = new Set(state.assets.map((asset) => asset.id));
+    [...state.selectedAssets].forEach((assetId) => {
+      if (!currentAssetIds.has(assetId)) state.selectedAssets.delete(assetId);
+    });
     const counts = {auto:0,manual:0,review:0,unmatched:0};
     state.assets.forEach((asset) => { counts[asset.matchStatus] = (counts[asset.matchStatus] || 0) + 1; });
     $("#asset-total").textContent = state.assets.length;
@@ -1285,6 +1290,16 @@
     $$('[data-asset-filter]').forEach((button) => button.classList.toggle("active", button.dataset.assetFilter === state.assetFilter));
     $("#asset-search").value = state.assetQuery;
     const visible = assetVisibleRows();
+    const visibleSelected = visible.filter((asset) => state.selectedAssets.has(asset.id));
+    const selectAll = $("#asset-select-all");
+    selectAll.checked = visible.length > 0 && visibleSelected.length === visible.length;
+    selectAll.indeterminate = visibleSelected.length > 0 && visibleSelected.length < visible.length;
+    selectAll.disabled = !visible.length;
+    const selectedCount = state.selectedAssets.size;
+    $("#asset-selection-count").hidden = !selectedCount;
+    $("#asset-batch-delete").hidden = !selectedCount;
+    $("#asset-clear-selection").hidden = !selectedCount;
+    $("#asset-selection-count").textContent = `已选 ${selectedCount} 条`;
     const consignmentOrderCount = new Set(state.assets.filter((asset) => asset.assetType === "consignment" && asset.consignmentOrderNo).map((asset) => asset.consignmentOrderNo)).size;
     $("#asset-sync-orders").disabled = !consignmentOrderCount || state.connection.status !== "connected";
     $("#asset-sync-orders").title = !consignmentOrderCount ? "请先导入含寄存单号的第一张“寄存”工作表" : state.connection.status !== "connected" ? "请先连接麦稀奇" : `搜索 ${consignmentOrderCount} 个寄存单号`;
@@ -1293,7 +1308,7 @@
       : "等待导入";
     const body = $("#asset-body");
     if (!visible.length) {
-      body.innerHTML = `<tr><td colspan="6" class="empty-state">${state.assets.length ? "当前筛选下没有记录。" : "尚未导入寄存或库存数据。"}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="7" class="empty-state">${state.assets.length ? "当前筛选下没有记录。" : "尚未导入寄存或库存数据。"}</td></tr>`;
       return;
     }
     const recordOptions = state.records.slice().sort((a, b) => Number(a.lot) - Number(b.lot)).map((record) =>
@@ -1304,7 +1319,8 @@
         : asset.gradingOrderNo ? `送评单 ${asset.gradingOrderNo}`
         : [asset.auctionNumber && `拍场 ${asset.auctionNumber}`, asset.lot && `Lot ${asset.lot}`].filter(Boolean).join(" · ") || "无订单编号";
       const amountDetail = asset.assetType === "inventory" ? `到手 ${currency.format(asset.landedCost || 0)} · 外拍 ${currency.format(asset.purchasePrice || 0)}` : (asset.orderDate || asset.gradingDate || "日期未填");
-      return `<tr>
+      return `<tr class="${state.selectedAssets.has(asset.id) ? "selected-row" : ""}">
+        <td class="select-column"><input type="checkbox" data-asset-select="${esc(asset.id)}" aria-label="选择 ${esc(asset.itemName)}" ${state.selectedAssets.has(asset.id) ? "checked" : ""}></td>
         <td><span class="asset-type ${esc(asset.assetType)}">${esc(assetSourceLabel(asset))}</span><small>${esc(asset.sourceFile)} · 第 ${esc(asset.sourceRow)} 行</small></td>
         <td><b>${esc(asset.itemName)}</b><small>${esc([asset.gradingId && `编号 ${asset.gradingId}`,asset.gradingScore,asset.issueYear].filter(Boolean).join(" · ") || asset.status || "")}</small></td>
         <td><b>${esc(asset.sellerWechat || "库存未关联人员")}</b><small>${esc(asset.sellerPhone || "手机号待补")}</small></td>
@@ -1881,7 +1897,36 @@
     state.assetQuery = "";
     renderAssetPanel();
   });
+  $("#asset-select-all").addEventListener("change", (event) => {
+    assetVisibleRows().forEach((asset) => {
+      if (event.target.checked) state.selectedAssets.add(asset.id);
+      else state.selectedAssets.delete(asset.id);
+    });
+    renderAssetPanel();
+  });
+  $("#asset-clear-selection").addEventListener("click", () => {
+    state.selectedAssets.clear();
+    renderAssetPanel();
+  });
+  $("#asset-batch-delete").addEventListener("click", () => {
+    const selectedIds = new Set([...state.selectedAssets].filter((assetId) => state.assets.some((asset) => asset.id === assetId)));
+    if (!selectedIds.size) return;
+    if (!confirm(`确定删除已选的 ${selectedIds.size} 条寄存/库存记录吗？\n\n只会删除这里的导入记录，不会删除主工作台拍品。此操作无法撤销。`)) return;
+    state.assets = state.assets.filter((asset) => !selectedIds.has(asset.id));
+    state.selectedAssets.clear();
+    audit("批量删除寄存库存", `${selectedIds.size} 条寄存/库存记录`);
+    save();
+    renderAssetPanel();
+    notify(`已删除 ${selectedIds.size} 条寄存/库存记录`, "info");
+  });
   $("#asset-body").addEventListener("change", (event) => {
+    const selectedAssetId = event.target.dataset.assetSelect;
+    if (selectedAssetId) {
+      if (event.target.checked) state.selectedAssets.add(selectedAssetId);
+      else state.selectedAssets.delete(selectedAssetId);
+      renderAssetPanel();
+      return;
+    }
     const assetId = event.target.dataset.assetMatch;
     if (!assetId) return;
     const asset = state.assets.find((item) => item.id === assetId);
