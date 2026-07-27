@@ -19,3 +19,14 @@ test("shipping bucket exposes shipped and unshipped filters", () => {
   assert.equal(workflow.shippingBucket({mxiqiShippingStatus:"filled"}), "shipped");
   assert.equal(workflow.shippingBucket({}), "unshipped");
 });
+
+test("payment state is exposed before the final outcome and becomes overdue after the deadline", () => {
+  const record = {finalOutcome:"成交",finalPrice:860,paymentStatus:"待付款",paymentDueAt:"2026-07-29T20:00:00+08:00"};
+  assert.equal(workflow.recordStatus(record, new Date("2026-07-29T19:00:00+08:00")), "待付款");
+  assert.equal(workflow.recordStatus(record, new Date("2026-07-29T21:00:00+08:00")), "超时未付款");
+});
+
+test("return disposition takes priority over payment state", () => {
+  const record = {finalOutcome:"成交",finalPrice:860,paymentStatus:"待付款",paymentDueAt:"2026-07-20T20:00:00+08:00",returnDisposition:"拖回/再拍"};
+  assert.equal(workflow.recordStatus(record, new Date("2026-07-29T21:00:00+08:00")), "拖回/再拍");
+});

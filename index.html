@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="theme-color" content="#102735">
   <title>送拍运营工作台 · 公开体验版</title>
-  <link rel="stylesheet" href="styles.css?v=13">
+  <link rel="stylesheet" href="styles.css?v=15">
   <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
@@ -17,6 +17,7 @@
       <nav class="nav-list" aria-label="主导航">
         <button class="nav-item active" data-stage="all"><span>▦</span> 拍品工作台</button>
         <button class="nav-item" id="open-assets"><span>▤</span> 寄存与库存</button>
+        <button class="nav-item" data-stage="reauction"><span>↺</span> 拖回再拍库</button>
         <button class="nav-item" data-stage="pickup"><span>⌁</span> 物流取件</button>
         <button class="nav-item" data-stage="shipping"><span>↗</span> 发货复核</button>
         <button class="nav-item" data-stage="settlement"><span>¥</span> 结算复核</button>
@@ -42,6 +43,7 @@
         <div><p class="eyebrow">拍品 · 物流 · 结算</p><h1>送拍全流程工作台</h1></div>
         <div class="top-actions">
           <button class="btn connection-button" id="connection-status-button"><span class="connection-button-dot"></span><span id="connection-status-text">麦稀奇未登录</span></button>
+          <button class="btn secondary" id="sync-unpaid-orders" disabled>同步待付款</button>
           <button class="btn secondary" id="open-import">导入数据</button>
           <button class="btn secondary" id="export-tracker">导出送拍跟踪表</button>
           <button class="btn secondary" id="export-mxiqi">导出麦稀奇模板</button>
@@ -51,6 +53,7 @@
 
       <section class="metric-grid" aria-label="业务汇总">
         <button class="metric-card selected" data-stage="all"><span class="metric-label">全部拍品</span><strong id="metric-total">0</strong><small>当前浏览器</small></button>
+        <button class="metric-card payment" data-stage="unpaid"><span class="metric-label">待付款</span><strong id="metric-unpaid">0</strong><small>来自麦稀奇订单</small></button>
         <button class="metric-card warning" data-stage="missing"><span class="metric-label">待补资料</span><strong id="metric-missing">0</strong><small>影响表格完整性</small></button>
         <button class="metric-card accent" data-stage="pickup"><span class="metric-label">待取件</span><strong id="metric-pickup">0</strong><small>成交后待处理</small></button>
         <button class="metric-card shipping" data-stage="shipping"><span class="metric-label">待发货包裹</span><strong id="metric-shipping">0</strong><small>同一订单自动合并</small></button>
@@ -94,8 +97,18 @@
         <div class="seller-summary-wrap"><div class="seller-summary-heading"><h3>送拍人汇总</h3><small>点击送拍人即可查看其本期拍品</small></div><div class="seller-summary-list" id="seller-summary-list"></div></div>
       </section>
 
+      <section class="reauction-summary" id="reauction-summary" hidden>
+        <div class="reauction-summary-copy"><p class="eyebrow">拖回再拍库</p><h2><span id="reauction-count">0</span> 件拍品待重新安排</h2><p>只收录“拖回/再拍”状态。再次上拍时直接编辑拍卖期数、Lot 和时间，原送拍及结算资料继续保留。</p></div>
+        <div class="reauction-stat-grid">
+          <div><small>涉及送拍人</small><b id="reauction-seller-count">0</b></div>
+          <div><small>待扣费结算</small><b id="reauction-unsettled-count">0</b></div>
+          <div><small>已完成扣费</small><b id="reauction-settled-count">0</b></div>
+        </div>
+        <button class="btn secondary" id="reauction-export">导出当前跟踪表</button>
+      </section>
+
       <section class="data-panel">
-        <div class="panel-heading"><div><h2>拍品明细</h2><p>平台字段、送拍资料、物流与结算状态集中复核</p></div><span class="public-pill">浏览器本地数据</span></div>
+        <div class="panel-heading"><div><h2 id="panel-title">拍品明细</h2><p id="panel-subtitle">平台字段、送拍资料、物流与结算状态集中复核</p></div><span class="public-pill">浏览器本地数据</span></div>
         <div class="toolbar">
           <label class="search-box"><span>⌕</span><input id="search" placeholder="搜索 Lot、拍品、送拍人、买家、单号或取件码"></label>
           <div class="bulk-actions"><span class="result-count" id="result-count">0 条结果</span><span class="selection-count" id="selection-count" hidden></span><button class="btn ghost" id="batch-pickup" hidden>批量申请取件</button><button class="btn ghost" id="batch-shipping" hidden>批量发货</button><button class="btn ghost danger" id="batch-delete" hidden>批量删除</button><button class="text-button" id="clear-selection" hidden>取消选择</button></div>
@@ -103,13 +116,13 @@
         <div class="advanced-filters" aria-label="拍品筛选">
           <label><span>送拍人</span><select id="filter-seller"><option value="">全部</option></select></label>
           <label><span>拍卖期数</span><select id="filter-auction"><option value="">全部期数</option></select></label>
-          <label><span>拍品状态</span><select id="filter-status"><option value="">全部</option><option>待拍</option><option>成交</option><option>流拍</option><option>超时未付款</option><option>拖回/发回</option><option>拖回/再拍</option><option>拖回/等待</option><option>拆单/成交</option></select></label>
+          <label><span>拍品状态</span><select id="filter-status"><option value="">全部</option><option>待拍</option><option>待付款</option><option>成交</option><option>流拍</option><option>超时未付款</option><option>拖回/发回</option><option>拖回/再拍</option><option>拖回/等待</option><option>拆单/成交</option></select></label>
           <label><span>发货状态</span><select id="filter-shipping"><option value="">全部</option><option value="unshipped">未发货</option><option value="shipped">已发货</option><option value="needs_address">地址待二审</option><option value="ready_to_order">可以下单</option><option value="mxiqi_pending">单号待回填</option><option value="completed">发货已完成</option></select></label>
           <button class="text-button" id="clear-filters">清除筛选</button>
         </div>
         <div class="table-wrap">
           <table>
-            <thead id="records-head"><tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选当前记录"></th><th>Lot / 拍品</th><th>送拍人</th><th>买家 / 收件人</th><th>拍场与时间</th><th>最终价格</th><th>资料</th><th>物流</th><th>取件码 / 运单</th><th>结算</th><th>操作</th></tr></thead>
+            <thead id="records-head"><tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选当前记录"></th><th>Lot / 拍品</th><th>送拍人</th><th>买家 / 收件人</th><th>拍品状态</th><th>拍场与时间</th><th>最终价格</th><th>资料</th><th>物流</th><th>取件码 / 运单</th><th>结算</th><th>操作</th></tr></thead>
             <tbody id="records-body"></tbody>
           </table>
         </div>
@@ -226,10 +239,10 @@
         <p class="collector-result" id="collector-last-result">未执行采集</p>
       </section>
       <section class="rule-card"><h3>采集范围与自动刷新</h3><div class="form-grid">
-        <label class="field"><span>订单范围</span><select id="collector-scope"><option value="waitexpress">待发货订单（最快）</option><option value="waitconfirm">待确认订单（结算）</option><option value="recent">最近 5 页订单</option></select></label>
+        <label class="field"><span>订单范围</span><select id="collector-scope"><option value="waitexpress">待发货订单（最快）</option><option value="waitpay">待付款订单（催款）</option><option value="waitconfirm">待确认订单（结算）</option><option value="recent">最近 5 页订单</option></select></label>
         <label class="field"><span>刷新间隔</span><select id="collector-interval"><option value="15">15 秒（短时快速）</option><option value="30">30 秒</option><option value="60">60 秒（推荐）</option><option value="300">5 分钟</option></select></label>
         <label class="field"><span>多久不操作自动停止</span><select id="collector-idle"><option value="5">5 分钟</option><option value="10">10 分钟（推荐）</option><option value="30">30 分钟</option><option value="60">60 分钟</option></select></label>
-      </div><p class="rule-preview">日常发货使用“待发货”；按期结算使用“待确认”，可读取最多 20 页；最近订单最多读取 5 页。页面关闭或长时间不操作后会自动停止。</p></section>
+      </div><p class="rule-preview">日常发货使用“待发货”；催款使用“待付款”；按期结算使用“待确认”。待付款和待确认最多读取 20 页，最近订单最多读取 5 页。页面关闭或长时间不操作后会自动停止。</p></section>
       <div class="collector-actions"><button class="btn primary" type="button" id="collector-refresh">立即刷新一次</button><button class="btn secondary" type="button" id="collector-start">开始自动采集</button><button class="btn secondary danger" type="button" id="collector-stop" disabled>停止自动采集</button></div>
     </div><footer><button class="btn primary" value="default">完成</button></footer></form>
   </dialog>
@@ -291,11 +304,11 @@
 
   <div id="toast" class="toast" role="status" hidden></div>
   <script src="vendor/exceljs.min.js"></script>
-  <script src="matching-core.js?v=14"></script>
-  <script src="package-core.js"></script>
-  <script src="workflow-core.js?v=14"></script>
-  <script src="commission-core.js?v=14"></script>
-  <script src="connector-bridge.js?v=14"></script>
-  <script src="app.js?v=14"></script>
+  <script src="matching-core.js?v=15"></script>
+  <script src="package-core.js?v=15"></script>
+  <script src="workflow-core.js?v=15"></script>
+  <script src="commission-core.js?v=15"></script>
+  <script src="connector-bridge.js?v=15"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>

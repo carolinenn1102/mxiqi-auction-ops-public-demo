@@ -70,7 +70,28 @@ test("connector supports exact historical order-number lookup", () => {
 
 test("connector supports the Mxiqi wait-confirm settlement scope", () => {
   const content = fs.readFileSync(path.join(extensionRoot, "content.js"), "utf8");
-  assert.match(content, /scope === "waitconfirm"/);
-  assert.match(content, /safeScope === "waitconfirm" \? 20/);
+  assert.match(content, /\["waitconfirm","waitpay"\]\.includes\(scope\)/);
+  assert.match(content, /\["waitconfirm","waitpay"\]\.includes\(safeScope\) \? 20/);
   assert.match(content, /org\.order\.list\/\$\{safeScope\}/);
+});
+
+test("connector supports the Mxiqi wait-pay scope and reports its version", () => {
+  const content = fs.readFileSync(path.join(extensionRoot, "content.js"), "utf8");
+  const background = fs.readFileSync(path.join(extensionRoot, "background.js"), "utf8");
+  const manifest = JSON.parse(fs.readFileSync(path.join(extensionRoot, "manifest.json"), "utf8"));
+  assert.match(content, /"waitconfirm","waitpay"/);
+  assert.match(content, /org\.order\.list\/\$\{safeScope\}/);
+  assert.match(background, /chrome\.runtime\.getManifest\(\)\.version/);
+  assert.equal(manifest.version, "1.4.0");
+});
+
+test("dashboard exposes wait-pay sync and a dedicated reauction library", () => {
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  assert.match(html, /id="sync-unpaid-orders"/);
+  assert.match(html, /value="waitpay"/);
+  assert.match(html, /data-stage="reauction"/);
+  assert.match(html, /<th>拍品状态<\/th>/);
+  assert.match(app, /trigger === "payment" \? "waitpay"/);
+  assert.match(app, /record\.returnDisposition === "拖回\/再拍"/);
 });

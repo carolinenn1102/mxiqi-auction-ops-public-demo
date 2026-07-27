@@ -30,5 +30,20 @@
       : "unshipped";
   }
 
-  return {isReturnRecord,auctionPeriod,settlementGross,isSettlementEligible,shippingBucket};
+  function isPaymentOverdue(record = {}, now = Date.now()) {
+    if (record.paymentStatus !== "待付款" || !record.paymentDueAt || Number(record.finalPrice) <= 0) return false;
+    const deadline = new Date(record.paymentDueAt).getTime();
+    const current = now instanceof Date ? now.getTime() : Number(now);
+    return Number.isFinite(deadline) && Number.isFinite(current) && deadline < current;
+  }
+
+  function recordStatus(record = {}, now = Date.now()) {
+    if (record.returnDisposition === "拆单") return record.finalOutcome === "成交" ? "拆单/成交" : "拆单";
+    if (["拖回/发回", "拖回/再拍", "拖回/等待"].includes(record.returnDisposition)) return record.returnDisposition;
+    if (isPaymentOverdue(record, now)) return "超时未付款";
+    if (record.paymentStatus === "待付款") return "待付款";
+    return record.finalOutcome || "待确认";
+  }
+
+  return {isReturnRecord,auctionPeriod,settlementGross,isSettlementEligible,shippingBucket,isPaymentOverdue,recordStatus};
 });
