@@ -10,10 +10,34 @@
   }
 
   function auctionPeriod(record = {}) {
-    const source = String(record.projectName || record.auctionHouse || "").trim();
-    const match = source.match(/第\s*(\d+)\s*期/);
+    const source = [record.projectName, record.auctionHouse, record.auctionAt, record.lotLabel, record.itemName]
+      .filter(Boolean)
+      .join(" · ");
+    const match = source.match(/(?:第\s*)?(\d{1,4})\s*期/);
     if (match) return `第${Number(match[1])}期`;
     return "期数待补";
+  }
+
+  function normalizeReturnDisposition(value = "") {
+    const source = String(value).replace(/\s+/g, "");
+    if (source.includes("拖回/发回")) return "拖回/发回";
+    if (source.includes("拖回/再拍")) return "拖回/再拍";
+    if (source.includes("拖回/等待")) return "拖回/等待";
+    if (source.includes("拆单")) return "拆单";
+    if (source.includes("寄存")) return "寄存";
+    return "";
+  }
+
+  function trackerOutcome(value = "", finalPrice = 0) {
+    const source = String(value).trim();
+    const returnDisposition = normalizeReturnDisposition(source);
+    if (returnDisposition === "寄存") return {finalOutcome:"待拍", returnDisposition};
+    if (returnDisposition === "拆单") return {finalOutcome:Number(finalPrice) > 0 ? "成交" : "待拍", returnDisposition};
+    if (returnDisposition) return {finalOutcome:"拖回", returnDisposition};
+    if (source.includes("拖回")) return {finalOutcome:"拖回", returnDisposition:""};
+    if (source.includes("流拍")) return {finalOutcome:"流拍", returnDisposition:""};
+    if (source.includes("待拍")) return {finalOutcome:"待拍", returnDisposition:""};
+    return {finalOutcome:Number(finalPrice) > 0 || source.includes("成交") ? "成交" : "待拍", returnDisposition:""};
   }
 
   function settlementGross(record = {}) {
@@ -39,11 +63,12 @@
 
   function recordStatus(record = {}, now = Date.now()) {
     if (record.returnDisposition === "拆单") return record.finalOutcome === "成交" ? "拆单/成交" : "拆单";
-    if (["拖回/发回", "拖回/再拍", "拖回/等待"].includes(record.returnDisposition)) return record.returnDisposition;
+    if (["拖回/发回", "拖回/再拍", "拖回/等待", "寄存"].includes(record.returnDisposition)) return record.returnDisposition;
     if (isPaymentOverdue(record, now)) return "超时未付款";
     if (record.paymentStatus === "待付款") return "待付款";
-    return record.finalOutcome || "待确认";
+    if (record.finalOutcome) return record.finalOutcome;
+    return Number(record.finalPrice) > 0 ? "成交" : "待拍";
   }
 
-  return {isReturnRecord,auctionPeriod,settlementGross,isSettlementEligible,shippingBucket,isPaymentOverdue,recordStatus};
+  return {isReturnRecord,auctionPeriod,normalizeReturnDisposition,trackerOutcome,settlementGross,isSettlementEligible,shippingBucket,isPaymentOverdue,recordStatus};
 });

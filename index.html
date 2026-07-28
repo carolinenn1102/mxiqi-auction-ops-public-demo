@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="theme-color" content="#102735">
   <title>送拍运营工作台 · 公开体验版</title>
-  <link rel="stylesheet" href="styles.css?v=16">
+  <link rel="stylesheet" href="styles.css?v=17">
   <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
@@ -116,7 +116,7 @@
         <div class="advanced-filters" aria-label="拍品筛选">
           <label><span>送拍人</span><select id="filter-seller"><option value="">全部</option></select></label>
           <label><span>拍卖期数</span><select id="filter-auction"><option value="">全部期数</option></select></label>
-          <label><span>拍品状态</span><select id="filter-status"><option value="">全部</option><option>待拍</option><option>待付款</option><option>成交</option><option>流拍</option><option>超时未付款</option><option>拖回/发回</option><option>拖回/再拍</option><option>拖回/等待</option><option>拆单/成交</option></select></label>
+          <label><span>拍品状态</span><select id="filter-status"><option value="">全部</option><option>待拍</option><option>待付款</option><option>成交</option><option>流拍</option><option>超时未付款</option><option>寄存</option><option>拖回/发回</option><option>拖回/再拍</option><option>拖回/等待</option><option>拆单/成交</option></select></label>
           <label><span>发货状态</span><select id="filter-shipping"><option value="">全部</option><option value="unshipped">未发货</option><option value="shipped">已发货</option><option value="needs_address">地址待二审</option><option value="ready_to_order">可以下单</option><option value="mxiqi_pending">单号待回填</option><option value="completed">发货已完成</option></select></label>
           <button class="text-button" id="clear-filters">清除筛选</button>
         </div>
@@ -146,7 +146,7 @@
           <label class="field"><span>成交状态</span><select name="finalOutcome"><option value="">待确认</option><option>待拍</option><option>成交</option><option>流拍</option><option>拖回</option></select></label>
           <label class="field"><span>买家付款状态</span><select name="paymentStatus"><option value="">未设置</option><option>待付款</option><option>已付款</option></select></label>
           <label class="field"><span>付款截止时间</span><input name="paymentDueAt" type="datetime-local"></label>
-          <label class="field"><span>拖回/特殊处理</span><select name="returnDisposition"><option value="">正常流程</option><option>拖回/发回</option><option>拖回/再拍</option><option>拖回/等待</option><option>拆单</option></select></label>
+          <label class="field"><span>拖回/特殊处理</span><select name="returnDisposition"><option value="">正常流程</option><option>寄存</option><option>拖回/发回</option><option>拖回/再拍</option><option>拖回/等待</option><option>拆单</option></select></label>
           <label class="field"><span>一级分类</span><input name="primaryCategory"></label>
           <label class="field"><span>二级分类</span><input name="secondaryCategory"></label>
         </div></section>
@@ -192,7 +192,7 @@
       <div class="asset-security"><b>真实资料只保存在当前浏览器</b><p>“寄存记录、送评记录.xlsx”只读取第一张“寄存”，第二张“送评”暂不导入；“外拍.xlsx”只读取“整体”，不读取“已售出”。</p></div>
       <section class="asset-import-panel">
         <label class="file-drop asset-file-drop"><input id="asset-excel-file" type="file" accept=".xlsx" multiple><span class="file-icon">⇧</span><b id="asset-file-name">选择寄存或外拍 Excel</b><small>可一次选择两份文件；重复记录会更新，不会重复新增</small></label>
-        <div class="asset-import-actions"><button class="btn secondary" type="button" id="asset-sync-orders">按寄存单号回补麦稀奇订单</button><button class="btn secondary" type="button" id="asset-rematch">重新自动匹配</button><span>寄存资料按送拍人手机号或寄存单号关联；麦稀奇订单中的买家手机号只用于发货，不参与送拍人匹配。</span></div>
+        <div class="asset-import-actions"><button class="btn secondary" type="button" id="asset-sync-orders">按寄存单号回补麦稀奇订单</button><button class="btn secondary" type="button" id="asset-rematch">重新自动匹配</button><span>寄存资料按送拍人手机号或寄存单号关联；麦稀奇订单中的买家手机号只用于发货，不参与送拍人匹配。</span><p class="asset-sync-status" id="asset-sync-status" aria-live="polite">点击回补后会在这里显示搜索进度和结果。</p></div>
       </section>
       <section class="asset-metrics" aria-label="匹配汇总">
         <button type="button" data-asset-filter="all"><span>全部</span><b id="asset-total">0</b></button>
@@ -210,7 +210,7 @@
   </dialog>
 
   <dialog id="audit-dialog" class="dialog">
-    <form method="dialog"><header><h2>最近操作记录</h2><button class="icon-close" type="button" value="cancel" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body"><p class="modal-copy">仅记录当前浏览器中的体验操作。</p><div class="audit-list" id="audit-list"></div></div><footer><button class="btn primary" value="default">完成</button></footer></form>
+    <form method="dialog"><header><h2>最近操作记录</h2><button class="icon-close" type="button" value="cancel" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body"><p class="modal-copy">仅记录当前浏览器中的体验操作。</p><section class="undo-panel"><div><b>撤回到哪次操作</b><p>选择后会恢复该操作发生前的数据；撤回前的当前状态也会保留，可再次恢复。</p></div><label><span>可撤回记录</span><select id="undo-target"><option value="">请选择一次操作</option></select></label><button class="btn secondary danger" type="button" id="undo-operation" disabled>撤回到所选操作</button></section><div class="audit-list" id="audit-list"></div></div><footer><button class="btn primary" value="default">完成</button></footer></form>
   </dialog>
 
   <dialog id="connection-dialog" class="dialog wide-dialog">
@@ -309,9 +309,9 @@
   <script src="vendor/exceljs.min.js"></script>
   <script src="matching-core.js?v=15"></script>
   <script src="package-core.js?v=15"></script>
-  <script src="workflow-core.js?v=15"></script>
+  <script src="workflow-core.js?v=17"></script>
   <script src="commission-core.js?v=15"></script>
   <script src="connector-bridge.js?v=15"></script>
-  <script src="app.js?v=16"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>

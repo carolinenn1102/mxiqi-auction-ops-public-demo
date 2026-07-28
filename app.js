@@ -8,6 +8,7 @@
   const COLLECTOR_KEY = "mxiqi-public-demo-collector-v1";
   const CONNECTION_KEY = "mxiqi-public-demo-connection-v1";
   const ASSETS_KEY = "mxiqi-public-demo-assets-v1";
+  const HISTORY_KEY = "mxiqi-public-demo-history-v1";
   const MIGRATION_KEY = "mxiqi-public-demo-schema";
   const BACKUP_META_KEY = "mxiqi-public-demo-last-backup";
 
@@ -71,6 +72,7 @@
     collector: loadObject(COLLECTOR_KEY, defaultCollector),
     connection: loadObject(CONNECTION_KEY, defaultConnection),
     assets: loadArray(ASSETS_KEY, []),
+    history: loadArray(HISTORY_KEY, []),
     assetFilter: "all",
     assetQuery: "",
     selectedAssets: new Set(),
@@ -123,7 +125,42 @@
     }
   }
 
-  function save() {
+  const HISTORY_LIMIT = 8;
+  let suppressHistoryCapture = false;
+
+  function businessSnapshot() {
+    return clone({records:state.records,assets:state.assets,settings:state.settings,customers:state.customers});
+  }
+
+  function persistedBusinessSnapshot() {
+    return {
+      records: loadArray(STORAGE_KEY, seedRecords),
+      assets: loadArray(ASSETS_KEY, []),
+      settings: loadObject(SETTINGS_KEY, defaultSettings),
+      customers: loadObject(CUSTOMERS_KEY, seedCustomers),
+    };
+  }
+
+  function snapshotFingerprint(snapshot) {
+    return JSON.stringify(snapshot);
+  }
+
+  function captureHistorySnapshot() {
+    if (suppressHistoryCapture) return null;
+    const before = persistedBusinessSnapshot();
+    const after = businessSnapshot();
+    const beforeFingerprint = snapshotFingerprint(before);
+    const afterFingerprint = snapshotFingerprint(after);
+    if (beforeFingerprint === afterFingerprint) return null;
+    const latest = state.history[0];
+    if (latest?.pending && latest.afterFingerprint === afterFingerprint) return latest;
+    const entry = {id:uid(),time:new Date().toISOString(),action:"自动保存",detail:"业务数据发生变更",pending:true,before,afterFingerprint};
+    state.history.unshift(entry);
+    state.history = state.history.slice(0, HISTORY_LIMIT);
+    return entry;
+  }
+
+  function persistState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.records));
     localStorage.setItem(AUDIT_KEY, JSON.stringify(state.audit.slice(0, 200)));
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
@@ -131,6 +168,12 @@
     localStorage.setItem(COLLECTOR_KEY, JSON.stringify(state.collector));
     localStorage.setItem(CONNECTION_KEY, JSON.stringify(state.connection));
     localStorage.setItem(ASSETS_KEY, JSON.stringify(state.assets));
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(state.history.slice(0, HISTORY_LIMIT)));
+  }
+
+  function save({skipHistoryCapture = false} = {}) {
+    if (!skipHistoryCapture) captureHistorySnapshot();
+    persistState();
   }
 
   function uid() {
@@ -149,9 +192,100 @@
     return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
   }
 
-  function audit(action, detail) {
-    state.audit.unshift({id:uid(), action, detail, time:new Date().toISOString()});
-    save();
+  function audit(action, detail, {undoable = true} = {}) {
+    const currentFingerprint = snapshotFingerprint(businessSnapshot());
+    const createdSnapshot = undoable ? captureHistorySnapshot() : null;
+    const snapshot = createdSnapshot || (undoable ? state.history.find((item) => item.pending && item.afterFingerprint === currentFingerprint) : null);
+    if (snapshot) {
+      snapshot.action = action;
+      snapshot.detail = detail;
+      snapshot.pending = false;
+    }
+    state.audit.unshift({id:uid(), action, detail, time:new Date().toISOString(), undoSnapshotId:snapshot?.id || ""});
+    save({skipHistoryCapture:true});
+  }
+
+  function historyTime(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "时间未知" : date.toLocaleString("zh-CN", {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});
+  }
+
+  function renderAuditDialog() {
+    const list = $("#audit-list");
+    list.innerHTML = state.audit.length ? state.audit.map((item) => `<article class="audit-entry"><span class="audit-dot"></span><div><b>${esc(item.action)}</b><p>${esc(item.detail)}</p></div><time>${historyTime(item.time)}</time></article>`).join("") : '<div class="audit-empty">暂无操作记录</div>';
+    const select = $("#undo-target");
+    const validHistory = state.history.filter((item) => item?.before);
+    select.innerHTML = '<option value="">请选择一次操作</option>' + validHistory.map((item) => {
+      const label = item.action === "撤回前状态"
+        ? `${historyTime(item.time)} · 恢复撤回前状态`
+        : `${historyTime(item.time)} · 撤回“${item.action || "数据修改"}”`;
+      return `<option value="${esc(item.id)}">${esc(label)}</option>`;
+    }).join("");
+    $("#undo-operation").disabled = true;
+  }
+
+  function restoreHistoryEntry(entry) {
+    if (!entry?.before) return;
+    const current = businessSnapshot();
+    const warning = entry.legacy
+      ? `旧版本没有保存完整快照，将按“最后新增的 ${entry.legacyCount} 条拍品”推断撤回。确定继续吗？\n\n当前状态会另存为“撤回前状态”，需要时可恢复。`
+      : `确定撤回“${entry.action || "所选操作"}”吗？\n\n当前状态会另存为“撤回前状态”，需要时可恢复。`;
+    if (!confirm(warning)) return;
+    const target = clone(entry.before);
+    const safety = {
+      id:uid(),
+      time:new Date().toISOString(),
+      action:"撤回前状态",
+      detail:`撤回“${entry.action || "所选操作"}”前自动保存`,
+      pending:false,
+      before:current,
+      afterFingerprint:snapshotFingerprint(target),
+    };
+    suppressHistoryCapture = true;
+    try {
+      state.records = Array.isArray(target.records) ? target.records : [];
+      state.assets = Array.isArray(target.assets) ? target.assets : [];
+      state.settings = target.settings && typeof target.settings === "object" ? {...clone(defaultSettings), ...target.settings} : clone(defaultSettings);
+      state.customers = target.customers && typeof target.customers === "object" ? target.customers : {};
+      state.history = [safety, ...state.history.filter((item) => item.id !== safety.id)].slice(0, HISTORY_LIMIT);
+      state.selected.clear();
+      state.selectedAssets.clear();
+      state.expandedPackages.clear();
+      state.expandedSettlements.clear();
+      persistState();
+    } finally {
+      suppressHistoryCapture = false;
+    }
+    audit("撤回操作", `已恢复到“${entry.action || "所选操作"}”发生前`, {undoable:false});
+    render();
+    renderAssetPanel();
+    updateBackupSummary();
+    renderAuditDialog();
+    notify("撤回完成；撤回前状态也已保存，可在这里再次恢复");
+  }
+
+  function ensureLegacyImportUndo() {
+    if (state.history.some((item) => item?.before && /^导入数据/.test(item.action || ""))) return;
+    const latest = state.audit[0];
+    if (!latest || latest.action !== "导入数据") return;
+    const count = Number(String(latest.detail || "").match(/(\d+)\s*条拍品/)?.[1] || 0);
+    if (!count || count > 200 || count > state.records.length) return;
+    const before = businessSnapshot();
+    before.records = before.records.slice(0, -count);
+    const importedRecordIds = new Set(state.records.slice(-count).map((record) => record.id));
+    before.assets = before.assets.filter((asset) => !asset.recordStorageId || !importedRecordIds.has(asset.recordStorageId));
+    state.history = [{
+      id:uid(),
+      time:latest.time || new Date().toISOString(),
+      action:"导入数据（旧版本）",
+      detail:`${count} 条拍品 · 按最后新增记录推断`,
+      pending:false,
+      legacy:true,
+      legacyCount:count,
+      before,
+      afterFingerprint:snapshotFingerprint(businessSnapshot()),
+    }, ...state.history].slice(0, HISTORY_LIMIT);
+    persistState();
   }
 
   function notify(text, tone = "success") {
@@ -180,8 +314,11 @@
   }
 
   function auctionMonth(record) {
-    const match = String(record.auctionAt || "").match(/^\d{4}-(\d{1,2})/);
-    return match ? Number(match[1]) : new Date().getMonth() + 1;
+    const source = String(record.auctionAt || "").trim();
+    const isoMatch = source.match(/^\d{4}-(\d{1,2})/);
+    if (isoMatch) return Number(isoMatch[1]);
+    const compactMatch = source.match(/^\d{2}(\d{2})\d{2}/);
+    return compactMatch ? Number(compactMatch[1]) : new Date().getMonth() + 1;
   }
 
   function birthdayMonthFor(record) {
@@ -896,6 +1033,42 @@
     applyAssetMatches();
   }
 
+  function syncStoredAssetForRecord(record) {
+    const index = state.assets.findIndex((asset) => asset.recordStorageId === record.id);
+    if (record.returnDisposition !== "寄存") {
+      if (index >= 0) state.assets.splice(index, 1);
+      return;
+    }
+    const storedAsset = {
+      ...(index >= 0 ? state.assets[index] : {}),
+      id: index >= 0 ? state.assets[index].id : `stored-${record.id}`,
+      assetKey: `record-storage:${record.id}`,
+      assetType: "consignment",
+      sourceFile: "拍品工作台",
+      sourceSheet: "寄存流转",
+      sourceRow: record.lot || "自动",
+      itemName: record.itemName,
+      sellerWechat: record.sellerWechat || "待补送拍人",
+      sellerPhone: record.sellerPhone || "",
+      auctionNumber: auctionPeriod(record),
+      lot: String(record.lot || ""),
+      status: "寄存",
+      matchStatus: "manual",
+      matchedRecordId: record.id,
+      matchScore: 999,
+      matchReason: `拍品状态选择寄存 · Lot ${record.lot}`,
+      recordStorageId: record.id,
+    };
+    if (index >= 0) state.assets[index] = storedAsset;
+    else state.assets.push(storedAsset);
+  }
+
+  function syncStoredAssetsFromRecords() {
+    const storedRecordIds = new Set(state.records.filter((record) => record.returnDisposition === "寄存").map((record) => record.id));
+    state.assets = state.assets.filter((asset) => !asset.recordStorageId || storedRecordIds.has(asset.recordStorageId));
+    state.records.forEach(syncStoredAssetForRecord);
+  }
+
   function upsert(records) {
     let added = 0;
     let updated = 0;
@@ -921,6 +1094,7 @@
         added += 1;
       }
     }
+    syncStoredAssetsFromRecords();
     rematchAssetsAndApply();
     save();
     render();
@@ -1301,7 +1475,7 @@
     $("#asset-clear-selection").hidden = !selectedCount;
     $("#asset-selection-count").textContent = `已选 ${selectedCount} 条`;
     const consignmentOrderCount = new Set(state.assets.filter((asset) => asset.assetType === "consignment" && asset.consignmentOrderNo).map((asset) => asset.consignmentOrderNo)).size;
-    $("#asset-sync-orders").disabled = !consignmentOrderCount || state.connection.status !== "connected";
+    $("#asset-sync-orders").disabled = !consignmentOrderCount;
     $("#asset-sync-orders").title = !consignmentOrderCount ? "请先导入含寄存单号的第一张“寄存”工作表" : state.connection.status !== "connected" ? "请先连接麦稀奇" : `搜索 ${consignmentOrderCount} 个寄存单号`;
     $("#asset-footer-note").textContent = state.assets.length
       ? `显示 ${visible.length} / ${state.assets.length} 条 · ${counts.review + counts.unmatched} 条需要人工处理`
@@ -1333,6 +1507,13 @@
       const select = body.querySelector(`[data-asset-match="${CSS.escape(asset.id)}"]`);
       if (select) select.value = ["auto", "manual"].includes(asset.matchStatus) ? asset.matchedRecordId || "" : "";
     });
+  }
+
+  function setAssetSyncStatus(message, tone = "") {
+    const status = $("#asset-sync-status");
+    if (!status) return;
+    status.textContent = message;
+    status.className = `asset-sync-status ${tone}`.trim();
   }
 
   function openAssets() {
@@ -1372,16 +1553,19 @@
   async function syncConsignmentOrdersFromAssets({quietIfDisconnected = false} = {}) {
     const orderNumbers = [...new Set(state.assets.filter((asset) => asset.assetType === "consignment" && asset.consignmentOrderNo).map((asset) => String(asset.consignmentOrderNo)))];
     if (!orderNumbers.length) {
+      setAssetSyncStatus("没有找到可搜索的寄存单号，请确认导入的是第一张“寄存”工作表。", "error");
       notify("当前寄存资料中没有可搜索的寄存订单号", "error");
       return false;
     }
     if (state.connection.status !== "connected") {
+      setAssetSyncStatus("尚未连接麦稀奇。请先到“平台登录”确认采集助手已连接并且账号仍处于登录状态。", "error");
       if (!quietIfDisconnected) notify("请先连接麦稀奇，再按寄存单号回补历史订单", "error");
       return false;
     }
     const button = $("#asset-sync-orders");
     button.disabled = true;
     button.textContent = `正在搜索 ${orderNumbers.length} 个寄存单号…`;
+    setAssetSyncStatus(`正在逐个搜索 ${orderNumbers.length} 个寄存单号，请不要关闭当前页面。`, "busy");
     try {
       const result = await MxiqiConnector.syncOrdersByNumbers({orderNumbers});
       if (result.requiresLogin) throw new Error("麦稀奇登录已失效，请重新登录");
@@ -1393,13 +1577,19 @@
       render();
       renderAssetPanel();
       const missing = result.missingOrderNumbers?.length || 0;
+      setAssetSyncStatus(`回补完成：找到 ${result.foundOrders?.length || 0} 单，同步 ${stats.accepted} 件拍品${missing ? `，${missing} 个单号未找到` : ""}。`, missing ? "busy" : "success");
       notify(`历史订单回补完成：找到 ${result.foundOrders?.length || 0} 单、同步 ${stats.accepted} 件拍品${missing ? `；${missing} 个单号未找到` : ""}`, missing ? "info" : "success");
       return true;
     } catch (error) {
-      notify(error.message || "按寄存单号回补失败；请更新采集助手后重试", "error");
+      const rawMessage = error.message || "按寄存单号回补失败";
+      const message = /不支持的采集命令|unsupported/i.test(rawMessage)
+        ? "采集助手版本过旧，请下载最新版、重新加载扩展后再试。"
+        : `${rawMessage}。请确认麦稀奇登录有效后重试。`;
+      setAssetSyncStatus(message, "error");
+      notify(message, "error");
       return false;
     } finally {
-      button.disabled = false;
+      button.disabled = !orderNumbers.length;
       button.textContent = "按寄存单号回补麦稀奇订单";
     }
   }
@@ -1627,6 +1817,7 @@
     const ids = [...state.selected];
     if (!ids.length || !confirm(`确定删除选中的 ${ids.length} 条拍品吗？此操作只影响当前浏览器数据。`)) return;
     state.records = state.records.filter((record) => !state.selected.has(record.id));
+    syncStoredAssetsFromRecords();
     rematchAssetsAndApply();
     state.selected.clear();
     audit("批量删除拍品", `${ids.length} 条拍品`);
@@ -1856,6 +2047,7 @@
     if (index >= 0) state.records[index] = record;
     else state.records.push({...record,carrier:"pending",logisticsStatus:"not_requested",pickupCode:""});
     state.records.filter((item) => !item.settled && item.sellerWechat === sellerWechat).forEach((item) => recalculateRecord(item));
+    syncStoredAssetsFromRecords();
     rematchAssetsAndApply();
     audit("保存拍品", `Lot ${record.lot} · ${record.itemName}`);
     save();
@@ -1968,8 +2160,11 @@
       } else throw new Error("请选择 Excel 文件或粘贴 JSON");
       const valid = records.filter((item) => Number(item.lot) > 0 && item.itemName);
       if (!valid.length) throw new Error("文件中没有可导入的数据行");
-      upsert(valid);
-      audit("导入数据", `${valid.length} 条拍品`);
+      const importBatchId = uid();
+      const importedAt = new Date().toISOString();
+      valid.forEach((record) => Object.assign(record, {importBatchId, importedAt}));
+      const stats = upsert(valid);
+      audit("导入数据", `${valid.length} 条拍品 · 新增 ${stats.added} · 更新 ${stats.updated}`);
       importDialog.close();
       $("#import-form").reset();
       $("#file-name").textContent = "选择 .xlsx 文件";
@@ -2089,14 +2284,21 @@
   $("#restore-backup").addEventListener("click", restoreBackup);
 
   $("#open-audit").addEventListener("click", () => {
-    const list = $("#audit-list");
-    list.innerHTML = state.audit.length ? state.audit.map((item) => `<article class="audit-entry"><span class="audit-dot"></span><div><b>${esc(item.action)}</b><p>${esc(item.detail)}</p></div><time>${new Date(item.time).toLocaleString("zh-CN", {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"})}</time></article>`).join("") : '<div class="audit-empty">暂无操作记录</div>';
+    renderAuditDialog();
     auditDialog.showModal();
+  });
+  $("#undo-target").addEventListener("change", (event) => {
+    $("#undo-operation").disabled = !event.target.value;
+  });
+  $("#undo-operation").addEventListener("click", () => {
+    const entry = state.history.find((item) => item.id === $("#undo-target").value);
+    restoreHistoryEntry(entry);
   });
 
   $("#reset-demo").addEventListener("click", () => {
     if (!confirm("确定恢复示例数据？当前浏览器中的体验修改将被清除。建议先下载完整备份。")) return;
     state.records = clone(seedRecords);
+    state.assets = [];
     state.audit = [];
     state.settings = clone(defaultSettings);
     state.customers = clone(seedCustomers);
@@ -2107,6 +2309,7 @@
     collectorRuntime.nextRunAt = 0;
     state.selected.clear();
     save();
+    audit("恢复示例数据", "拍品、寄存库存、规则和登录状态已重置");
     render();
     renderConnectionPanel();
     renderCollectorPanel();
@@ -2175,17 +2378,19 @@
         const projectName = textAt(row, found.map, "送拍项目");
         if (!lot && !projectName) continue;
         const outcome = textAt(row, found.map, "拍出价格/拖回", "拍出价格拖回");
-        if (lot > 0 && projectName) records.push(compact({lot,itemName:projectName,projectName,lotLabel,auctionHouse:lotLabel.split(/[\/／]/)[0].trim(),sellerWechat:textAt(row,found.map,"送拍人（微信名）","送拍人微信名"),contactedAt:textAt(row,found.map,"联系时间"),coinBoxId:textAt(row,found.map,"盒子币编号"),trackingNumber:textAt(row,found.map,"快递单号"),auctionAt:textAt(row,found.map,"上拍时间（拍卖时间）","上拍时间拍卖时间"),received:textAt(row,found.map,"是/否收到","是否收到") || "待确认",finalOutcome:outcome.includes("拖回") ? "拖回" : numberAt(row,found.map,"拍出价格/拖回") > 0 ? "成交" : "",finalPrice:outcome.includes("拖回") ? 0 : numberAt(row,found.map,"拍出价格/拖回"),settled:textAt(row,found.map,"是/否已结账","是否已结账") === "是",settlementNote:textAt(row,found.map,"结账")}));
+        const price = numberAt(row, found.map, "拍出价格/拖回");
+        const normalizedOutcome = MxiqiWorkflow.trackerOutcome(outcome, price);
+        if (lot > 0 && projectName) records.push(compact({lot,itemName:projectName,projectName,lotLabel,auctionHouse:lotLabel.split(/[\/／]/)[0].trim(),sellerWechat:textAt(row,found.map,"送拍人（微信名）","送拍人微信名"),sellerPhone:MxiqiAssets.normalizePhone(textAt(row,found.map,"送拍人手机号","手机号","电话")),contactedAt:textAt(row,found.map,"联系时间"),coinBoxId:textAt(row,found.map,"盒子币编号"),trackingNumber:textAt(row,found.map,"快递单号"),auctionAt:textAt(row,found.map,"上拍时间（拍卖时间）","上拍时间拍卖时间"),received:textAt(row,found.map,"是/否收到","是否收到") || "待确认",finalOutcome:normalizedOutcome.finalOutcome,returnDisposition:normalizedOutcome.returnDisposition,finalPrice:normalizedOutcome.finalOutcome === "成交" ? price : 0,settled:textAt(row,found.map,"是/否已结账","是否已结账") === "是",settlementNote:textAt(row,found.map,"结账")}));
       }
     }
-    if (found.kind === "tracker" && column(found.map, "送拍人手机号", "手机号")) {
+    if (found.kind === "tracker" && column(found.map, "送拍人手机号", "手机号", "电话")) {
       let recordIndex = 0;
       for (let rowNo = found.rowNo + 1; rowNo <= found.sheet.rowCount; rowNo += 1) {
         const row = found.sheet.getRow(rowNo);
         const lotLabel = textAt(row, found.map, "拍场/Lot", "拍场Lot");
         const projectName = textAt(row, found.map, "送拍项目");
         if (lotFromLabel(lotLabel) > 0 && projectName && records[recordIndex]) {
-          records[recordIndex].sellerPhone = MxiqiAssets.normalizePhone(textAt(row, found.map, "送拍人手机号", "手机号"));
+          records[recordIndex].sellerPhone = MxiqiAssets.normalizePhone(textAt(row, found.map, "送拍人手机号", "手机号", "电话"));
           recordIndex += 1;
         }
       }
@@ -2199,7 +2404,7 @@
       const sheet = workbook.addWorksheet("Sheet1");
       const headers = ["送拍人（微信名）","送拍人手机号","联系时间","送拍项目","盒子币编号","快递单号","上拍时间（拍卖时间）","拍场/Lot","是/否收到","拍出价格/拖回","送拍佣金","结款金额","是/否已结账","适用优惠方案","结账","利润（不包含邮费）"];
       sheet.addRow([null, ...headers]);
-      state.records.forEach((record) => sheet.addRow([null,record.sellerWechat || null,record.sellerPhone || null,record.contactedAt || null,record.projectName || record.itemName,record.coinBoxId || null,record.trackingNumber || null,record.auctionAt || null,record.lotLabel || `${record.auctionHouse || ""} / Lot ${record.lot}`,record.received || "待确认",record.finalOutcome === "拖回" ? "拖回" : record.finalPrice || null,record.commissionAmount || null,record.settlementAmount || null,record.settled ? "是" : "否",record.promotion || null,record.settlementNote || null,record.profit || null]));
+      state.records.forEach((record) => sheet.addRow([null,record.sellerWechat || null,record.sellerPhone || null,record.contactedAt || null,record.projectName || record.itemName,record.coinBoxId || null,record.trackingNumber || null,record.auctionAt || null,record.lotLabel || `${record.auctionHouse || ""} / Lot ${record.lot}`,record.received || "待确认",record.returnDisposition || (record.finalOutcome === "拖回" ? "拖回" : record.finalPrice || null),record.commissionAmount || null,record.settlementAmount || null,record.settled ? "是" : "否",record.promotion || null,record.settlementNote || null,record.profit || null]));
       sheet.getRow(1).font = {bold:true};
       sheet.views = [{state:"frozen",ySplit:1}];
       downloadBlob(await workbook.xlsx.writeBuffer(), `送拍跟踪表_体验版_${new Date().toISOString().slice(0,10)}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -2430,6 +2635,7 @@
     $("#offline-status").textContent = "本机数据已启用";
   }
 
+  ensureLegacyImportUndo();
   render();
   renderConnectionPanel();
   renderCollectorPanel();

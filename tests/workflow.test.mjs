@@ -4,7 +4,19 @@ import workflow from "../workflow-core.js";
 
 test("extracts the auction period from the Mxiqi project title", () => {
   assert.equal(workflow.auctionPeriod({projectName:'甄臻铺“甄品场”-世界币章拍卖（第75期）'}), "第75期");
+  assert.equal(workflow.auctionPeriod({projectName:"ANACS-AU58 1923年美国和平银币",auctionAt:"260730 周四, 76期"}), "第76期");
   assert.equal(workflow.auctionPeriod({projectName:"长期征集拍品"}), "期数待补");
+});
+
+test("normalizes tracker special outcomes without losing the exact disposition", () => {
+  assert.deepEqual(workflow.trackerOutcome("拖回/再拍", 0), {finalOutcome:"拖回",returnDisposition:"拖回/再拍"});
+  assert.deepEqual(workflow.trackerOutcome("寄存", 0), {finalOutcome:"待拍",returnDisposition:"寄存"});
+  assert.deepEqual(workflow.trackerOutcome("", 0), {finalOutcome:"待拍",returnDisposition:""});
+});
+
+test("blank unsold records are exposed as pending auction", () => {
+  assert.equal(workflow.recordStatus({finalOutcome:"",finalPrice:0}), "待拍");
+  assert.equal(workflow.recordStatus({returnDisposition:"寄存",finalOutcome:"待拍",finalPrice:0}), "寄存");
 });
 
 test("return records remain settlement eligible with zero transaction gross", () => {
