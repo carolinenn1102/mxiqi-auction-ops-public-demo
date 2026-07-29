@@ -76,6 +76,8 @@
     history: loadArray(HISTORY_KEY, []),
     assetFilter: "all",
     assetQuery: "",
+    customerQuery: "",
+    editingCustomer: "",
     selectedAssets: new Set(),
     stage: "all",
     query: "",
@@ -108,6 +110,8 @@
   const shippingForm = $("#shipping-form");
   const connectionDialog = $("#connection-dialog");
   const assetDialog = $("#asset-dialog");
+  const customerDialog = $("#customer-dialog");
+  const customerForm = $("#customer-form");
   let pendingBackupFile = null;
   const collectorRuntime = {running:false,busy:false,nextRunAt:0,lastActivityAt:Date.now()};
 
@@ -165,6 +169,7 @@
   }
 
   function persistState() {
+    syncCustomerDirectory();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.records));
     localStorage.setItem(AUDIT_KEY, JSON.stringify(state.audit.slice(0, 200)));
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
@@ -194,6 +199,85 @@
 
   function roundMoney(value) {
     return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+  }
+
+  function normalizeCustomerPhone(value) {
+    const digits = String(value || "").replace(/\D/g, "");
+    return /^1\d{10}$/.test(digits) ? digits : "";
+  }
+
+  function latestCustomerDate(...values) {
+    return values.flat().map((value) => String(value || "").slice(0, 10)).filter(Boolean).sort().at(-1) || "";
+  }
+
+  function syncCustomerDirectory() {
+    const merge = (source) => {
+      const wechat = String(source?.sellerWechat || "").trim();
+      if (!wechat || wechat === "手机号用户") return;
+      const current = state.customers[wechat] && typeof state.customers[wechat] === "object" ? state.customers[wechat] : {};
+      const incomingPhone = normalizeCustomerPhone(source.sellerPhone || source.phone);
+      state.customers[wechat] = {
+        ...current,
+        phone: current.phone || incomingPhone,
+        birthdayMonth: Number(current.birthdayMonth || source.birthdayMonth || 0),
+        lastContactedAt: latestCustomerDate(current.lastContactedAt, source.contactedAt),
+        notes: String(current.notes || ""),
+      };
+    };
+    state.records.forEach(merge);
+    state.assets.forEach(merge);
+  }
+
+  function customerDirectoryEntries() {
+    syncCustomerDirectory();
+    return Object.entries(state.customers).map(([wechat, profile]) => {
+      const records = state.records.filter((record) => record.sellerWechat === wechat);
+      const assets = state.assets.filter((asset) => asset.sellerWechat === wechat);
+      return {
+        wechat,
+        phone: profile.phone || records.find((record) => record.sellerPhone)?.sellerPhone || assets.find((asset) => asset.sellerPhone)?.sellerPhone || "",
+        birthdayMonth: Number(profile.birthdayMonth || records.find((record) => Number(record.birthdayMonth))?.birthdayMonth || 0),
+        lastContactedAt: latestCustomerDate(profile.lastContactedAt, records.map((record) => record.contactedAt)),
+        notes: String(profile.notes || ""),
+        recordCount: records.length,
+        assetCount: assets.length,
+      };
+    }).sort((left, right) => left.wechat.localeCompare(right.wechat, "zh-CN"));
+  }
+
+  function fillCustomerProfile(entry) {
+    const profile = entry || {wechat:"",phone:"",birthdayMonth:0,lastContactedAt:"",notes:"",recordCount:0,assetCount:0};
+    customerForm.elements.originalWechat.value = profile.wechat;
+    customerForm.elements.sellerWechat.value = profile.wechat;
+    customerForm.elements.phone.value = profile.phone;
+    customerForm.elements.birthdayMonth.value = profile.birthdayMonth || "";
+    customerForm.elements.lastContactedAt.value = profile.lastContactedAt || "";
+    customerForm.elements.notes.value = profile.notes || "";
+    $("#customer-profile-title").textContent = profile.wechat || "新增送拍人";
+    $("#customer-avatar").textContent = profile.birthdayMonth ? "🎂" : (profile.wechat.trim().slice(0, 1) || "送");
+    $("#customer-record-count").textContent = `${profile.recordCount} 件${profile.assetCount ? ` · 寄存 ${profile.assetCount}` : ""}`;
+    $("#customer-last-contact").textContent = profile.lastContactedAt || "待补";
+    $("#customer-birthday-summary").textContent = profile.birthdayMonth ? `🎂 ${profile.birthdayMonth} 月` : "待补";
+  }
+
+  function renderCustomerDirectory(selectedWechat = state.editingCustomer) {
+    const entries = customerDirectoryEntries();
+    const query = state.customerQuery.trim().toLowerCase();
+    const visible = entries.filter((entry) => !query || [entry.wechat, entry.phone, entry.notes].join(" ").toLowerCase().includes(query));
+    if (selectedWechat && !entries.some((entry) => entry.wechat === selectedWechat)) selectedWechat = "";
+    if (!selectedWechat && visible.length) selectedWechat = visible[0].wechat;
+    state.editingCustomer = selectedWechat;
+    $("#customer-directory-count").textContent = `${entries.length} 位送拍人 · 本机保存`;
+    $("#customer-list").innerHTML = visible.length ? visible.map((entry) => `<button type="button" class="customer-list-item ${entry.wechat === selectedWechat ? "active" : ""}" data-customer-wechat="${esc(entry.wechat)}"><span><b>${entry.birthdayMonth ? "🎂 " : ""}${esc(entry.wechat)}</b><small>${esc(entry.phone || "手机号待补")} · ${entry.recordCount} 件拍品</small></span><strong>${entry.birthdayMonth ? `${entry.birthdayMonth} 月` : "查看"}</strong></button>`).join("") : '<div class="audit-empty">没有找到送拍人</div>';
+    fillCustomerProfile(entries.find((entry) => entry.wechat === selectedWechat));
+  }
+
+  function openCustomerDirectory() {
+    state.customerQuery = "";
+    $("#customer-search").value = "";
+    renderCustomerDirectory();
+    persistState();
+    customerDialog.showModal();
   }
 
   function audit(action, detail, {undoable = true} = {}) {
@@ -1833,10 +1917,12 @@
 
   function updateBackupSummary() {
     const lastBackup = localStorage.getItem(BACKUP_META_KEY);
-    const customerCount = Object.values(state.customers).filter((customer) => Number(customer.birthdayMonth) > 0).length;
+    syncCustomerDirectory();
+    const customerTotal = Object.keys(state.customers).length;
+    const birthdayCustomerCount = Object.values(state.customers).filter((customer) => Number(customer.birthdayMonth) > 0).length;
     const shippingPending = state.records.filter((record) => isShippingCandidate(record) && shippingStage(record) !== "completed").length;
     const connectionLabel = isCollectorConnected() ? state.connection.status === "demo_connected" ? "演示登录已连接" : "平台已连接" : "平台未登录";
-    $("#backup-summary").textContent = `${state.records.length} 条拍品 · ${state.assets.length} 条寄存/库存 · ${customerCount} 位客户已设生日月 · ${shippingPending} 单待发货 · ${connectionLabel} · 采集间隔 ${state.collector.intervalSeconds} 秒${lastBackup ? ` · 上次备份 ${new Date(lastBackup).toLocaleString("zh-CN")}` : " · 尚未下载过备份"}`;
+    $("#backup-summary").textContent = `${state.records.length} 条拍品 · ${state.assets.length} 条寄存/库存 · ${customerTotal} 位送拍人档案（${birthdayCustomerCount} 位已设生日月） · ${shippingPending} 单待发货 · ${connectionLabel} · 采集间隔 ${state.collector.intervalSeconds} 秒${lastBackup ? ` · 上次备份 ${new Date(lastBackup).toLocaleString("zh-CN")}` : " · 尚未下载过备份"}`;
   }
 
   function openBackup() {
@@ -1860,7 +1946,7 @@
 
   function downloadBackup() {
     const exportedAt = new Date().toISOString();
-    const backup = {schemaVersion:8,exportedAt,records:state.records,assets:state.assets,settings:state.settings,customers:state.customers,collector:state.collector,connection:state.connection,audit:state.audit};
+    const backup = {schemaVersion:9,exportedAt,records:state.records,assets:state.assets,settings:state.settings,customers:state.customers,collector:state.collector,connection:state.connection,audit:state.audit};
     downloadBlob(JSON.stringify(backup, null, 2), `送拍工作台_完整备份_${exportedAt.slice(0, 10)}.json`, "application/json;charset=utf-8");
     localStorage.setItem(BACKUP_META_KEY, exportedAt);
     audit("下载完整备份", `${state.records.length} 条拍品`);
@@ -2283,7 +2369,12 @@
       notify("收件手机号应为 11 位中国大陆手机号", "error");
       return;
     }
-    if (sellerWechat) state.customers[sellerWechat] = {birthdayMonth, phone:sellerPhone};
+    if (sellerWechat) state.customers[sellerWechat] = {
+      ...(state.customers[sellerWechat] || {}),
+      birthdayMonth,
+      phone:sellerPhone || state.customers[sellerWechat]?.phone || "",
+      lastContactedAt:latestCustomerDate(state.customers[sellerWechat]?.lastContactedAt, data.get("contactedAt")),
+    };
     const requestedDisposition = String(data.get("returnDisposition") || "");
     let record = {
       ...existing,
@@ -2357,6 +2448,60 @@
   });
 
   $("#open-assets").addEventListener("click", openAssets);
+  $("#open-customers").addEventListener("click", openCustomerDirectory);
+  $("#customer-search").addEventListener("input", (event) => {
+    state.customerQuery = event.target.value;
+    renderCustomerDirectory(state.editingCustomer);
+  });
+  $("#customer-list").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-customer-wechat]");
+    if (!button) return;
+    renderCustomerDirectory(button.dataset.customerWechat);
+  });
+  $("#new-customer").addEventListener("click", () => {
+    state.editingCustomer = "";
+    fillCustomerProfile(null);
+    customerForm.elements.sellerWechat.focus();
+  });
+  customerForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = new FormData(customerForm);
+    const originalWechat = String(data.get("originalWechat") || "").trim();
+    const sellerWechat = String(data.get("sellerWechat") || "").trim();
+    const phoneInput = String(data.get("phone") || "").trim();
+    const phone = normalizeCustomerPhone(phoneInput);
+    const birthdayMonth = Number(data.get("birthdayMonth") || 0);
+    if (!sellerWechat) return notify("请填写送拍人微信昵称", "error");
+    if (phoneInput && !phone) return notify("送拍人手机号应为 11 位中国大陆手机号", "error");
+    if (sellerWechat !== originalWechat && state.customers[sellerWechat]) return notify("该微信昵称已经存在，请直接打开原档案", "error");
+    const previous = originalWechat ? state.customers[originalWechat] || {} : {};
+    if (originalWechat && originalWechat !== sellerWechat) delete state.customers[originalWechat];
+    state.customers[sellerWechat] = {
+      ...previous,
+      phone,
+      birthdayMonth,
+      lastContactedAt:String(data.get("lastContactedAt") || ""),
+      notes:String(data.get("notes") || "").trim(),
+      updatedAt:new Date().toISOString(),
+    };
+    state.records.forEach((record) => {
+      if (record.sellerWechat !== originalWechat && !(originalWechat === "" && record.sellerWechat === sellerWechat)) return;
+      record.sellerWechat = sellerWechat;
+      record.sellerPhone = phone;
+      record.birthdayMonth = birthdayMonth;
+      if (!record.settled) recalculateRecord(record);
+    });
+    state.assets.forEach((asset) => {
+      if (asset.sellerWechat !== originalWechat && !(originalWechat === "" && asset.sellerWechat === sellerWechat)) return;
+      asset.sellerWechat = sellerWechat;
+      asset.sellerPhone = phone;
+    });
+    state.editingCustomer = sellerWechat;
+    audit("保存送拍人档案", `${sellerWechat} · ${phone || "手机号待补"}${birthdayMonth ? ` · ${birthdayMonth} 月生日` : ""}`);
+    render();
+    renderCustomerDirectory(sellerWechat);
+    notify(`${sellerWechat} 的本地档案已保存`);
+  });
   $("#asset-sync-orders").addEventListener("click", () => { void syncConsignmentOrdersFromAssets(); });
   $("#asset-excel-file").addEventListener("change", async (event) => {
     const files = [...event.target.files];
@@ -2922,7 +3067,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = `./zhenzhenpu-logo.jpg?v=24`;
+      image.src = `./zhenzhenpu-logo.jpg?v=25`;
     });
     return checklistLogoPromise;
   }
@@ -3081,9 +3226,12 @@
       context.fillRect(36, y, width - 72, rowHeight);
       context.fillStyle = "#213944";
       context.font = '17px "Microsoft YaHei", sans-serif';
-      const promotion = String(record.promotion || (isReturnRecord(record) ? "拖回处理费" : "送拍佣金")).split(" · ")[0];
+      const birthdayDiscount = birthdayMonthFor(record) > 0 && birthdayMonthFor(record) === auctionMonth(record);
+      const promotion = birthdayDiscount
+        ? (hasAppliedBoxRebate(record) ? "生日月优惠·盒子返" : "生日月优惠")
+        : String(record.promotion || (isReturnRecord(record) ? "拖回处理费" : "送拍佣金")).split(" · ")[0];
       const values = [
-        truncate(record.sellerWechat || "待补送拍人", 11),
+        truncate(`${birthdayDiscount ? "🎂 " : ""}${record.sellerWechat || "待补送拍人"}`, 11),
         truncate(record.itemName, 32),
         datePart(record.auctionAt || record.platformOrderDate) || "日期待补",
         truncate(settlementAuctionLot(record), 15),
@@ -3118,7 +3266,7 @@
   $("#export-settlement-checklist-image").addEventListener("click", exportSettlementChecklistImage);
   $("#export-preauction-image").addEventListener("click", exportPreauctionImage);
 
-  if (localStorage.getItem(MIGRATION_KEY) !== "8") {
+  if (localStorage.getItem(MIGRATION_KEY) !== "9") {
     if (Number(state.settings.birthdayCommissionValue) === 5 && state.settings.birthdayLabel === "生日月优惠") {
       state.settings.birthdayCommissionValue = -2;
       state.settings.birthdayLabel = "生日月返佣";
@@ -3174,7 +3322,7 @@
     state.assets = MxiqiAssets.rematchAssets(state.assets, state.records);
     state.connection = {...defaultConnection, ...state.connection};
     if (!["disconnected","demo_connected","connected"].includes(state.connection.status)) state.connection = clone(defaultConnection);
-    localStorage.setItem(MIGRATION_KEY, "8");
+    localStorage.setItem(MIGRATION_KEY, "9");
     save();
   }
 
@@ -3195,6 +3343,8 @@
   }
 
   ensureLegacyImportUndo();
+  syncCustomerDirectory();
+  persistState();
   render();
   renderConnectionPanel();
   renderCollectorPanel();

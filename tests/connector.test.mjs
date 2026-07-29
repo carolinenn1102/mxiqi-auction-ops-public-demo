@@ -136,6 +136,24 @@ test("settlement reconciliation image exposes financial columns and payable tota
   assert.match(app, /结款总金额：\$\{currency\.format\(totalSettlement\)\}/);
 });
 
+test("birthday reconciliation marks consignors and local directory keeps contact profiles", () => {
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const styles = fs.readFileSync(path.join(root, "styles.css"), "utf8");
+  assert.match(html, /id="open-customers"[^>]*>[^<]*<span>♙<\/span> 送拍人档案/);
+  assert.match(html, /id="customer-dialog"/);
+  assert.match(html, /name="sellerWechat"/);
+  assert.match(html, /name="phone"/);
+  assert.match(html, /name="birthdayMonth"/);
+  assert.match(html, /name="notes"/);
+  assert.match(app, /function syncCustomerDirectory\(\)/);
+  assert.match(app, /state\.records\.forEach\(merge\)/);
+  assert.match(app, /state\.assets\.forEach\(merge\)/);
+  assert.match(app, /birthdayDiscount \? "🎂 " : ""/);
+  assert.match(app, /"生日月优惠·盒子返" : "生日月优惠"/);
+  assert.match(styles, /\.customer-directory-layout/);
+});
+
 test("dashboard exposes wait-pay sync and a dedicated reauction library", () => {
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
