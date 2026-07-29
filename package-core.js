@@ -33,5 +33,22 @@
     return values.every((value) => value === values[0]) ? values[0] : "";
   }
 
-  return {packageKey, groupRecords, sameValue};
+  function applySharedFields(records, values, fields) {
+    const source = values && typeof values === "object" ? values : {};
+    const allowed = Array.isArray(fields) ? fields : [];
+    let updated = 0;
+    for (const record of records || []) {
+      let changed = false;
+      for (const field of allowed) {
+        if (!Object.prototype.hasOwnProperty.call(source, field)) continue;
+        if (record[field] === source[field]) continue;
+        record[field] = source[field];
+        changed = true;
+      }
+      if (changed) updated += 1;
+    }
+    return updated;
+  }
+
+  return {packageKey, groupRecords, sameValue, applySharedFields};
 });

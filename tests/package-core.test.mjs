@@ -34,3 +34,16 @@ test("returns a value only when every package item has the same field", () => {
   assert.equal(packages.sameValue([{buyerName:"张三"},{buyerName:"李四"}], "buyerName"), "");
   assert.equal(packages.sameValue([{buyerName:"张三"},{buyerName:""}], "buyerName"), "");
 });
+
+test("applies shared package fields to every lot without overwriting item-specific data", () => {
+  const records = [
+    {id:"a",lot:31,itemName:"拍品一",sellerWechat:"送拍人甲",buyerName:""},
+    {id:"b",lot:59,itemName:"拍品二",sellerWechat:"送拍人乙",buyerName:""},
+    {id:"c",lot:60,itemName:"拍品三",sellerWechat:"送拍人丙",buyerName:""},
+  ];
+  const updated = packages.applySharedFields(records, {buyerName:"BaronZ",buyerPhone:"15900907981"}, ["buyerName","buyerPhone"]);
+  assert.equal(updated, 3);
+  assert.deepEqual(records.map((record) => record.buyerName), ["BaronZ","BaronZ","BaronZ"]);
+  assert.deepEqual(records.map((record) => record.lot), [31,59,60]);
+  assert.deepEqual(records.map((record) => record.sellerWechat), ["送拍人甲","送拍人乙","送拍人丙"]);
+});

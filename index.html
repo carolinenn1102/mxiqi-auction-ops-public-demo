@@ -255,6 +255,20 @@
     <form method="dialog" id="shipping-form"><header><div><p class="eyebrow">地址二审 · 出库发货</p><h2 id="shipping-title">发货复核</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
       <div class="collector-notice"><b>当前为演示发货流程</b><p>不会向菜鸟、顺丰或麦稀奇提交真实数据。演示运单号带有 DEMO 标识；正式接通前可用“复制单号”完成人工粘贴。</p></div>
       <details class="shipping-package-details"><summary><b id="shipping-package-summary">本包裹 1 件拍品</b><span>展开查看包裹内容</span></summary><div class="shipping-package-list" id="shipping-package-list"></div></details>
+      <section class="form-section shipping-section package-common-section"><div class="form-section-heading"><h3>整包公共资料</h3><p id="shipping-common-badge">修改后整包同步</p></div>
+        <p class="rule-preview" id="shipping-common-note">买家、拍场、付款和收件资料在这里填写一次，同步到本包裹全部拍品；Lot、拍品名称、送拍人和寄入快递仍需展开逐件填写。</p>
+        <div class="form-grid">
+          <label class="field"><span>买家账号（整包同步）</span><input name="buyerName" autocomplete="off"></label>
+          <label class="field"><span>买家登录手机号（整包同步）</span><input name="buyerPhone" inputmode="numeric" autocomplete="off"></label>
+          <label class="field"><span>拍场项目（整包同步）</span><input name="projectName" autocomplete="off"></label>
+          <label class="field"><span>拍场平台（整包同步）</span><input name="auctionHouse" autocomplete="off"></label>
+          <label class="field"><span>拍卖时间（整包同步）</span><input name="auctionAt" placeholder="2026-07-30 20:00"></label>
+          <label class="field"><span>成交状态（整包同步）</span><select name="finalOutcome"><option value="">待确认</option><option>待拍</option><option>成交</option><option>流拍</option><option>拖回</option></select></label>
+          <label class="field"><span>付款状态（整包同步）</span><select name="paymentStatus"><option value="">未设置</option><option>待付款</option><option>已付款</option></select></label>
+          <label class="field"><span>付款截止时间（整包同步）</span><input name="paymentDueAt" type="datetime-local"></label>
+          <label class="field wide"><span>麦稀奇订单号</span><input name="mxiqiOrderId" readonly></label>
+        </div>
+      </section>
       <ol class="shipping-flow" aria-label="发货流程">
         <li id="shipping-step-payment"><span>1</span><div><b>确认已付款</b><small id="shipping-payment-state">待确认</small></div></li>
         <li id="shipping-step-address"><span>2</span><div><b>地址拆分与二审</b><small id="shipping-address-state">待录入</small></div></li>
@@ -308,11 +322,11 @@
 
   <div id="toast" class="toast" role="status" hidden></div>
   <script src="vendor/exceljs.min.js"></script>
-  <script src="matching-core.js?v=18"></script>
-  <script src="package-core.js?v=15"></script>
-  <script src="workflow-core.js?v=18"></script>
-  <script src="commission-core.js?v=15"></script>
-  <script src="connector-bridge.js?v=18"></script>
-  <script src="app.js?v=18"></script>
+  <script src="matching-core.js?v=19"></script>
+  <script src="package-core.js?v=19"></script>
+  <script src="workflow-core.js?v=19"></script>
+  <script src="commission-core.js?v=19"></script>
+  <script src="connector-bridge.js?v=19"></script>
+  <script src="app.js?v=19"></script>
 </body>
 </html>

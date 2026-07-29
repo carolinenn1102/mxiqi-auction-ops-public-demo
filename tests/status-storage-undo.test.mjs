@@ -54,3 +54,13 @@ test("record editor exposes the full buyer shipping address", () => {
   assert.match(html, /name="recipientRaw"[^>]*placeholder="姓名 手机号 省市区详细地址"/);
   assert.match(app, /recipientRaw = String\(data\.get\("recipientRaw"\)/);
 });
+
+test("combined package missing-data entry synchronizes only shared fields", () => {
+  assert.match(app, /data-package-edit=/);
+  assert.match(html, /id="shipping-common-badge"/);
+  assert.match(html, /买家账号（整包同步）/);
+  assert.match(html, /拍场项目（整包同步）/);
+  assert.match(app, /PACKAGE_SHARED_FIELDS/);
+  assert.match(app, /MxiqiPackages\.applySharedFields\(records/);
+  assert.match(app, /Lot、拍品名称、送拍人和寄入快递仍按单件保留/);
+});

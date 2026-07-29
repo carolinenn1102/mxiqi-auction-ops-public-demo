@@ -95,6 +95,8 @@
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const currency = new Intl.NumberFormat("zh-CN", {style:"currency",currency:"CNY",maximumFractionDigits:2});
+  const PACKAGE_SHARED_FIELDS = ["buyerName","buyerPhone","projectName","auctionHouse","auctionAt","finalOutcome","paymentStatus","paymentDueAt","mxiqiOrderId"];
+  const PACKAGE_ADDRESS_FIELDS = ["recipientRaw","recipientName","recipientPhone","addressProvince","addressCity","addressDistrict","addressDetail"];
   const editDialog = $("#edit-dialog");
   const editForm = $("#edit-form");
   const importDialog = $("#import-dialog");
@@ -731,7 +733,7 @@
       <td class="status-cell"><span class="chip ${statusValues.length === 1 ? statusChipClass(statusValues[0]) : "neutral"}">${esc(statusValues.length === 1 ? statusValues[0] : `${statusValues.length} 种状态`)}</span><small>${esc(paymentValues.length ? `付款：${paymentValues.join("、")}` : "付款状态未同步")}</small></td>
       <td><b>${esc(project)}</b><small>${orderId ? `订单 ${esc(orderId)}` : "同一出库运单"}</small></td>
       <td><b class="money">${currency.format(total)}</b><small>合计 ${records.length} 件 · 均价 ${currency.format(total / records.length)}</small></td>
-      <td>${gapCount ? `<span class="chip warning">共缺 ${gapCount} 项</span>` : '<span class="chip success">全部完整</span>'}</td>
+      <td>${gapCount ? `<button type="button" class="chip warning" data-package-edit="${esc(group.key)}" title="打开整包补资料；公共资料同步到 ${records.length} 件拍品">共缺 ${gapCount} 项 · 整包补资料</button>` : '<span class="chip success">全部完整</span>'}</td>
       <td><span class="carrier ${carrier}">${carrierValues.length === 1 ? carrierLabel(carrier) : "混合"}</span><small>${esc(stageValues.length === 1 ? stageValues[0] : `${stageValues.length} 种发货状态`)}</small></td>
       <td>${deliveryCode ? `<code>${esc(deliveryCode)}</code>` : '<span class="muted">—</span>'}<small>${deliveryCode ? "整包共用单号" : "等待整包下单"}</small></td>
       <td>${settledCount === records.length ? '<span class="chip success">整包已结账</span>' : `<span class="chip neutral">${settledCount}/${records.length} 已结账</span>`}<small>${currency.format(totalSettlement)} · 佣金 ${currency.format(totalCommission)}</small></td>
@@ -911,10 +913,17 @@
   }
 
   function populateShippingForm(record) {
-    ["recipientRaw","recipientName","recipientPhone","addressProvince","addressCity","addressDistrict","addressDetail","outboundTrackingNumber"].forEach((name) => {
+    const members = activeShippingRecords();
+    [...PACKAGE_SHARED_FIELDS, ...PACKAGE_ADDRESS_FIELDS, "outboundTrackingNumber"].forEach((name) => {
       shippingForm.elements[name].value = record[name] || "";
     });
     shippingForm.elements.shippingCarrier.value = record.shippingCarrier || record.carrier || carrierFor(record);
+    if (members.length > 1) {
+      [...PACKAGE_SHARED_FIELDS, ...PACKAGE_ADDRESS_FIELDS].forEach((name) => {
+        const commonValue = MxiqiPackages.sameValue(members, name);
+        shippingForm.elements[name].value = commonValue;
+      });
+    }
   }
 
   function renderShippingDialog(record, populate = true) {
@@ -937,6 +946,10 @@
     $("#shipping-next-package").hidden = !hasNextPackage;
     $("#shipping-next-package").textContent = hasNextPackage ? `下一个包裹（${state.shippingQueueIndex + 2}/${queueTotal}）` : "下一个包裹";
     $("#shipping-package-summary").textContent = `本包裹 ${members.length || 1} 件拍品${members.length > 1 ? ` · Lot ${members.map((item) => item.lot).join("、")}` : ""}`;
+    $("#shipping-common-badge").textContent = members.length > 1 ? `${members.length} 件同步生效` : "当前拍品生效";
+    $("#shipping-common-note").textContent = members.length > 1
+      ? `这里修改的买家、拍场、付款、收件地址和物流资料会同步到本包裹 ${members.length} 件拍品；Lot、拍品名称、送拍人和寄入快递仍按单件保留。`
+      : "这里修改买家、拍场、付款、收件地址和物流资料；Lot、拍品名称、送拍人和寄入快递请返回主表编辑。";
     $("#shipping-package-list").innerHTML = members.map((item) => `<div class="shipping-package-item"><span>Lot ${item.lot}</span><b>${esc(item.itemName)}</b><small>${currency.format(item.finalPrice || 0)}</small></div>`).join("");
     $("#shipping-payment-state").textContent = packageReady ? `${members.length} 件均已付款，可整包发货` : `${paidCount}/${members.length} 件满足发货条件`;
     $("#shipping-address-state").textContent = addressReviewed ? "整包地址已二审" : addressStatusLabel(record.addressStatus);
@@ -1850,6 +1863,13 @@
       openShippingPackage(packageShipping.dataset.packageShipping);
       return;
     }
+    const packageEdit = event.target.closest("[data-package-edit]");
+    if (packageEdit) {
+      const records = recordsForPackageKey(packageEdit.dataset.packageEdit);
+      openShippingPackage(packageEdit.dataset.packageEdit);
+      notify(`已打开整包补资料；公共资料会同步到 ${records.length} 件拍品`, "info");
+      return;
+    }
     const button = event.target.closest("[data-action]");
     if (!button) return;
     const record = state.records.find((item) => item.id === button.dataset.id);
@@ -1993,14 +2013,18 @@
     notify("地址二次审核已通过，可以进入物流下单");
   });
 
-  shippingForm.addEventListener("input", (event) => {
+  function syncPackageFormField(event) {
     const records = activeShippingRecords();
     const record = records[0];
-    if (!record || records.some((item) => item.outboundTrackingNumber) || !event.target.name) return;
-    if (["recipientRaw","recipientName","recipientPhone","addressProvince","addressCity","addressDistrict","addressDetail"].includes(event.target.name)) {
+    if (!record || !event.target.name) return;
+    const name = event.target.name;
+    if (records.some((item) => item.outboundTrackingNumber) && PACKAGE_ADDRESS_FIELDS.includes(name)) return;
+    if ([...PACKAGE_SHARED_FIELDS, ...PACKAGE_ADDRESS_FIELDS].includes(name)) {
+      const value = ["buyerPhone","recipientPhone"].includes(name) ? event.target.value.replace(/\D/g, "") : event.target.value;
+      MxiqiPackages.applySharedFields(records, {[name]:value}, [name]);
       records.forEach((item) => {
-        item[event.target.name] = event.target.name === "recipientPhone" ? event.target.value.replace(/\D/g, "") : event.target.value;
-        if (item.addressStatus === "reviewed") {
+        if (["finalOutcome","paymentStatus","auctionAt"].includes(name)) ensurePaymentTracking(item);
+        if (PACKAGE_ADDRESS_FIELDS.includes(name) && item.addressStatus === "reviewed") {
           item.addressStatus = "pending_review";
           item.addressReviewedAt = "";
         }
@@ -2009,6 +2033,11 @@
       renderShippingDialog(record, false);
       render();
     }
+  }
+
+  shippingForm.addEventListener("input", syncPackageFormField);
+  shippingForm.addEventListener("change", (event) => {
+    if (event.target.name !== "shippingCarrier") syncPackageFormField(event);
   });
 
   shippingForm.elements.shippingCarrier.addEventListener("change", (event) => {
