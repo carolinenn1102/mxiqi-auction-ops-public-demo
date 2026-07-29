@@ -64,3 +64,11 @@ test("combined package missing-data entry synchronizes only shared fields", () =
   assert.match(app, /MxiqiPackages\.applySharedFields\(records/);
   assert.match(app, /Lot、拍品名称、送拍人和寄入快递仍按单件保留/);
 });
+
+test("combined package synchronizes exact return dispositions and reauction routing", () => {
+  assert.match(html, /id="shipping-return-disposition"[\s\S]*?<option>拖回\/发回<\/option>[\s\S]*?<option>拖回\/再拍<\/option>[\s\S]*?<option>拖回\/等待<\/option>/);
+  assert.match(app, /PACKAGE_SHARED_FIELDS[^\n]*"returnDisposition"/);
+  assert.match(app, /name === "returnDisposition"[\s\S]*?MxiqiWorkflow\.trackerOutcome\(value, item\.finalPrice\)/);
+  assert.match(app, /item\.returnDisposition = outcome\.returnDisposition/);
+  assert.match(app, /state\.stage === "reauction" && record\.returnDisposition === "拖回\/再拍"/);
+});

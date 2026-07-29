@@ -5,6 +5,7 @@ import path from "node:path";
 
 const require = createRequire(import.meta.url);
 const packages = require(path.resolve(import.meta.dirname, "..", "package-core.js"));
+const workflow = require(path.resolve(import.meta.dirname, "..", "workflow-core.js"));
 
 test("groups all lots from the same mxiqi order into one package", () => {
   const groups = packages.groupRecords([
@@ -46,4 +47,16 @@ test("applies shared package fields to every lot without overwriting item-specif
   assert.deepEqual(records.map((record) => record.buyerName), ["BaronZ","BaronZ","BaronZ"]);
   assert.deepEqual(records.map((record) => record.lot), [31,59,60]);
   assert.deepEqual(records.map((record) => record.sellerWechat), ["送拍人甲","送拍人乙","送拍人丙"]);
+});
+
+test("routes every package lot to reauction when the shared disposition changes", () => {
+  const records = [
+    {id:"a",lot:44,finalPrice:1200,finalOutcome:"成交",returnDisposition:""},
+    {id:"b",lot:97,finalPrice:800,finalOutcome:"成交",returnDisposition:""},
+  ];
+  packages.applySharedFields(records, {returnDisposition:"拖回/再拍"}, ["returnDisposition"]);
+  records.forEach((record) => Object.assign(record, workflow.trackerOutcome(record.returnDisposition, record.finalPrice)));
+  assert.deepEqual(records.map((record) => record.returnDisposition), ["拖回/再拍","拖回/再拍"]);
+  assert.deepEqual(records.map((record) => record.finalOutcome), ["拖回","拖回"]);
+  assert.equal(records.filter((record) => record.returnDisposition === "拖回/再拍").length, 2);
 });
