@@ -35,9 +35,12 @@
     });
   }
 
-  async function getMxiqiTab({create = true, active = false} = {}) {
+  async function getMxiqiTab({create = true, active = false, preferAuction = false} = {}) {
     const tabs = await chrome.tabs.query({url: "https://www.mxiqi.com/*"});
-    let tab = tabs.find((item) => /\/org(?:[./?]|$)/.test(item.url || "")) || tabs[0];
+    const recentTabs = [...tabs].sort((left, right) => Number(right.lastAccessed || 0) - Number(left.lastAccessed || 0));
+    let tab = preferAuction
+      ? tabs.find((item) => /\/auction\.info\.entry\//.test(item.url || "")) || recentTabs[0]
+      : tabs.find((item) => /\/org(?:[./?]|$)/.test(item.url || "")) || tabs[0];
     if (!tab && create) tab = await chrome.tabs.create({url: "https://www.mxiqi.com/org.home", active});
     if (!tab) return null;
     if (active) await chrome.tabs.update(tab.id, {active: true});
@@ -98,7 +101,7 @@
         ok: true,
         installed: true,
         version: chrome.runtime.getManifest().version,
-        capabilities: ["login", "syncOrders", "syncOrdersByNumbers"],
+        capabilities: ["login", "syncOrders", "syncOrdersByNumbers", "syncAuctionDeals"],
         loggedIn: Boolean(result?.loggedIn),
         orgName: result?.orgName || "",
       };
@@ -110,6 +113,10 @@
     if (message?.type === "syncOrdersByNumbers") {
       const result = await sendToMxiqi({type: "scrapeOrdersByNumbers", orderNumbers: message.orderNumbers}, {create: true, active: false});
       return {ok: true, ...result};
+    }
+    if (message?.type === "syncAuctionDeals") {
+      const result = await sendToMxiqi({type:"scrapeAuctionDeals",period:message.period}, {create:true,active:false,preferAuction:true});
+      return {ok:true,...result};
     }
     throw new Error("不支持的连接器命令");
   }

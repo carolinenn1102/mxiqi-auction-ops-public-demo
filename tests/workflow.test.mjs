@@ -33,7 +33,7 @@ test("return records remain settlement eligible with zero transaction gross", ()
 
 test("relisting preserves the previous return settlement and resets the new auction round", () => {
   const relisted = workflow.relistRecord({finalOutcome:"成交",returnDisposition:"拖回/再拍",finalPrice:1160,paymentStatus:"已付款",settled:true,commissionAmount:8,settlementAmount:-8,settlementNote:"已扣拖回费"}, "2026-07-29T10:00:00.000Z");
-  assert.deepEqual(relisted.priorReturnSettlement, {finalOutcome:"成交",returnDisposition:"拖回/再拍",finalPrice:1160,settled:true,settledAt:"",commissionAmount:8,settlementAmount:-8,promotion:"",settlementNote:"已扣拖回费",buyerName:"",buyerPhone:"",recipientName:"",recipientPhone:"",recipientRaw:"",mxiqiOrderId:"",outboundTrackingNumber:""});
+  assert.deepEqual(relisted.priorReturnSettlement, {finalOutcome:"成交",returnDisposition:"拖回/再拍",finalPrice:1160,settled:true,settledAt:"",commissionAmount:8,settlementAmount:-8,promotion:"",settlementNote:"已扣拖回费",unpaidReturn:false,unpaidReturnDetectedAt:"",buyerName:"",buyerPhone:"",recipientName:"",recipientPhone:"",recipientRaw:"",mxiqiOrderId:"",outboundTrackingNumber:""});
   assert.equal(relisted.finalOutcome, "待拍");
   assert.equal(relisted.returnDisposition, "");
   assert.equal(relisted.finalPrice, 0);
@@ -41,6 +41,32 @@ test("relisting preserves the previous return settlement and resets the new auct
   assert.equal(relisted.settled, false);
   assert.equal(workflow.recordStatus(relisted), "上拍");
   assert.equal(workflow.isSettlementEligible(relisted), false);
+});
+
+test("same Lot is unique only inside the same auction period", () => {
+  assert.equal(workflow.sameAuctionLot({lot:48,projectName:"第75期"},{lot:48,auctionPeriodOverride:"75"}), true);
+  assert.equal(workflow.sameAuctionLot({lot:48,projectName:"第75期"},{lot:48,auctionPeriodOverride:"第76期"}), false);
+});
+
+test("period settlement matching handles unpaid first and keeps the fixed return marker", () => {
+  const records = [
+    {id:"p75",lot:48,itemName:"同名拍品",projectName:"第75期",sellerWechat:"甲"},
+    {id:"p76",lot:48,itemName:"同名拍品",projectName:"第76期",sellerWechat:"乙"},
+  ];
+  const deals = [{lot:48,itemName:"同名拍品",auctionPeriodOverride:"第75期",finalPrice:49288,finalOutcome:"成交",paymentStatus:"已付款"}];
+  const pending = [{lot:48,itemName:"同名拍品",projectName:"第75期",paymentStatus:"待付款"}];
+  const result = workflow.applyAuctionSettlementResults(records,deals,pending,"第75期","2026-07-29T12:00:00.000Z");
+  assert.equal(result.unpaid, 1);
+  assert.equal(result.records.find((item) => item.id === "p75").unpaidReturn, true);
+  assert.equal(result.records.find((item) => item.id === "p75").returnDisposition, "拖回/等待");
+  assert.equal(workflow.settlementGross(result.records.find((item) => item.id === "p75")), 0);
+  assert.equal(result.records.find((item) => item.id === "p76").unpaidReturn, undefined);
+});
+
+test("unpaid return remains a return after choosing any later disposition", () => {
+  ["拖回/发回","拖回/再拍","拖回/等待","寄存"].forEach((returnDisposition) => {
+    assert.equal(workflow.isReturnRecord({unpaidReturn:true,returnDisposition,finalOutcome:"成交",finalPrice:100}), true);
+  });
 });
 
 test("shipping bucket exposes shipped and unshipped filters", () => {

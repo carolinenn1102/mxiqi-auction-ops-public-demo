@@ -497,7 +497,8 @@
 
   function promotionBadges(record) {
     const badges = [];
-    if (isReturnRecord(record)) badges.push(`<span class="chip neutral">拖回扣 ${currency.format(state.settings.returnHandlingFee || 0)}</span>`);
+    if (record.unpaidReturn) badges.push(`<span class="chip neutral">未付款拖回扣 ${currency.format(state.settings.returnHandlingFee || 0)}</span>`);
+    else if (isReturnRecord(record)) badges.push(`<span class="chip neutral">拖回扣 ${currency.format(state.settings.returnHandlingFee || 0)}</span>`);
     const birthday = birthdayMonthFor(record);
     if (birthday && birthday === auctionMonth(record)) badges.push('<span class="chip birthday">生日月</span>');
     if (hasBoxRebateSignal(record)) {
@@ -633,6 +634,8 @@
     $("#settlement-gross").textContent = currency.format(sold.reduce((sum, record) => sum + settlementGross(record), 0));
     $("#settlement-commission").textContent = currency.format(sold.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0));
     $("#settlement-payable").textContent = currency.format(sold.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0));
+    const unpaidReturns = sold.filter((record) => record.unpaidReturn);
+    $("#settlement-unpaid-return").textContent = `${unpaidReturns.length} 笔 / ${currency.format(unpaidReturns.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0))}`;
     $("#settlement-hint").textContent = remaining ? `还有 ${remaining} 条待确认，全部结账后开放结算表导出。` : "本批成交记录已全部结账，可以导出结算表。";
     $("#export-settlement").disabled = !(sold.length && remaining === 0);
     $("#export-settlement").textContent = remaining ? `还有 ${remaining} 条未结账` : "导出本批结算表";
@@ -803,10 +806,12 @@
     const birthdayCount = records.filter((record) => birthdayMonthFor(record) && birthdayMonthFor(record) === auctionMonth(record)).length;
     const boxCount = records.filter(hasAppliedBoxRebate).length;
     const returnCount = records.filter(isReturnRecord).length;
+    const unpaidReturnCount = records.filter((record) => record.unpaidReturn).length;
     const badges = [];
     if (birthdayCount) badges.push(`<span class="chip birthday">生日月 ${birthdayCount} 件</span>`);
     if (boxCount) badges.push(`<span class="chip box-rebate">盒子返 ${Math.abs(Number(state.settings.birthdayCommissionValue || 0))}% · ${boxCount} 件</span>`);
-    if (returnCount) badges.push(`<span class="chip neutral">拖回扣费 · ${returnCount} Lot</span>`);
+    if (unpaidReturnCount) badges.push(`<span class="chip neutral">未付款拖回扣费 · ${unpaidReturnCount} Lot</span>`);
+    if (returnCount > unpaidReturnCount) badges.push(`<span class="chip neutral">其他拖回扣费 · ${returnCount - unpaidReturnCount} Lot</span>`);
     return badges.length ? `<div class="promotion-badges">${badges.join("")}</div>` : '<span class="muted">无特殊标识</span>';
   }
 
@@ -1200,7 +1205,7 @@
       const platformItemKey = String(incoming.platformItemKey || "");
       const index = platformItemKey
         ? state.records.findIndex((item) => item.platformItemKey === platformItemKey)
-        : state.records.findIndex((item) => Number(item.lot) === lot && (!incoming.projectName || !item.projectName || item.projectName === incoming.projectName));
+        : state.records.findIndex((item) => MxiqiWorkflow.sameAuctionLot(item, incoming));
       if (index >= 0) {
         state.records[index] = {...state.records[index], ...incoming, id:state.records[index].id};
         ensurePaymentTracking(state.records[index]);
@@ -1436,7 +1441,7 @@
     $("#collector-start").disabled = collectorRuntime.running || !connected;
     $("#collector-stop").disabled = !collectorRuntime.running;
     $("#collector-refresh").disabled = collectorRuntime.busy || !connected;
-    $("#sync-settlement-orders").disabled = collectorRuntime.busy || !realConnection;
+    $("#sync-settlement-orders").disabled = collectorRuntime.busy || !realConnection || !state.filters.auction;
     $("#sync-unpaid-orders").disabled = collectorRuntime.busy || !realConnection;
     $("#collector-scope").disabled = collectorRuntime.busy || collectorRuntime.running;
     $("#collector-interval").disabled = collectorRuntime.busy;
@@ -1460,7 +1465,7 @@
     try {
       const now = new Date().toISOString();
       if (state.connection.status === "connected") {
-        const requestedScope = trigger === "settlement" ? "waitconfirm" : trigger === "payment" ? "waitpay" : trigger === "auto" ? "waitexpress" : state.collector.scope || "waitexpress";
+        const requestedScope = trigger === "payment" ? "waitpay" : trigger === "auto" ? "waitexpress" : state.collector.scope || "waitexpress";
         if (requestedScope === "waitpay") {
           const connector = await MxiqiConnector.ping();
           state.connection.connectorVersion = connector.version || "";
@@ -1486,7 +1491,7 @@
         state.collector.runCount = Number(state.collector.runCount || 0) + 1;
         const departedText = reconciliation.departed ? `，退出原状态 ${reconciliation.departed} 条` : "";
         state.collector.lastResult = `真实同步完成：读取 ${result.pages || 0} 页、${stats.accepted} 件拍品，新增 ${stats.added} 条，更新 ${stats.updated} 条${departedText}`;
-        audit(trigger === "auto" ? "自动同步麦稀奇" : trigger === "settlement" ? "同步麦稀奇待确认" : trigger === "payment" ? "同步麦稀奇待付款" : "手动同步麦稀奇", `${stats.accepted} 件拍品 · 新增 ${stats.added} · 更新 ${stats.updated}${reconciliation.departed ? ` · 退出原状态 ${reconciliation.departed}` : ""}`);
+        audit(trigger === "auto" ? "自动同步麦稀奇" : trigger === "payment" ? "同步麦稀奇待付款" : "手动同步麦稀奇", `${stats.accepted} 件拍品 · 新增 ${stats.added} · 更新 ${stats.updated}${reconciliation.departed ? ` · 退出原状态 ${reconciliation.departed}` : ""}`);
         save();
         notify(state.collector.lastResult, "success");
         return true;
@@ -1507,6 +1512,80 @@
     } finally {
       collectorRuntime.busy = false;
       if (collectorRuntime.running) collectorRuntime.nextRunAt = Date.now() + Number(state.collector.intervalSeconds) * 1000;
+      renderCollectorPanel();
+    }
+  }
+
+  async function runSettlementSync() {
+    const period = state.filters.auction;
+    if (!period) {
+      notify("请先选择要结算的拍卖期数，再同步本期成交记录", "error");
+      return false;
+    }
+    if (state.connection.status !== "connected") {
+      notify("请先在“平台登录”中建立麦稀奇真实连接", "error");
+      return false;
+    }
+    if (collectorRuntime.busy) return false;
+    collectorRuntime.busy = true;
+    renderCollectorPanel();
+    try {
+      const connector = await MxiqiConnector.ping();
+      const capabilities = Array.isArray(connector.capabilities) ? connector.capabilities : [];
+      state.connection.connectorVersion = connector.version || "";
+      if (!versionAtLeast(connector.version, "1.6.0") || !capabilities.includes("syncAuctionDeals")) {
+        throw new Error("采集助手版本过旧，请重新下载 1.6.0 版并在扩展页面点击重新加载");
+      }
+      const pendingResult = await MxiqiConnector.syncOrders({scope:"waitpay",maxPages:20});
+      if (pendingResult.requiresLogin) throw new Error("麦稀奇登录已失效，请重新登录后检查连接");
+      const dealsResult = await MxiqiConnector.syncAuctionDeals({period});
+      if (pendingResult.requiresLogin || dealsResult.requiresLogin) {
+        state.connection = {...clone(defaultConnection),mode:"connector",connectorInstalled:true,connectorVersion:connector.version || ""};
+        throw new Error("麦稀奇登录已失效，请重新登录后检查连接");
+      }
+      removeDefaultDemoRecords();
+      const timestamp = new Date().toISOString();
+      const merged = MxiqiWorkflow.applyAuctionSettlementResults(
+        state.records,
+        Array.isArray(dealsResult.records) ? dealsResult.records : [],
+        Array.isArray(pendingResult.records) ? pendingResult.records : [],
+        period,
+        timestamp,
+      );
+      state.records = merged.records.map((record) => ({
+        id:record.id || uid(),
+        received:record.received || "待确认",
+        settled:Boolean(record.settled),
+        carrier:record.carrier || "pending",
+        logisticsStatus:record.logisticsStatus || "not_requested",
+        pickupCode:record.pickupCode || "",
+        ...record,
+      }));
+      state.records.filter((record) => auctionPeriod(record) === merged.period).forEach((record) => {
+        ensurePaymentTracking(record);
+        recalculateRecord(record, true);
+      });
+      syncStoredAssetsFromRecords();
+      rematchAssetsAndApply();
+      state.collector.adapter = "connector";
+      state.collector.lastRunAt = timestamp;
+      state.collector.runCount = Number(state.collector.runCount || 0) + 1;
+      state.collector.lastResult = `${merged.period}成交目录同步完成：匹配 ${merged.matched} 件，新增 ${merged.added} 件，未付款拖回 ${merged.unpaid} 件`;
+      audit("同步本期成交记录", `${merged.period} · 匹配 ${merged.matched} · 新增 ${merged.added} · 未付款拖回 ${merged.unpaid}`);
+      save();
+      state.stage = "settlement";
+      state.selected.clear();
+      render();
+      notify(state.collector.lastResult, "success");
+      return true;
+    } catch (error) {
+      state.collector.lastResult = `结算同步失败：${error.message || "未知错误"}`;
+      audit("同步本期成交记录失败", error.message || "未知错误");
+      save();
+      notify(state.collector.lastResult, "error");
+      return false;
+    } finally {
+      collectorRuntime.busy = false;
       renderCollectorPanel();
     }
   }
@@ -2241,6 +2320,8 @@
       trackingNumber: String(data.get("trackingNumber") || ""),
       received: String(data.get("received") || "待确认"),
       settlementNote: String(data.get("settlementNote") || ""),
+      unpaidReturn: Boolean(existing.unpaidReturn),
+      unpaidReturnDetectedAt: String(existing.unpaidReturnDetectedAt || ""),
       settled: data.get("settled") === "on",
       carrierOverride: String(data.get("carrierOverride") || ""),
     };
@@ -2254,9 +2335,9 @@
       notify("请填写有效 Lot 和拍品名称", "error");
       return;
     }
-    const duplicate = state.records.find((item) => Number(item.lot) === record.lot && item.id !== record.id);
+    const duplicate = state.records.find((item) => item.id !== record.id && MxiqiWorkflow.sameAuctionLot(item, record));
     if (duplicate) {
-      notify(`Lot ${record.lot} 已存在，请直接编辑该记录`, "error");
+      notify(`${auctionPeriod(record)} 的 Lot ${record.lot} 已存在，请直接编辑该记录`, "error");
       return;
     }
     recalculateRecord(record, true);
@@ -2492,7 +2573,7 @@
   });
   $("#sync-settlement-orders").addEventListener("click", () => {
     collectorRuntime.lastActivityAt = Date.now();
-    void runCollector("settlement");
+    void runSettlementSync();
   });
   $("#reauction-export").addEventListener("click", () => $("#export-tracker").click());
   $("#collector-refresh").addEventListener("click", () => { collectorRuntime.lastActivityAt = Date.now(); void runCollector("manual"); });
@@ -2710,8 +2791,10 @@
         ["送拍人范围", state.settlementScope.seller || "全部送拍人"],
         ["拍卖期数", state.filters.auction || "全部期数"],
         ["拍卖时间范围", `${state.settlementScope.from || "不限"} 至 ${state.settlementScope.to || "不限"}`],
-        ["成交件数", sold.length],
+        ["结算笔数", sold.length],
+        ["成交件数", sold.filter((record) => !isReturnRecord(record)).length],
         ["成交总额", sold.reduce((sum, record) => sum + settlementGross(record), 0)],
+        ["未付款拖回扣费", sold.filter((record) => record.unpaidReturn).reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0)],
         ["佣金合计", sold.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0)],
         ["应结金额", sold.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0)],
       ]);
@@ -2740,10 +2823,20 @@
       summary.getColumn(7).width = 14;
       summary.getColumn(8).width = 14;
       summary.getRow(1).font = {bold:true,size:16};
-      summary.getRow(11).font = {bold:true};
+      summary.getRow(summary.rowCount).font = {bold:true};
       const detail = workbook.addWorksheet("结算明细");
       detail.addRow(["送拍人","送拍人手机号","Lot","拍品名称","拍卖期数/项目","拍卖时间","成交价","买家付款","拍品状态","优惠标识","佣金规则","送拍佣金","应结金额","结账时间","结账说明"]);
-      settlementGroups(sold).forEach((group) => group.records.forEach((record) => detail.addRow([group.seller,group.phone || "",record.lot,record.itemName,auctionPeriod(record),record.auctionAt || record.platformOrderDate || "",settlementGross(record),record.paymentStatus || "",recordStatus(record),[birthdayMonthFor(record) === auctionMonth(record) ? "生日月" : "",hasAppliedBoxRebate(record) ? `盒子返 ${Math.abs(Number(state.settings.birthdayCommissionValue || 0))}%` : hasBoxRebateSignal(record) ? "盒子达标" : "",isReturnRecord(record) ? `拖回扣 ${currency.format(state.settings.returnHandlingFee || 0)}` : ""].filter(Boolean).join("、"),record.promotion || "",record.commissionAmount || 0,record.settlementAmount || 0,record.settledAt ? new Date(record.settledAt).toLocaleString("zh-CN") : "",record.settlementNote || ""])));
+      settlementGroups(sold).forEach((group) => group.records.forEach((record) => {
+        const returnFeeLabel = record.unpaidReturn
+          ? `未付款拖回扣 ${currency.format(state.settings.returnHandlingFee || 0)}`
+          : isReturnRecord(record) ? `拖回扣 ${currency.format(state.settings.returnHandlingFee || 0)}` : "";
+        const flags = [
+          birthdayMonthFor(record) === auctionMonth(record) ? "生日月" : "",
+          hasAppliedBoxRebate(record) ? `盒子返 ${Math.abs(Number(state.settings.birthdayCommissionValue || 0))}%` : hasBoxRebateSignal(record) ? "盒子达标" : "",
+          returnFeeLabel,
+        ].filter(Boolean).join("、");
+        detail.addRow([group.seller,group.phone || "",record.lot,record.itemName,auctionPeriod(record),record.auctionAt || record.platformOrderDate || "",settlementGross(record),record.paymentStatus || "",record.unpaidReturn ? "未付款拖回" : recordStatus(record),flags,record.promotion || "",record.commissionAmount || 0,record.settlementAmount || 0,record.settledAt ? new Date(record.settledAt).toLocaleString("zh-CN") : "",record.settlementNote || ""]);
+      }));
       detail.getRow(1).font = {bold:true};
       detail.views = [{state:"frozen",ySplit:1}];
       [18,18,8,32,24,20,14,14,16,16,20,14,14,21,24].forEach((width, index) => { detail.getColumn(index + 1).width = width; });
@@ -2780,8 +2873,9 @@
     const gross = sold.reduce((sum, record) => sum + settlementGross(record), 0);
     const commission = sold.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0);
     const payable = sold.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0);
+    const unpaidReturns = sold.filter((record) => record.unpaidReturn);
     context.font = 'bold 22px "Microsoft YaHei", sans-serif';
-    context.fillText(`${sold.length} 件　成交 ${currency.format(gross)}　佣金 ${currency.format(commission)}　应结 ${currency.format(payable)}`, 50, 204);
+    context.fillText(`${sold.length} 笔　成交 ${currency.format(gross)}　佣金 ${currency.format(commission)}　应结 ${currency.format(payable)}　未付款拖回 ${unpaidReturns.length} 笔`, 50, 204);
 
     const columns = [
       {label:"Lot",x:50,width:80},
@@ -2806,7 +2900,7 @@
       context.fillRect(40, y, width - 80, rowHeight);
       context.fillStyle = "#213944";
       context.font = '15px "Microsoft YaHei", sans-serif';
-      const values = [record.lot,truncate(record.itemName,22),truncate(record.sellerWechat || "待补",10),truncate(record.auctionAt,16),currency.format(settlementGross(record)),currency.format(record.commissionAmount || 0),currency.format(record.settlementAmount || 0),truncate(record.returnDisposition || "已结账",8)];
+      const values = [record.lot,truncate(record.itemName,22),truncate(record.sellerWechat || "待补",10),truncate(record.auctionAt,16),currency.format(settlementGross(record)),currency.format(record.commissionAmount || 0),currency.format(record.settlementAmount || 0),truncate(record.unpaidReturn ? "未付款拖回扣费" : record.returnDisposition || "已结账",8)];
       values.forEach((value, columnIndex) => context.fillText(String(value), columns[columnIndex].x + 8, y + 29));
     });
     context.fillStyle = "#7b898f";
@@ -2820,10 +2914,71 @@
     }, "image/png");
   }
 
+  function exportPreauctionImage() {
+    const records = visibleRecords().filter(isPreauctionRecord);
+    if (!records.length) {
+      notify("当前筛选下没有可导出的拍前核对记录", "error");
+      return;
+    }
+    const sorted = [...records].sort((left, right) => String(left.sellerWechat || "").localeCompare(String(right.sellerWechat || ""), "zh-CN") || Number(left.lot) - Number(right.lot));
+    const width = 1700;
+    const rowHeight = 58;
+    const headerHeight = 224;
+    const footerHeight = 58;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = headerHeight + rowHeight * (sorted.length + 1) + footerHeight;
+    const context = canvas.getContext("2d");
+    context.fillStyle = "#f7f5ef";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "#102735";
+    context.fillRect(0, 0, width, 112);
+    context.fillStyle = "#f7ead0";
+    context.font = 'bold 34px "Microsoft YaHei", sans-serif';
+    context.fillText("拍前核对完整清单", 48, 68);
+    context.fillStyle = "#314b57";
+    context.font = '20px "Microsoft YaHei", sans-serif';
+    context.fillText(`拍卖期数：${state.filters.auction || "全部期数"}　送拍人：${state.filters.seller || "全部送拍人"}`, 48, 152);
+    context.font = 'bold 22px "Microsoft YaHei", sans-serif';
+    context.fillText(`${new Set(sorted.map((record) => record.sellerWechat || "待补送拍人")).size} 位送拍人　${sorted.length} 件拍品`, 48, 196);
+    const columns = [
+      {label:"送拍人",x:48,width:300},
+      {label:"Lot",x:348,width:130},
+      {label:"拍品名称",x:478,width:900},
+      {label:"拍卖期数",x:1378,width:274},
+    ];
+    context.fillStyle = "#e8e5dd";
+    context.fillRect(36, headerHeight, width - 72, rowHeight);
+    context.fillStyle = "#52636c";
+    context.font = 'bold 18px "Microsoft YaHei", sans-serif';
+    columns.forEach((column) => context.fillText(column.label, column.x + 10, headerHeight + 37));
+    const truncate = (value, max) => String(value || "").length > max ? `${String(value).slice(0, max - 1)}…` : String(value || "");
+    sorted.forEach((record, index) => {
+      const y = headerHeight + rowHeight * (index + 1);
+      context.fillStyle = index % 2 ? "#f1efe9" : "#fffefa";
+      context.fillRect(36, y, width - 72, rowHeight);
+      context.fillStyle = "#213944";
+      context.font = '17px "Microsoft YaHei", sans-serif';
+      const values = [truncate(record.sellerWechat || "待补送拍人",16),record.lot,truncate(record.itemName,48),auctionPeriod(record)];
+      values.forEach((value, columnIndex) => context.fillText(String(value), columns[columnIndex].x + 10, y + 37));
+    });
+    context.fillStyle = "#7b898f";
+    context.font = '14px "Microsoft YaHei", sans-serif';
+    context.fillText(`生成时间：${new Date().toLocaleString("zh-CN")} · 送拍运营工作台`, 48, canvas.height - 22);
+    canvas.toBlob((blob) => {
+      if (!blob) return notify("核对图片生成失败", "error");
+      const period = (state.filters.auction || "全部期数").replace(/[^\w\u4e00-\u9fa5-]/g, "");
+      downloadBlob(blob, `拍前核对_${period}_${new Date().toISOString().slice(0,10)}.png`, "image/png");
+      audit("导出拍前核对图片", `${sorted.length} 件拍品`);
+      notify("完整拍前核对图片已下载");
+    }, "image/png");
+  }
+
   $("#export-tracker").addEventListener("click", exportTracker);
   $("#export-mxiqi").addEventListener("click", exportMxiqi);
   $("#export-settlement").addEventListener("click", exportSettlement);
   $("#export-settlement-image").addEventListener("click", exportSettlementImage);
+  $("#export-preauction-image").addEventListener("click", exportPreauctionImage);
 
   if (localStorage.getItem(MIGRATION_KEY) !== "8") {
     if (Number(state.settings.birthdayCommissionValue) === 5 && state.settings.birthdayLabel === "生日月优惠") {

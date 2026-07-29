@@ -6,7 +6,7 @@
   "use strict";
 
   function isReturnRecord(record = {}) {
-    return record.finalOutcome === "拖回" || /^拖回\//.test(String(record.returnDisposition || ""));
+    return record.unpaidReturn === true || record.finalOutcome === "拖回" || /^拖回\//.test(String(record.returnDisposition || ""));
   }
 
   function auctionPeriod(record = {}) {
@@ -56,6 +56,8 @@
       settlementAmount:Number(record.settlementAmount) || 0,
       promotion:record.promotion || "",
       settlementNote:record.settlementNote || "",
+      unpaidReturn:Boolean(record.unpaidReturn),
+      unpaidReturnDetectedAt:record.unpaidReturnDetectedAt || "",
       buyerName:record.buyerName || "",
       buyerPhone:record.buyerPhone || "",
       recipientName:record.recipientName || "",
@@ -79,6 +81,8 @@
       settled:false,
       settledAt:"",
       settlementNote:"",
+      unpaidReturn:false,
+      unpaidReturnDetectedAt:"",
       buyerName:"",
       buyerPhone:"",
       recipientName:"",
@@ -141,6 +145,104 @@
     return "";
   }
 
+  function sameAuctionLot(left = {}, right = {}) {
+    const leftLot = Number(left.lot);
+    const rightLot = Number(right.lot);
+    return Number.isInteger(leftLot)
+      && leftLot > 0
+      && leftLot === rightLot
+      && auctionPeriod(left) === auctionPeriod(right);
+  }
+
+  function settlementMatchKey(record = {}, period = "") {
+    const lot = Number(record.lot);
+    if (!Number.isInteger(lot) || lot <= 0) return "";
+    const normalizedPeriod = period ? auctionPeriod({auctionPeriodOverride:period}) : auctionPeriod(record);
+    return `${normalizedPeriod}:${lot}`;
+  }
+
+  function applyAuctionSettlementResults(records = [], deals = [], pendingOrders = [], period = "", timestamp = new Date().toISOString()) {
+    const selectedPeriod = auctionPeriod({auctionPeriodOverride:period});
+    if (!period || selectedPeriod === "期数待补") throw new Error("请先选择要结算的拍卖期数");
+    const next = records.map((record) => ({...record}));
+    let matched = 0;
+    let added = 0;
+    let unpaid = 0;
+
+    function isPending(record = {}) {
+      const orderId = String(record.mxiqiOrderId || "");
+      const itemName = String(record.itemName || "").replace(/\s+/g, "").toLowerCase();
+      return pendingOrders.some((pending) => {
+          const pendingOrderId = String(pending.mxiqiOrderId || "");
+          if (orderId && pendingOrderId && orderId === pendingOrderId) return true;
+          if (Number(pending.lot) !== Number(record.lot)) return false;
+          const pendingPeriod = auctionPeriod(pending);
+          if (pendingPeriod === selectedPeriod) return true;
+          const pendingName = String(pending.itemName || "").replace(/\s+/g, "").toLowerCase();
+          return pendingPeriod === "期数待补" && itemName && pendingName === itemName;
+        });
+    }
+
+    function applyResult(existing = {}, incoming = {}) {
+      const pending = isPending({...existing,...incoming});
+      const wasUnpaidReturn = existing.unpaidReturn === true;
+      const finalPrice = Math.max(0, Number(incoming.finalPrice ?? existing.finalPrice) || 0);
+      const platformOutcome = incoming.finalOutcome || (finalPrice > 0 ? "成交" : "流拍");
+      const updated = {
+        ...existing,
+        ...incoming,
+        auctionPeriodOverride:selectedPeriod,
+        source:incoming.source || existing.source || "mxiqi_connector",
+        sourceUpdatedAt:timestamp,
+      };
+      if (pending) {
+        updated.finalOutcome = "拖回";
+        updated.finalPrice = finalPrice;
+        updated.paymentStatus = "待付款";
+        updated.unpaidReturn = true;
+        updated.unpaidReturnDetectedAt = existing.unpaidReturnDetectedAt || timestamp;
+        updated.returnDisposition = /^拖回\//.test(String(existing.returnDisposition || "")) ? existing.returnDisposition : "拖回/等待";
+        updated.settled = Boolean(existing.settled);
+        unpaid += 1;
+      } else if (platformOutcome === "成交" && finalPrice > 0) {
+        updated.finalOutcome = "成交";
+        updated.finalPrice = finalPrice;
+        updated.paymentStatus = incoming.paymentStatus || "已付款";
+        updated.unpaidReturn = false;
+        if (wasUnpaidReturn && /^拖回\//.test(String(updated.returnDisposition || ""))) updated.returnDisposition = "";
+      } else {
+        updated.finalOutcome = "流拍";
+        updated.finalPrice = 0;
+        updated.paymentStatus = "";
+        updated.unpaidReturn = false;
+        if (wasUnpaidReturn && /^拖回\//.test(String(updated.returnDisposition || ""))) updated.returnDisposition = "";
+      }
+      return updated;
+    }
+
+    for (const incoming of deals) {
+      const lot = Number(incoming.lot);
+      if (!Number.isInteger(lot) || lot <= 0 || !incoming.itemName) continue;
+      const incomingWithPeriod = {...incoming,auctionPeriodOverride:selectedPeriod};
+      const index = next.findIndex((record) => sameAuctionLot(record, incomingWithPeriod));
+      if (index >= 0) {
+        next[index] = applyResult(next[index], incomingWithPeriod);
+        matched += 1;
+      } else {
+        next.push(applyResult({}, incomingWithPeriod));
+        added += 1;
+      }
+    }
+
+    next.forEach((record, index) => {
+      if (auctionPeriod(record) !== selectedPeriod || !isPending(record) || record.unpaidReturn) return;
+      next[index] = applyResult(record, record);
+      matched += 1;
+    });
+
+    return {records:next,matched,added,unpaid,period:selectedPeriod};
+  }
+
   function recordBelongsToScope(record = {}, scope = "") {
     if (record.source !== "mxiqi_connector") return false;
     if (scope === "waitpay") return record.paymentStatus === "待付款";
@@ -169,5 +271,5 @@
     return {records:next,departed};
   }
 
-  return {isReturnRecord,auctionPeriod,normalizeReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,recordBelongsToScope,reconcileAuthoritativeScope};
+  return {isReturnRecord,auctionPeriod,normalizeReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
 });

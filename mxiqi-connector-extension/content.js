@@ -76,6 +76,44 @@
     };
   }
 
+  function findAuctionResultLink(doc, period = "") {
+    const normalizedPeriod = MxiqiPageParser.auctionPeriod(period) || String(period || "").trim();
+    const candidates = Array.from(doc.querySelectorAll("a[href]"))
+      .map((anchor) => {
+        const text = MxiqiPageParser.clean(anchor.textContent);
+        const href = anchor.getAttribute("href") || "";
+        if (!/成交目录|成交记录/.test(text) && !/auction\.info\.entry/.test(href)) return null;
+        const containerText = MxiqiPageParser.clean(anchor.closest("article, section, li, tr, .card, [class*='auction']")?.textContent || anchor.parentElement?.textContent || text);
+        let score = /成交目录|成交记录/.test(text) ? 5 : 1;
+        if (/auction\.info\.entry/.test(href)) score += 4;
+        if (normalizedPeriod && containerText.includes(normalizedPeriod)) score += 8;
+        return {href:new URL(href, location.origin).href,score,containerText};
+      })
+      .filter(Boolean)
+      .sort((left, right) => right.score - left.score);
+    return candidates[0] || null;
+  }
+
+  async function scrapeAuctionDeals({period = ""} = {}) {
+    const normalizedPeriod = MxiqiPageParser.auctionPeriod(period) || String(period || "").trim();
+    if (!normalizedPeriod) throw new Error("请先在工作台选择拍卖期数");
+    let targetUrl = /\/auction\.info\.entry\//.test(location.pathname) ? location.href : "";
+    if (!targetUrl) targetUrl = findAuctionResultLink(document, normalizedPeriod)?.href || "";
+    if (!targetUrl) {
+      const home = await fetchDocument("/org.home");
+      if (home.requiresLogin) return {requiresLogin:true,records:[]};
+      targetUrl = findAuctionResultLink(home.doc, normalizedPeriod)?.href || "";
+    }
+    if (!targetUrl) throw new Error(`没有找到${normalizedPeriod}的成交目录。请先在麦稀奇打开该期拍场页面（右上角可见“成交目录”），再回工作台同步`);
+    const result = targetUrl === location.href
+      ? {doc:document,finalUrl:location.href,requiresLogin:false}
+      : await fetchDocument(targetUrl);
+    if (result.requiresLogin) return {requiresLogin:true,records:[]};
+    const parsed = MxiqiPageParser.parseAuctionResultDocument(result.doc,{period:normalizedPeriod,entryKey:result.finalUrl});
+    if (!parsed.records.length) throw new Error(`${normalizedPeriod}成交目录已打开，但没有读取到 Lot 与成交价；请刷新麦稀奇成交目录后重试`);
+    return {requiresLogin:false,records:parsed.records,period:parsed.period || normalizedPeriod,projectName:parsed.projectName || "",sourceUrl:result.finalUrl};
+  }
+
   function setInputValue(input, value) {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     if (setter) setter.call(input, value);
@@ -100,6 +138,7 @@
       if (message?.type === "checkSession") return checkSession();
       if (message?.type === "scrapeOrders") return scrapeOrders(message);
       if (message?.type === "scrapeOrdersByNumbers") return scrapeOrdersByNumbers(message);
+      if (message?.type === "scrapeAuctionDeals") return scrapeAuctionDeals(message);
       if (message?.type === "submitCredentials") return submitCredentials(message);
       throw new Error("不支持的采集命令");
     })().then((result) => sendResponse({ok: true, ...result})).catch((error) => sendResponse({ok: false, error: error.message || "采集失败"}));

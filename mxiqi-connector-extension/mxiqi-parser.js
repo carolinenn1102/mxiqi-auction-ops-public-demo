@@ -112,5 +112,74 @@
     return {records, totalPages, totalOrders};
   }
 
-  return {clean, money, phoneFrom, orderDate, auctionDate, normalizeOrderStatus, parseOrderCard, parseOrderDocument};
+  function auctionPeriod(value) {
+    const match = clean(value).match(/(?:第\s*)?(\d{1,4})\s*期/);
+    return match ? `第${Number(match[1])}期` : "";
+  }
+
+  function parseAuctionResultRows(rows = [], {period = "", projectName = "", entryKey = ""} = {}) {
+    const normalizedPeriod = auctionPeriod(period) || clean(period);
+    const unique = new Map();
+    rows.forEach((row) => {
+      const text = clean(row?.text);
+      const lot = Number(text.match(/Lot\.?\s*(\d+)/i)?.[1] || 0);
+      if (!lot) return;
+      const finalPrice = money(text.match(/成交价\s*[:：]?\s*[¥￥]?\s*[\d,.]+/)?.[0]);
+      const explicitTitle = clean(row?.title).replace(/^Lot\.?\s*\d+\s*/i, "");
+      const fallbackTitle = clean(text
+        .replace(/^.*?Lot\.?\s*\d+\s*/i, "")
+        .replace(/成交价\s*[:：]?[\s\S]*$/i, "")
+        .split("\n")[0]);
+      const itemName = explicitTitle || fallbackTitle || `Lot ${lot}`;
+      const key = `${normalizedPeriod}:${lot}`;
+      const current = unique.get(key);
+      const record = {
+        platformItemKey:`auction-result:${entryKey || normalizedPeriod}:${lot}`,
+        source:"mxiqi_connector",
+        sourceUpdatedAt:new Date().toISOString(),
+        lot,
+        lotLabel:`麦稀奇 / Lot ${lot}`,
+        itemName,
+        projectName:projectName || normalizedPeriod,
+        auctionPeriodOverride:normalizedPeriod,
+        auctionHouse:"麦稀奇",
+        finalPrice,
+        finalOutcome:finalPrice > 0 ? "成交" : "流拍",
+        paymentStatus:finalPrice > 0 ? "已付款" : "",
+        mxiqiAuctionItemUrl:clean(row?.href),
+      };
+      if (!current || record.finalPrice > current.finalPrice || record.itemName.length > current.itemName.length) unique.set(key, record);
+    });
+    return [...unique.values()];
+  }
+
+  function parseAuctionResultDocument(doc, options = {}) {
+    const pageText = clean(doc.body?.textContent);
+    const projectName = clean(doc.querySelector("h1, h2, .auction-title, [class*='auction'][class*='title']")?.textContent)
+      || clean(doc.title).replace(/[-_|].*$/, "");
+    const period = auctionPeriod(options.period) || auctionPeriod(`${projectName}\n${pageText}`) || clean(options.period);
+    const elements = Array.from(doc.querySelectorAll('a[href*="auction.item.info"], a[href*="auction.item"], tr, li, article, [class*="auction-item"], [class*="lot-item"]'));
+    const rows = [];
+    const seen = new Set();
+    elements.forEach((element) => {
+      const container = element.matches("tr, li, article, [class*='auction-item'], [class*='lot-item']")
+        ? element
+        : element.closest("tr, li, article, [class*='auction-item'], [class*='lot-item']") || element.parentElement || element;
+      const text = clean(container.textContent);
+      if (!/Lot\.?\s*\d+/i.test(text) || !/成交价\s*[:：]?/i.test(text)) return;
+      const lot = text.match(/Lot\.?\s*(\d+)/i)?.[1] || "";
+      const hrefNode = container.querySelector?.('a[href*="auction.item"]') || (element.matches?.("a") ? element : null);
+      const href = hrefNode?.href || hrefNode?.getAttribute?.("href") || "";
+      const title = clean(container.querySelector?.("h2, h3, h4, .title, [class*='name']")?.textContent || hrefNode?.textContent);
+      const key = `${lot}:${href}:${text.slice(0, 80)}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      rows.push({text,title,href});
+    });
+    const currentPath = typeof location === "object" ? location.pathname : "";
+    const entryKey = String(options.entryKey || currentPath || "").match(/(\d{4,})/)?.[1] || "";
+    return {records:parseAuctionResultRows(rows,{period,projectName,entryKey}),period,projectName};
+  }
+
+  return {clean, money, phoneFrom, orderDate, auctionDate, auctionPeriod, normalizeOrderStatus, parseOrderCard, parseOrderDocument, parseAuctionResultRows, parseAuctionResultDocument};
 });

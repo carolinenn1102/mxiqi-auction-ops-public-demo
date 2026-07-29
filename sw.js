@@ -1,4 +1,4 @@
-const CACHE_NAME = "mxiqi-ops-demo-v20";
+const CACHE_NAME = "mxiqi-ops-demo-v22";
 const APP_ASSETS = [
   "./",
   "./index.html",

@@ -84,8 +84,31 @@ test("connector supports the Mxiqi wait-pay scope and reports its version", () =
   assert.match(content, /"waitconfirm","waitpay"/);
   assert.match(content, /org\.order\.list\/\$\{safeScope\}/);
   assert.match(background, /chrome\.runtime\.getManifest\(\)\.version/);
-  assert.equal(manifest.version, "1.5.0");
-  assert.match(background, /capabilities:\s*\["login", "syncOrders", "syncOrdersByNumbers"\]/);
+  assert.equal(manifest.version, "1.6.0");
+  assert.match(background, /capabilities:\s*\["login", "syncOrders", "syncOrdersByNumbers", "syncAuctionDeals"\]/);
+});
+
+test("connector parses auction deal rows and exposes period settlement sync", () => {
+  const bridge = fs.readFileSync(path.join(root, "connector-bridge.js"), "utf8");
+  const content = fs.readFileSync(path.join(extensionRoot, "content.js"), "utf8");
+  const records = parser.parseAuctionResultRows([
+    {text:"Lot.48 PCGS-AU55 孙中山像开国纪念壹圆\n成交价：¥49,288.00",title:"PCGS-AU55 孙中山像开国纪念壹圆",href:"/auction.item.info/48"},
+  ],{period:"第75期",projectName:"世界币章拍卖（第75期）",entryKey:"75"});
+  assert.equal(records.length, 1);
+  assert.equal(records[0].lot, 48);
+  assert.equal(records[0].finalPrice, 49288);
+  assert.equal(records[0].auctionPeriodOverride, "第75期");
+  assert.match(bridge, /syncAuctionDeals/);
+  assert.match(content, /成交目录/);
+});
+
+test("dashboard keeps duplicate Lots separate by auction period and exports full preauction image", () => {
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  assert.match(app, /MxiqiWorkflow\.sameAuctionLot\(item, record\)/);
+  assert.match(app, /applyAuctionSettlementResults/);
+  assert.match(app, /未付款拖回扣费/);
+  assert.match(html, /id="export-preauction-image"/);
 });
 
 test("dashboard exposes wait-pay sync and a dedicated reauction library", () => {

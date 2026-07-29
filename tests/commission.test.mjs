@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import commission from "../commission-core.js";
+import workflow from "../workflow-core.js";
 
 const settings = {
   defaultCommissionType: "percent",
@@ -47,4 +48,14 @@ test("return handling fee is charged per lot", () => {
   assert.equal(plan.amount, 8);
   assert.equal(plan.label, "拖回处理费");
   assert.equal(plan.isReturn, true);
+});
+
+test("an unpaid return stays at minus eight in the settlement bill after later handling", () => {
+  ["拖回/发回","拖回/再拍","拖回/等待","寄存"].forEach((returnDisposition) => {
+    const record = {unpaidReturn:true,returnDisposition,finalPrice:49288};
+    const gross = workflow.settlementGross(record);
+    const plan = commission.calculate({gross,isReturn:workflow.isReturnRecord(record),settings});
+    assert.equal(plan.amount, 8);
+    assert.equal(gross - plan.amount, -8);
+  });
 });

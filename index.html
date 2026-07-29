@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="theme-color" content="#102735">
   <title>送拍运营工作台 · 公开体验版</title>
-  <link rel="stylesheet" href="styles.css?v=21">
+  <link rel="stylesheet" href="styles.css?v=22">
   <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
@@ -87,9 +87,10 @@
           <div><small>成交总额</small><b id="settlement-gross">¥0</b></div>
           <div><small>佣金合计</small><b id="settlement-commission">¥0</b></div>
           <div><small>应结金额</small><b id="settlement-payable">¥0</b></div>
+          <div><small>未付款拖回扣费</small><b id="settlement-unpaid-return">0 笔 / ¥0</b></div>
         </div>
         <div class="settlement-actions">
-          <button class="btn secondary" id="sync-settlement-orders">同步麦稀奇待确认</button>
+          <button class="btn secondary" id="sync-settlement-orders">同步本期成交记录</button>
           <button class="btn secondary" id="batch-settle" hidden>将所选标为已结账</button>
           <button class="btn primary" id="export-settlement" disabled>全部结账后导出</button>
           <button class="btn secondary" id="export-settlement-image" disabled>导出结算明细图片</button>
@@ -108,7 +109,7 @@
       </section>
 
       <section class="preauction-summary" id="preauction-summary" hidden>
-        <div class="seller-summary-heading"><div><p class="eyebrow">拍前核对</p><h2>送拍人清单</h2></div><small>先选拍卖期数，再点送拍人查看其本期上拍拍品</small></div>
+        <div class="seller-summary-heading"><div><p class="eyebrow">拍前核对</p><h2>送拍人清单</h2></div><div class="preauction-summary-actions"><small>先选拍卖期数，再点送拍人查看其本期上拍拍品</small><button class="btn secondary compact" id="export-preauction-image" type="button">下载完整核对图片</button></div></div>
         <div class="seller-summary-list" id="preauction-seller-list"></div>
       </section>
 
@@ -331,11 +332,11 @@
   <datalist id="auction-period-options"></datalist>
   <div id="toast" class="toast" role="status" hidden></div>
   <script src="vendor/exceljs.min.js"></script>
-  <script src="matching-core.js?v=21"></script>
-  <script src="package-core.js?v=21"></script>
-  <script src="workflow-core.js?v=21"></script>
-  <script src="commission-core.js?v=21"></script>
-  <script src="connector-bridge.js?v=21"></script>
-  <script src="app.js?v=21"></script>
+  <script src="matching-core.js?v=22"></script>
+  <script src="package-core.js?v=22"></script>
+  <script src="workflow-core.js?v=22"></script>
+  <script src="commission-core.js?v=22"></script>
+  <script src="connector-bridge.js?v=22"></script>
+  <script src="app.js?v=22"></script>
 </body>
 </html>

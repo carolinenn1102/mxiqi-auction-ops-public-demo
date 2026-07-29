@@ -50,5 +50,9 @@
       type: "syncOrdersByNumbers",
       orderNumbers,
     }, 180_000),
+    syncAuctionDeals: ({period = ""} = {}) => send({
+      type: "syncAuctionDeals",
+      period,
+    }, 180_000),
   });
 })();
