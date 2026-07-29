@@ -70,5 +70,39 @@
     return Number(record.finalPrice) > 0 ? "成交" : "待拍";
   }
 
-  return {isReturnRecord,auctionPeriod,normalizeReturnDisposition,trackerOutcome,settlementGross,isSettlementEligible,shippingBucket,isPaymentOverdue,recordStatus};
+  function platformRecordKey(record = {}) {
+    if (record.platformItemKey) return String(record.platformItemKey);
+    if (record.mxiqiOrderId && record.lot) return `${record.mxiqiOrderId}:${record.lot}`;
+    return "";
+  }
+
+  function recordBelongsToScope(record = {}, scope = "") {
+    if (record.source !== "mxiqi_connector") return false;
+    if (scope === "waitpay") return record.paymentStatus === "待付款";
+    if (scope === "waitexpress") {
+      return record.finalOutcome === "成交"
+        && record.paymentStatus === "已付款"
+        && !isReturnRecord(record)
+        && shippingBucket(record) === "unshipped";
+    }
+    return false;
+  }
+
+  function reconcileAuthoritativeScope(records = [], incoming = [], scope = "", complete = false, timestamp = new Date().toISOString()) {
+    if (!complete || !["waitpay", "waitexpress"].includes(scope)) return {records,departed:0};
+    const incomingKeys = new Set(incoming.map(platformRecordKey).filter(Boolean));
+    let departed = 0;
+    const next = records.map((record) => {
+      const key = platformRecordKey(record);
+      if (!key || incomingKeys.has(key) || !recordBelongsToScope(record, scope)) return record;
+      departed += 1;
+      if (scope === "waitpay") {
+        return {...record,paymentStatus:"已付款",paymentResolvedAt:timestamp,mxiqiOrderStatus:"已离开待付款",sourceUpdatedAt:timestamp};
+      }
+      return {...record,mxiqiShippingStatus:"filled",mxiqiFilledAt:record.mxiqiFilledAt || timestamp,mxiqiOrderStatus:"已离开待发货",sourceUpdatedAt:timestamp};
+    });
+    return {records:next,departed};
+  }
+
+  return {isReturnRecord,auctionPeriod,normalizeReturnDisposition,trackerOutcome,settlementGross,isSettlementEligible,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,recordBelongsToScope,reconcileAuthoritativeScope};
 });

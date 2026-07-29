@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="theme-color" content="#102735">
   <title>送拍运营工作台 · 公开体验版</title>
-  <link rel="stylesheet" href="styles.css?v=17">
+  <link rel="stylesheet" href="styles.css?v=18">
   <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
@@ -122,7 +122,7 @@
         </div>
         <div class="table-wrap">
           <table>
-            <thead id="records-head"><tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选当前记录"></th><th>Lot / 拍品</th><th>送拍人</th><th>买家 / 收件人</th><th>拍品状态</th><th>拍场与时间</th><th>最终价格</th><th>资料</th><th>物流</th><th>取件码 / 运单</th><th>结算</th><th>操作</th></tr></thead>
+            <thead id="records-head"><tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选当前记录"></th><th>买家 / 收件人</th><th>Lot / 拍品</th><th>送拍人</th><th>拍品状态</th><th>拍场与时间</th><th>最终价格</th><th>资料</th><th>物流</th><th>取件码 / 运单</th><th>结算</th><th>操作</th></tr></thead>
             <tbody id="records-body"></tbody>
           </table>
         </div>
@@ -171,6 +171,7 @@
           <label class="field"><span>买家登录手机号</span><input name="buyerPhone" type="tel" inputmode="numeric" autocomplete="off"></label>
           <label class="field"><span>收件人</span><input name="recipientName" autocomplete="off"></label>
           <label class="field"><span>收件手机号</span><input name="recipientPhone" type="tel" inputmode="numeric" autocomplete="off"></label>
+          <label class="field wide"><span>完整收货地址</span><textarea class="import-area compact-address" name="recipientRaw" placeholder="姓名 手机号 省市区详细地址"></textarea></label>
           <label class="field wide"><span>麦稀奇订单号</span><input name="mxiqiOrderId" readonly></label>
         </div></section>
       </div>
@@ -205,7 +206,7 @@
         <label><span>⌕</span><input id="asset-search" type="search" placeholder="搜索手机号、订单号、编号或拍品"></label>
         <div class="asset-toolbar-actions"><button class="text-button" type="button" id="asset-clear-filter">显示全部</button><span class="selection-count" id="asset-selection-count" hidden></span><button class="btn ghost danger" type="button" id="asset-batch-delete" hidden>批量删除</button><button class="text-button" type="button" id="asset-clear-selection" hidden>取消选择</button></div>
       </div>
-      <div class="asset-table-wrap"><table class="asset-table"><thead><tr><th class="select-column"><input id="asset-select-all" type="checkbox" aria-label="全选当前筛选的寄存库存记录"></th><th>类型 / 来源</th><th>物品</th><th>送拍人 / 手机号</th><th>寄存单 / 成本</th><th>匹配状态</th><th>关联到送拍记录</th></tr></thead><tbody id="asset-body"><tr><td colspan="7" class="empty-state">尚未导入寄存或库存数据。</td></tr></tbody></table></div>
+      <div class="asset-table-wrap"><table class="asset-table"><thead><tr><th class="select-column"><input id="asset-select-all" type="checkbox" aria-label="全选当前筛选的寄存库存记录"></th><th>买家 / 收件地址</th><th>寄存物品</th><th>拍场期数与时间</th><th>匹配状态</th><th>来源 / 寄存单</th><th>关联拍品</th><th>操作</th></tr></thead><tbody id="asset-body"><tr><td colspan="8" class="empty-state">尚未导入寄存或库存数据。</td></tr></tbody></table></div>
     </div><footer><span class="asset-footer-note" id="asset-footer-note">等待导入</span><button class="btn primary" value="default">完成</button></footer></form>
   </dialog>
 
@@ -307,11 +308,11 @@
 
   <div id="toast" class="toast" role="status" hidden></div>
   <script src="vendor/exceljs.min.js"></script>
-  <script src="matching-core.js?v=15"></script>
+  <script src="matching-core.js?v=18"></script>
   <script src="package-core.js?v=15"></script>
-  <script src="workflow-core.js?v=17"></script>
+  <script src="workflow-core.js?v=18"></script>
   <script src="commission-core.js?v=15"></script>
-  <script src="connector-bridge.js?v=15"></script>
-  <script src="app.js?v=17"></script>
+  <script src="connector-bridge.js?v=18"></script>
+  <script src="app.js?v=18"></script>
 </body>
 </html>

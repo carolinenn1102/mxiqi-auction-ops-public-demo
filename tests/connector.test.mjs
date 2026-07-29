@@ -24,6 +24,8 @@ test("extracts normalized phone and date", () => {
   assert.equal(parser.phoneFrom("收件人 138 0000 0001"), "13800000001");
   assert.equal(parser.orderDate("20260723220402613096"), "2026-07-23");
   assert.equal(parser.money("佣金 ¥1,056.50"), 1056.5);
+  assert.equal(parser.auctionDate("ANACS-AU58 · 260730 周四，76期"), "2026-07-30");
+  assert.equal(parser.auctionDate("第76期 · 2026年7月30日 20:00"), "2026-07-30");
 });
 
 test("extension is restricted to the public dashboard and mxiqi", () => {
@@ -71,7 +73,7 @@ test("connector supports exact historical order-number lookup", () => {
 test("connector supports the Mxiqi wait-confirm settlement scope", () => {
   const content = fs.readFileSync(path.join(extensionRoot, "content.js"), "utf8");
   assert.match(content, /\["waitconfirm","waitpay"\]\.includes\(scope\)/);
-  assert.match(content, /\["waitconfirm","waitpay"\]\.includes\(safeScope\) \? 20/);
+  assert.match(content, /\["waitconfirm","waitpay","waitexpress"\]\.includes\(safeScope\) \? 20/);
   assert.match(content, /org\.order\.list\/\$\{safeScope\}/);
 });
 
@@ -82,7 +84,8 @@ test("connector supports the Mxiqi wait-pay scope and reports its version", () =
   assert.match(content, /"waitconfirm","waitpay"/);
   assert.match(content, /org\.order\.list\/\$\{safeScope\}/);
   assert.match(background, /chrome\.runtime\.getManifest\(\)\.version/);
-  assert.equal(manifest.version, "1.4.0");
+  assert.equal(manifest.version, "1.5.0");
+  assert.match(background, /capabilities:\s*\["login", "syncOrders", "syncOrdersByNumbers"\]/);
 });
 
 test("dashboard exposes wait-pay sync and a dedicated reauction library", () => {

@@ -12,13 +12,13 @@ const ExcelJS = excelContext.ExcelJS;
 const excelRow = (values) => vm.runInContext(`JSON.parse(${JSON.stringify(JSON.stringify(values))})`, excelContext);
 await import("../matching-core.js");
 
-const { parseAssetWorkbook, rematchAssets } = globalThis.MxiqiAssets;
+const { parseAssetWorkbook, rematchAssets, groupAssetsByBuyer } = globalThis.MxiqiAssets;
 
 test("imports consignment and intentionally skips the second grading sheet", () => {
   const workbook = new ExcelJS.Workbook();
   const consignment = workbook.addWorksheet("寄存");
   consignment.addRow(excelRow(["寄存", "用户", "寄存订单号", "订单日期", "收货地址", "拍品", null, "状态"]));
-  consignment.addRow(excelRow([null, "体验客户 13900000001", "DEMO-C-001", 46228, "体验地址 13900000001", "Lot.8 演示纪念币", null, "在库"]));
+  consignment.addRow(excelRow([null, "体验客户 13900000001", "DEMO-C-001", 46228, "上海市 浦东新区 世纪大道100号 张三 13900000001", "Lot.8 演示纪念币", null, "在库"]));
   const grading = workbook.addWorksheet("送评");
   grading.addRow(excelRow(["微信名称/联系方式", "送评物品", "图片", "档", "送评单号", "送评日期", "是否出分", "是否返还", null]));
   grading.addRow(excelRow(["体验客户", "演示银币", null, "65", "DEMO-G-001", "0725", "出分", "返还", "上拍"]));
@@ -26,8 +26,39 @@ test("imports consignment and intentionally skips the second grading sheet", () 
   const parsed = parseAssetWorkbook(workbook, "演示寄存.xlsx");
   assert.deepEqual(parsed.kinds, ["consignment"]);
   assert.equal(parsed.assets.length, 1);
-  assert.equal(parsed.assets[0].sellerPhone, "13900000001");
+  assert.equal(parsed.assets[0].personRole, "buyer");
+  assert.equal(parsed.assets[0].buyerPhone, "13900000001");
+  assert.equal(parsed.assets[0].buyerName, "体验客户");
+  assert.equal(parsed.assets[0].recipientName, "张三");
+  assert.match(parsed.assets[0].recipientRaw, /世纪大道100号/);
+  assert.equal(parsed.assets[0].sellerPhone, undefined);
   assert.equal(parsed.assets[0].orderDate, "2026-07-25");
+});
+
+test("replaces unsupported DISPIMG formulas and groups consignment by buyer", () => {
+  const workbook = new ExcelJS.Workbook();
+  const consignment = workbook.addWorksheet("寄存");
+  consignment.addRow(excelRow(["寄存", "用户", "寄存订单号", "订单日期", "收货地址", "拍品", null, "状态"]));
+  consignment.addRow(excelRow([null, "买家甲 13900000001", "DEMO-C-001", "2026-07-20", "上海市 张三 13900000001", '=DISPIMG("ID_1",1)', null, "在库"]));
+  consignment.addRow(excelRow([null, "买家甲 13900000001", "DEMO-C-002", "2026-07-21", "上海市 张三 13900000001", "Lot.9 第二件拍品", null, "在库"]));
+
+  const parsed = parseAssetWorkbook(workbook, "寄存记录.xlsx");
+  assert.equal(parsed.assets.length, 2);
+  assert.match(parsed.assets[0].itemName, /图片拍品/);
+  assert.doesNotMatch(parsed.assets[0].itemName, /DISPIMG/);
+  const groups = groupAssetsByBuyer(parsed.assets);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].buyerName, "买家甲");
+  assert.equal(groups[0].assets.length, 2);
+});
+
+test("completed consignment groups move behind pending groups", () => {
+  const groups = groupAssetsByBuyer([
+    {id:"done",assetType:"consignment",personRole:"buyer",buyerName:"甲",buyerPhone:"13900000001",storageShippingStatus:"completed"},
+    {id:"pending",assetType:"consignment",personRole:"buyer",buyerName:"乙",buyerPhone:"13900000002"},
+  ]);
+  assert.equal(groups[0].buyerName, "乙");
+  assert.equal(groups[1].completed, true);
 });
 
 test("imports only the current inventory sheet", () => {

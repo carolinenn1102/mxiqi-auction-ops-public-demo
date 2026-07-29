@@ -15,6 +15,7 @@ test("dashboard exposes pending-auction and storage states", () => {
   assert.match(html, /name="returnDisposition"[\s\S]*?<option>寄存<\/option>/);
   assert.match(app, /function syncStoredAssetsFromRecords\(/);
   assert.match(app, /recordStorageId/);
+  assert.match(app, /record\.returnDisposition !== "寄存"/);
 });
 
 test("tracker import preserves phone aliases and special outcomes", () => {
@@ -37,4 +38,19 @@ test("consignment backfill reports progress inside its dialog", () => {
   assert.match(app, /function setAssetSyncStatus\(/);
   assert.match(app, /正在逐个搜索/);
   assert.match(app, /回补完成/);
+});
+
+test("consignment inventory is buyer-first, expandable, and supports group shipment", () => {
+  assert.match(html, /<th>买家 \/ 收件地址<\/th>/);
+  assert.match(html, /<th>拍场期数与时间<\/th>/);
+  assert.match(app, /groupAssetsByBuyer\(visible\)/);
+  assert.match(app, /data-asset-group-toggle/);
+  assert.match(app, /data-asset-group-ship/);
+  assert.match(app, /storageShippingStatus = "completed"/);
+  assert.match(styles, /\.asset-group-row\.completed/);
+});
+
+test("record editor exposes the full buyer shipping address", () => {
+  assert.match(html, /name="recipientRaw"[^>]*placeholder="姓名 手机号 省市区详细地址"/);
+  assert.match(app, /recipientRaw = String\(data\.get\("recipientRaw"\)/);
 });

@@ -18,7 +18,7 @@
 
   async function scrapeOrders({scope = "waitexpress", maxPages = 1} = {}) {
     const safeScope = scope === "recent" ? "all" : ["waitconfirm","waitpay"].includes(scope) ? scope : "waitexpress";
-    const pageLimit = ["waitconfirm","waitpay"].includes(safeScope) ? 20 : safeScope === "all" ? 10 : 3;
+    const pageLimit = ["waitconfirm","waitpay","waitexpress"].includes(safeScope) ? 20 : 10;
     const requestedPages = Math.max(1, Math.min(Number(maxPages) || 1, pageLimit));
     const basePath = `/org.order.list/${safeScope}`;
     const first = await fetchDocument(`${basePath}?page=1&aftersale=0`);

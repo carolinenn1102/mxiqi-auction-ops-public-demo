@@ -94,7 +94,14 @@
     }
     if (message?.type === "ping") {
       const result = await sendToMxiqi({type: "checkSession"}, {create: true, active: false});
-      return {ok: true, installed: true, version: chrome.runtime.getManifest().version, loggedIn: Boolean(result?.loggedIn), orgName: result?.orgName || ""};
+      return {
+        ok: true,
+        installed: true,
+        version: chrome.runtime.getManifest().version,
+        capabilities: ["login", "syncOrders", "syncOrdersByNumbers"],
+        loggedIn: Boolean(result?.loggedIn),
+        orgName: result?.orgName || "",
+      };
     }
     if (message?.type === "syncOrders") {
       const result = await sendToMxiqi({type: "scrapeOrders", scope: message.scope, maxPages: message.maxPages}, {create: true, active: false});

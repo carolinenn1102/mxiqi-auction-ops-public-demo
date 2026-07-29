@@ -42,3 +42,26 @@ test("return disposition takes priority over payment state", () => {
   const record = {finalOutcome:"成交",finalPrice:860,paymentStatus:"待付款",paymentDueAt:"2026-07-20T20:00:00+08:00",returnDisposition:"拖回/再拍"};
   assert.equal(workflow.recordStatus(record, new Date("2026-07-29T21:00:00+08:00")), "拖回/再拍");
 });
+
+test("a complete wait-pay refresh removes departed orders from the pending count", () => {
+  const oldRecord = {id:"r1",source:"mxiqi_connector",platformItemKey:"o1:1:0",paymentStatus:"待付款",finalOutcome:"成交",finalPrice:100};
+  const result = workflow.reconcileAuthoritativeScope([oldRecord], [], "waitpay", true, "2026-07-29T08:00:00.000Z");
+  assert.equal(result.departed, 1);
+  assert.equal(result.records[0].paymentStatus, "已付款");
+  assert.equal(result.records[0].mxiqiOrderStatus, "已离开待付款");
+});
+
+test("a complete wait-shipping refresh marks absent orders as shipped", () => {
+  const oldRecord = {id:"r1",source:"mxiqi_connector",platformItemKey:"o1:1:0",paymentStatus:"已付款",finalOutcome:"成交",finalPrice:100,mxiqiShippingStatus:"pending"};
+  const result = workflow.reconcileAuthoritativeScope([oldRecord], [], "waitexpress", true, "2026-07-29T08:00:00.000Z");
+  assert.equal(result.departed, 1);
+  assert.equal(result.records[0].mxiqiShippingStatus, "filled");
+  assert.equal(workflow.shippingBucket(result.records[0]), "shipped");
+});
+
+test("partial platform refresh never clears absent local states", () => {
+  const oldRecord = {id:"r1",source:"mxiqi_connector",platformItemKey:"o1:1:0",paymentStatus:"待付款",finalOutcome:"成交",finalPrice:100};
+  const result = workflow.reconcileAuthoritativeScope([oldRecord], [], "waitpay", false);
+  assert.equal(result.departed, 0);
+  assert.equal(result.records[0].paymentStatus, "待付款");
+});

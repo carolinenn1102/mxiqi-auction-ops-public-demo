@@ -91,6 +91,12 @@
     return cleaned || "手机号用户";
   }
 
+  function recipientNameFromAddress(value, phone = "") {
+    const withoutPhone = String(value || "").replace(phone, " ").replace(/\s+/g, " ").trim();
+    const parts = withoutPhone.split(" ").filter(Boolean);
+    return parts.length > 1 ? parts.at(-1) : "";
+  }
+
   function simpleHash(value) {
     let hash = 2166136261;
     for (const char of String(value)) {
@@ -145,15 +151,20 @@
       const address = textAt(row, headers, "收货地址");
       const rawItem = cellText(row.getCell(6));
       if (!user && !orderNo && !address && !rawItem) continue;
-      const phone = extractPhone(user, address);
-      const itemName = rawItem && !/^#NAME\?/i.test(rawItem)
+      const buyerPhone = extractPhone(user, address);
+      const recipientPhone = extractPhone(address) || buyerPhone;
+      const itemName = rawItem && !/^(?:#NAME\?|=?DISPIMG\s*\()/i.test(rawItem)
         ? rawItem
         : `寄存订单 ${orderNo || rowNumber}（图片拍品）`;
-      const key = `consignment|${orderNo || `${sheet.name}-${rowNumber}`}|${phone}|${itemName}`;
+      const key = `consignment|${orderNo || `${sheet.name}-${rowNumber}`}|${buyerPhone}|${itemName}`;
       assets.push({
         ...baseAsset("consignment", fileName, sheet.name, rowNumber, key),
-        sellerWechat: sellerName(user),
-        sellerPhone: phone,
+        personRole: "buyer",
+        buyerName: sellerName(user),
+        buyerPhone,
+        recipientName: recipientNameFromAddress(address, recipientPhone),
+        recipientPhone,
+        recipientRaw: address,
         consignmentOrderNo: orderNo,
         orderDate: dateAt(row, headers, "订单日期"),
         address,
@@ -267,7 +278,7 @@
   function matchScore(asset, record) {
     let score = 0;
     const reasons = [];
-    const assetPhone = normalizePhone(asset.sellerPhone);
+    const assetPhone = asset.personRole === "buyer" ? "" : normalizePhone(asset.sellerPhone);
     const recordPhones = [record.sellerPhone].map(normalizePhone).filter(Boolean);
     if (assetPhone && recordPhones.includes(assetPhone)) {
       score += 100;
@@ -279,7 +290,7 @@
       score += 85;
       reasons.push("评级编号一致");
     }
-    const assetSeller = normalizeHeader(asset.sellerWechat);
+    const assetSeller = asset.personRole === "buyer" ? "" : normalizeHeader(asset.sellerWechat);
     const recordSeller = normalizeHeader(record.sellerWechat);
     if (assetSeller && assetSeller !== "手机号用户" && assetSeller === recordSeller) {
       score += 40;
@@ -343,6 +354,41 @@
     return [...byKey.values()];
   }
 
+  function assetBuyerName(asset = {}) {
+    return String(asset.buyerName || (asset.personRole === "buyer" ? asset.sellerWechat : "") || "").trim();
+  }
+
+  function assetBuyerPhone(asset = {}) {
+    return normalizePhone(asset.buyerPhone || (asset.personRole === "buyer" ? asset.sellerPhone : "") || asset.recipientPhone);
+  }
+
+  function assetBuyerKey(asset = {}) {
+    const phone = assetBuyerPhone(asset);
+    if (phone) return `phone:${phone}`;
+    const name = normalizeHeader(assetBuyerName(asset));
+    if (name && name !== "手机号用户") return `name:${name}`;
+    return `asset:${asset.id || asset.assetKey || "unknown"}`;
+  }
+
+  function groupAssetsByBuyer(assets = []) {
+    const groups = new Map();
+    for (const asset of assets) {
+      const key = asset.assetType === "consignment" ? assetBuyerKey(asset) : `asset:${asset.id || asset.assetKey}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(asset);
+    }
+    return Array.from(groups, ([key, items]) => {
+      const first = items[0] || {};
+      const buyerName = items.map(assetBuyerName).find(Boolean) || "买家待补";
+      const buyerPhone = items.map(assetBuyerPhone).find(Boolean) || "";
+      const recipientRaw = items.map((asset) => String(asset.recipientRaw || asset.address || "").trim()).find(Boolean) || "";
+      const completed = items.length > 0 && items.every((asset) => asset.storageShippingStatus === "completed");
+      return {key,assets:items,buyerName,buyerPhone,recipientRaw,completed,assetType:first.assetType || "inventory"};
+    }).sort((left, right) => Number(left.completed) - Number(right.completed)
+      || left.buyerName.localeCompare(right.buyerName, "zh-CN")
+      || left.key.localeCompare(right.key));
+  }
+
   root.MxiqiAssets = {
     TYPE_LABELS,
     normalizePhone,
@@ -352,6 +398,10 @@
     suggestMatch,
     rematchAssets,
     mergeAssets,
+    assetBuyerName,
+    assetBuyerPhone,
+    assetBuyerKey,
+    groupAssetsByBuyer,
     parseAssetWorkbook,
   };
 })(globalThis);

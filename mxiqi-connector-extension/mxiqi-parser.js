@@ -17,6 +17,16 @@
     return match ? `${match[1]}-${match[2]}-${match[3]}` : "";
   }
 
+  function auctionDate(value) {
+    const source = clean(value);
+    const separated = source.match(/(20\d{2})[年\/.\-](\d{1,2})[月\/.\-](\d{1,2})日?/);
+    if (separated) return `${separated[1]}-${separated[2].padStart(2, "0")}-${separated[3].padStart(2, "0")}`;
+    const compact = source.match(/(?:^|\D)(20)?(\d{2})(\d{2})(\d{2})(?:\D|$)/);
+    if (!compact) return "";
+    const year = compact[1] ? `${compact[1]}${compact[2]}` : `20${compact[2]}`;
+    return `${year}-${compact[3]}-${compact[4]}`;
+  }
+
   function normalizeOrderStatus(status) {
     const value = clean(status);
     return {
@@ -45,6 +55,7 @@
     const recipientRaw = clean(recipientNode?.textContent).replace(/^收件人：?\n?/, "").replace(/\s*复制\s*$/, "");
     const remark = clean(card.querySelector(".remark_seller_wrap")?.textContent).replace(/^备注：?/, "");
     const projectName = clean(content.querySelector(".deposit")?.textContent).replace(/^实时拍卖\s*/, "");
+    const auctionAt = auctionDate(`${projectName}\n${clean(content.textContent)}`);
     const summaryNode = directChildren.find((element) => /佣金\s*¥/.test(clean(element.textContent)));
     const summary = clean(summaryNode?.textContent);
     const commissionAmount = money(summary.match(/佣金\s*(¥[\d,.]+)/)?.[1]);
@@ -80,6 +91,8 @@
         recipientRaw,
         recipientPhone: phoneFrom(recipientRaw) || buyerPhone,
         projectName,
+        auctionAt,
+        platformAuctionAt: auctionAt,
         auctionHouse: "麦稀奇",
         commissionPlatformAmount: commissionAmount,
         incomePlatformAmount: incomeAmount,
@@ -99,5 +112,5 @@
     return {records, totalPages, totalOrders};
   }
 
-  return {clean, money, phoneFrom, orderDate, normalizeOrderStatus, parseOrderCard, parseOrderDocument};
+  return {clean, money, phoneFrom, orderDate, auctionDate, normalizeOrderStatus, parseOrderCard, parseOrderDocument};
 });
