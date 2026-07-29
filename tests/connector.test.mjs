@@ -111,6 +111,18 @@ test("dashboard keeps duplicate Lots separate by auction period and exports full
   assert.match(html, /id="export-preauction-image"/);
 });
 
+test("checklist images include consignor phones, branding, and settlement reconciliation", () => {
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
+  assert.match(html, /id="export-settlement-checklist-image"[^>]*>结款对账</);
+  assert.match(app, /label:"送拍人手机号"/);
+  assert.match(app, /record\.sellerPhone \|\| "手机号待补"/);
+  assert.match(app, /title:`\$\{period\}结款对账单`/);
+  assert.match(app, /zhenzhenpu-logo\.jpg/);
+  assert.match(serviceWorker, /zhenzhenpu-logo\.jpg/);
+});
+
 test("dashboard exposes wait-pay sync and a dedicated reauction library", () => {
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");

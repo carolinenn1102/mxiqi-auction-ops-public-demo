@@ -640,6 +640,7 @@
     $("#export-settlement").disabled = !(sold.length && remaining === 0);
     $("#export-settlement").textContent = remaining ? `还有 ${remaining} 条未结账` : "导出本批结算表";
     $("#export-settlement-image").disabled = !(sold.length && remaining === 0);
+    $("#export-settlement-checklist-image").disabled = !(sold.length && remaining === 0);
     renderSellerSummary();
   }
 
@@ -2914,12 +2915,26 @@
     }, "image/png");
   }
 
-  function exportPreauctionImage() {
-    const records = visibleRecords().filter(isPreauctionRecord);
-    if (!records.length) {
-      notify("当前筛选下没有可导出的拍前核对记录", "error");
-      return;
-    }
+  let checklistLogoPromise;
+
+  function loadChecklistLogo() {
+    if (!checklistLogoPromise) checklistLogoPromise = new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => resolve(null);
+      image.src = `./zhenzhenpu-logo.jpg?v=23`;
+    });
+    return checklistLogoPromise;
+  }
+
+  function checklistPeriod(records) {
+    if (state.filters.auction) return state.filters.auction;
+    const periods = [...new Set(records.map(auctionPeriod).filter((value) => value && value !== "期数待补"))];
+    if (periods.length === 1) return periods[0];
+    return periods.length ? "多期" : "全部期数";
+  }
+
+  async function exportChecklistImage(records, options) {
     const sorted = [...records].sort((left, right) => String(left.sellerWechat || "").localeCompare(String(right.sellerWechat || ""), "zh-CN") || Number(left.lot) - Number(right.lot));
     const width = 1700;
     const rowHeight = 58;
@@ -2935,17 +2950,27 @@
     context.fillRect(0, 0, width, 112);
     context.fillStyle = "#f7ead0";
     context.font = 'bold 34px "Microsoft YaHei", sans-serif';
-    context.fillText("拍前核对完整清单", 48, 68);
+    context.fillText(options.title, 48, 68);
+    const logo = await loadChecklistLogo();
+    if (logo) {
+      context.fillStyle = "#fff";
+      context.fillRect(width - 154, 10, 106, 94);
+      const cropX = Math.round(logo.width * 0.08);
+      const cropY = Math.round(logo.height * 0.1);
+      const cropSize = Math.round(Math.min(logo.width, logo.height) * 0.76);
+      context.drawImage(logo, cropX, cropY, cropSize, cropSize, width - 148, 13, 94, 88);
+    }
     context.fillStyle = "#314b57";
     context.font = '20px "Microsoft YaHei", sans-serif';
-    context.fillText(`拍卖期数：${state.filters.auction || "全部期数"}　送拍人：${state.filters.seller || "全部送拍人"}`, 48, 152);
+    context.fillText(`拍卖期数：${options.period}　送拍人：${options.seller}`, 48, 152);
     context.font = 'bold 22px "Microsoft YaHei", sans-serif';
     context.fillText(`${new Set(sorted.map((record) => record.sellerWechat || "待补送拍人")).size} 位送拍人　${sorted.length} 件拍品`, 48, 196);
     const columns = [
-      {label:"送拍人",x:48,width:300},
-      {label:"Lot",x:348,width:130},
-      {label:"拍品名称",x:478,width:900},
-      {label:"拍卖期数",x:1378,width:274},
+      {label:"送拍人",x:48,width:240},
+      {label:"Lot",x:288,width:110},
+      {label:"拍品名称",x:398,width:760},
+      {label:"拍卖期数",x:1158,width:190},
+      {label:"送拍人手机号",x:1348,width:304},
     ];
     context.fillStyle = "#e8e5dd";
     context.fillRect(36, headerHeight, width - 72, rowHeight);
@@ -2959,25 +2984,62 @@
       context.fillRect(36, y, width - 72, rowHeight);
       context.fillStyle = "#213944";
       context.font = '17px "Microsoft YaHei", sans-serif';
-      const values = [truncate(record.sellerWechat || "待补送拍人",16),record.lot,truncate(record.itemName,48),auctionPeriod(record)];
+      const values = [truncate(record.sellerWechat || "待补送拍人",12),record.lot,truncate(record.itemName,40),auctionPeriod(record),record.sellerPhone || "手机号待补"];
       values.forEach((value, columnIndex) => context.fillText(String(value), columns[columnIndex].x + 10, y + 37));
     });
     context.fillStyle = "#7b898f";
     context.font = '14px "Microsoft YaHei", sans-serif';
     context.fillText(`生成时间：${new Date().toLocaleString("zh-CN")} · 送拍运营工作台`, 48, canvas.height - 22);
     canvas.toBlob((blob) => {
-      if (!blob) return notify("核对图片生成失败", "error");
-      const period = (state.filters.auction || "全部期数").replace(/[^\w\u4e00-\u9fa5-]/g, "");
-      downloadBlob(blob, `拍前核对_${period}_${new Date().toISOString().slice(0,10)}.png`, "image/png");
-      audit("导出拍前核对图片", `${sorted.length} 件拍品`);
-      notify("完整拍前核对图片已下载");
+      if (!blob) return notify(options.failureMessage, "error");
+      const period = options.period.replace(/[^\w\u4e00-\u9fa5-]/g, "");
+      downloadBlob(blob, `${options.filePrefix}_${period}_${new Date().toISOString().slice(0,10)}.png`, "image/png");
+      audit(options.auditLabel, `${sorted.length} 件拍品`);
+      notify(options.successMessage);
     }, "image/png");
+  }
+
+  function exportPreauctionImage() {
+    const records = visibleRecords().filter(isPreauctionRecord);
+    if (!records.length) {
+      notify("当前筛选下没有可导出的拍前核对记录", "error");
+      return;
+    }
+    const period = checklistPeriod(records);
+    exportChecklistImage(records, {
+      title:"拍前核对完整清单",
+      period,
+      seller:state.filters.seller || "全部送拍人",
+      filePrefix:"拍前核对",
+      auditLabel:"导出拍前核对图片",
+      successMessage:"完整拍前核对图片已下载",
+      failureMessage:"核对图片生成失败",
+    });
+  }
+
+  function exportSettlementChecklistImage() {
+    const records = settlementRecords();
+    if (!records.length || records.some((record) => !record.settled)) {
+      notify("还有未结账记录，暂不能生成结款对账单", "error");
+      return;
+    }
+    const period = checklistPeriod(records);
+    exportChecklistImage(records, {
+      title:`${period}结款对账单`,
+      period,
+      seller:state.settlementScope.seller || "全部送拍人",
+      filePrefix:"结款对账单",
+      auditLabel:"导出结款对账单",
+      successMessage:`${period}结款对账单已下载`,
+      failureMessage:"结款对账单生成失败",
+    });
   }
 
   $("#export-tracker").addEventListener("click", exportTracker);
   $("#export-mxiqi").addEventListener("click", exportMxiqi);
   $("#export-settlement").addEventListener("click", exportSettlement);
   $("#export-settlement-image").addEventListener("click", exportSettlementImage);
+  $("#export-settlement-checklist-image").addEventListener("click", exportSettlementChecklistImage);
   $("#export-preauction-image").addEventListener("click", exportPreauctionImage);
 
   if (localStorage.getItem(MIGRATION_KEY) !== "8") {
