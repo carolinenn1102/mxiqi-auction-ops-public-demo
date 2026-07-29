@@ -10,6 +10,11 @@
   }
 
   function auctionPeriod(record = {}) {
+    const override = String(record.auctionPeriodOverride || "").trim();
+    if (override) {
+      const overrideMatch = override.match(/(?:第\s*)?(\d{1,4})\s*期?/);
+      return overrideMatch ? `第${Number(overrideMatch[1])}期` : override;
+    }
     const source = [record.projectName, record.auctionHouse, record.auctionAt, record.lotLabel, record.itemName]
       .filter(Boolean)
       .join(" · ");
@@ -40,6 +45,65 @@
     return {finalOutcome:Number(finalPrice) > 0 || source.includes("成交") ? "成交" : "待拍", returnDisposition:""};
   }
 
+  function relistRecord(record = {}, timestamp = new Date().toISOString()) {
+    const priorReturnSettlement = record.priorReturnSettlement || {
+      finalOutcome:record.finalOutcome || "",
+      returnDisposition:record.returnDisposition || "",
+      finalPrice:Number(record.finalPrice) || 0,
+      settled:Boolean(record.settled),
+      settledAt:record.settledAt || "",
+      commissionAmount:Number(record.commissionAmount) || 0,
+      settlementAmount:Number(record.settlementAmount) || 0,
+      promotion:record.promotion || "",
+      settlementNote:record.settlementNote || "",
+      buyerName:record.buyerName || "",
+      buyerPhone:record.buyerPhone || "",
+      recipientName:record.recipientName || "",
+      recipientPhone:record.recipientPhone || "",
+      recipientRaw:record.recipientRaw || "",
+      mxiqiOrderId:record.mxiqiOrderId || "",
+      outboundTrackingNumber:record.outboundTrackingNumber || "",
+    };
+    return {
+      ...record,
+      priorReturnSettlement,
+      finalOutcome:"待拍",
+      returnDisposition:"",
+      finalPrice:0,
+      paymentStatus:"",
+      paymentDueAt:"",
+      commissionAmount:0,
+      settlementAmount:0,
+      profit:0,
+      promotion:"",
+      settled:false,
+      settledAt:"",
+      settlementNote:"",
+      buyerName:"",
+      buyerPhone:"",
+      recipientName:"",
+      recipientPhone:"",
+      recipientRaw:"",
+      addressProvince:"",
+      addressCity:"",
+      addressDistrict:"",
+      addressDetail:"",
+      addressStatus:"",
+      addressWarnings:[],
+      addressReviewedAt:"",
+      mxiqiOrderId:"",
+      outboundTrackingNumber:"",
+      shippingOrderedAt:"",
+      mxiqiShippingStatus:"",
+      pickupCode:"",
+      carrier:"pending",
+      logisticsStatus:"not_requested",
+      logisticsNote:"",
+      relisted:true,
+      relistedAt:timestamp,
+    };
+  }
+
   function settlementGross(record = {}) {
     return isReturnRecord(record) ? 0 : Math.max(0, Number(record.finalPrice) || 0);
   }
@@ -64,6 +128,7 @@
   function recordStatus(record = {}, now = Date.now()) {
     if (record.returnDisposition === "拆单") return record.finalOutcome === "成交" ? "拆单/成交" : "拆单";
     if (["拖回/发回", "拖回/再拍", "拖回/等待", "寄存"].includes(record.returnDisposition)) return record.returnDisposition;
+    if (record.relisted && record.finalOutcome === "待拍") return "上拍";
     if (isPaymentOverdue(record, now)) return "超时未付款";
     if (record.paymentStatus === "待付款") return "待付款";
     if (record.finalOutcome) return record.finalOutcome;
@@ -104,5 +169,5 @@
     return {records:next,departed};
   }
 
-  return {isReturnRecord,auctionPeriod,normalizeReturnDisposition,trackerOutcome,settlementGross,isSettlementEligible,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,recordBelongsToScope,reconcileAuthoritativeScope};
+  return {isReturnRecord,auctionPeriod,normalizeReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,recordBelongsToScope,reconcileAuthoritativeScope};
 });

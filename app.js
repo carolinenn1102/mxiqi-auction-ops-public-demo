@@ -95,7 +95,7 @@
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const currency = new Intl.NumberFormat("zh-CN", {style:"currency",currency:"CNY",maximumFractionDigits:2});
-  const PACKAGE_SHARED_FIELDS = ["buyerName","buyerPhone","projectName","auctionHouse","auctionAt","finalOutcome","returnDisposition","paymentStatus","paymentDueAt","mxiqiOrderId"];
+  const PACKAGE_SHARED_FIELDS = ["buyerName","buyerPhone","projectName","auctionHouse","auctionAt","auctionPeriodOverride","finalOutcome","returnDisposition","paymentStatus","paymentDueAt","mxiqiOrderId"];
   const PACKAGE_ADDRESS_FIELDS = ["recipientRaw","recipientName","recipientPhone","addressProvince","addressCity","addressDistrict","addressDetail"];
   const editDialog = $("#edit-dialog");
   const editForm = $("#edit-form");
@@ -483,6 +483,10 @@
     return MxiqiWorkflow.recordStatus(record);
   }
 
+  function isPreauctionRecord(record) {
+    return ["待拍", "上拍"].includes(recordStatus(record));
+  }
+
   function hasBoxRebateSignal(record) {
     return MxiqiCommission.hasBoxRebate({gross:record.finalPrice,title:record.itemName,settings:state.settings});
   }
@@ -536,7 +540,8 @@
     const query = state.query.trim().toLowerCase();
     return state.records.filter((record) => {
       const search = !query || [record.lot,record.itemName,record.projectName,record.sellerWechat,record.sellerPhone,record.buyerName,record.buyerPhone,record.auctionHouse,record.trackingNumber,record.pickupCode,record.outboundTrackingNumber,record.recipientName,record.recipientPhone,record.recipientRaw,record.promotion].join(" ").toLowerCase().includes(query);
-      const filters = (!state.filters.seller || record.sellerWechat === state.filters.seller)
+      const sellerMatches = !state.filters.seller || (state.filters.seller === "__missing__" ? !record.sellerWechat : record.sellerWechat === state.filters.seller);
+      const filters = sellerMatches
         && (!state.filters.auction || auctionPeriod(record) === state.filters.auction)
         && (!state.filters.status || recordStatus(record) === state.filters.status)
         && (!state.filters.shipping || (["shipped","unshipped"].includes(state.filters.shipping) ? MxiqiWorkflow.shippingBucket(record) === state.filters.shipping : shippingStage(record) === state.filters.shipping));
@@ -544,6 +549,7 @@
         || (state.stage === "unpaid" && record.paymentStatus === "待付款")
         || (state.stage === "missing" && missing(record).length)
         || (state.stage === "reauction" && record.returnDisposition === "拖回/再拍")
+        || (state.stage === "preauction" && isPreauctionRecord(record))
         || (state.stage === "pickup" && Number(record.finalPrice) > 0 && !record.pickupCode)
         || (state.stage === "shipping" && isShippingCandidate(record) && shippingStage(record) !== "completed")
         || (state.stage === "settlement" && settlementRecords().some((item) => item.id === record.id));
@@ -561,7 +567,12 @@
     const sellers = [...new Set(state.records.map((record) => record.sellerWechat).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-CN"));
     const auctions = [...new Set(state.records.map(auctionPeriod).filter((value) => value !== "期数待补"))].sort((a, b) => a.localeCompare(b, "zh-CN", {numeric:true}));
     setDynamicOptions("#filter-seller", sellers, "全部", state.filters.seller);
+    if (state.records.some((record) => !record.sellerWechat)) {
+      $("#filter-seller").insertAdjacentHTML("beforeend", '<option value="__missing__">待补送拍人</option>');
+      $("#filter-seller").value = state.filters.seller;
+    }
     setDynamicOptions("#filter-auction", auctions, "全部", state.filters.auction);
+    $("#auction-period-options").innerHTML = auctions.map((value) => `<option value="${esc(value)}"></option>`).join("");
     $("#filter-status").value = state.filters.status;
     $("#filter-shipping").value = state.filters.shipping;
     setDynamicOptions("#settlement-seller", sellers, "全部送拍人", state.settlementScope.seller);
@@ -589,6 +600,25 @@
     });
     const entries = [...grouped.values()].sort((a, b) => b.payable - a.payable);
     $("#seller-summary-list").innerHTML = entries.length ? entries.map((item) => `<button class="seller-summary-item ${state.settlementScope.seller === item.seller ? "active" : ""}" data-seller-summary="${esc(item.seller === "待补送拍人" ? "" : item.seller)}"><span><b>${esc(item.seller)}</b><small>${esc(item.phone || "手机号待补")} · ${item.count} 件 · ${item.pending} 件待结账 · 成交 ${currency.format(item.gross)}</small></span><strong>${currency.format(item.payable)}</strong></button>`).join("") : '<div class="audit-empty">当前时间段暂无成交记录</div>';
+  }
+
+  function renderPreauctionSummary() {
+    const records = state.records.filter((record) => isPreauctionRecord(record) && (!state.filters.auction || auctionPeriod(record) === state.filters.auction));
+    const grouped = new Map();
+    records.forEach((record) => {
+      const seller = record.sellerWechat || "待补送拍人";
+      const current = grouped.get(seller) || {seller,phone:record.sellerPhone || "",count:0,periods:new Set()};
+      if (!current.phone && record.sellerPhone) current.phone = record.sellerPhone;
+      current.count += 1;
+      current.periods.add(auctionPeriod(record));
+      grouped.set(seller, current);
+    });
+    const entries = [...grouped.values()].sort((a, b) => b.count - a.count || a.seller.localeCompare(b.seller, "zh-CN"));
+    $("#preauction-summary").hidden = state.stage !== "preauction";
+    $("#preauction-seller-list").innerHTML = entries.length ? entries.map((item) => {
+      const filterValue = item.seller === "待补送拍人" ? "__missing__" : item.seller;
+      return `<button class="seller-summary-item ${state.filters.seller === filterValue ? "active" : ""}" data-preauction-seller="${esc(filterValue)}"><span><b>${esc(item.seller)}</b><small>${esc(item.phone || "手机号待补")} · ${item.count} 件拍品 · ${esc([...item.periods].join("、"))}</small></span><strong>${item.count} 件</strong></button>`;
+    }).join("") : '<div class="audit-empty">当前期数暂无待拍或上拍拍品</div>';
   }
 
   function renderSettlementSummary() {
@@ -754,11 +784,19 @@
   }
 
   function renderTableHeader() {
+    if (state.stage === "preauction") {
+      $("#records-head").innerHTML = '<tr><th>送拍人</th><th>Lot</th><th>拍品名称</th><th>拍卖期数</th></tr>';
+      return;
+    }
     if (state.stage === "settlement") {
       $("#records-head").innerHTML = '<tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选当前结算记录"></th><th>送拍人 / 手机号</th><th>拍品 / Lot</th><th>拍卖期数与时间</th><th>成交总额</th><th>优惠标识</th><th>佣金</th><th>应结金额</th><th>结账进度</th><th>操作</th></tr>';
       return;
     }
     $("#records-head").innerHTML = '<tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选当前记录"></th><th>买家 / 收件人</th><th>Lot / 拍品</th><th>送拍人</th><th>拍品状态</th><th>拍卖期数与时间</th><th>最终价格</th><th>资料</th><th>物流</th><th>取件码 / 运单</th><th>结算</th><th>操作</th></tr>';
+  }
+
+  function renderPreauctionRow(record) {
+    return `<tr class="preauction-row"><td><b>${esc(record.sellerWechat || "待补送拍人")}</b></td><td><span class="preauction-lot">${esc(record.lot)}</span></td><td><button class="preauction-item-button" type="button" data-action="edit" data-id="${esc(record.id)}">${esc(record.itemName)}</button></td><td><b>${esc(auctionPeriod(record))}</b></td></tr>`;
   }
 
   function settlementBadgeSummary(records) {
@@ -829,6 +867,8 @@
 
     const panelCopy = state.stage === "reauction"
       ? ["拖回再拍库", "集中保留待重新上拍拍品，编辑后可继续沿用原送拍与结算资料"]
+      : state.stage === "preauction"
+        ? ["拍前核对", "按送拍人核对本期上拍拍品，只保留 Lot、拍品名称和拍卖期数"]
       : state.stage === "unpaid"
         ? ["待付款拍品", "来自麦稀奇待付款订单；超时项目会单独标红提醒"]
         : ["拍品明细", "平台字段、送拍资料、物流与结算状态集中复核"];
@@ -836,39 +876,42 @@
     $("#panel-subtitle").textContent = panelCopy[1];
 
     const visible = visibleRecords();
-    const packageGroups = ["settlement","reauction"].includes(state.stage) ? [] : MxiqiPackages.groupRecords(visible);
+    const packageGroups = ["settlement","reauction","preauction"].includes(state.stage) ? [] : MxiqiPackages.groupRecords(visible);
     const settlementList = state.stage === "settlement" ? settlementGroups(visible) : [];
     const mergedCount = packageGroups.filter((group) => group.isPackage).length;
     $("#result-count").textContent = state.stage === "settlement"
       ? `${settlementList.length} 位送拍人 · ${visible.length} 件拍品`
+      : state.stage === "preauction" ? `${new Set(visible.map((record) => record.sellerWechat || "待补送拍人")).size} 位送拍人 · ${visible.length} 件待核对`
       : state.stage === "reauction" ? `${visible.length} 件待重新上拍`
       : mergedCount ? `${packageGroups.length} 个包裹 · ${visible.length} 件拍品` : `${visible.length} 条结果`;
     const selectable = visible;
-    $("#select-all").checked = selectable.length > 0 && selectable.every((item) => state.selected.has(item.id));
+    if ($("#select-all")) $("#select-all").checked = selectable.length > 0 && selectable.every((item) => state.selected.has(item.id));
     const selectedCount = state.selected.size;
     const selectedRecords = state.records.filter((item) => state.selected.has(item.id));
     const selectedPickupCount = selectedRecords.filter((item) => Number(item.finalPrice) > 0).length;
     const selectedShippingCount = selectedRecords.filter(isShippingCandidate).length;
     $("#selection-count").hidden = !selectedCount;
-    $("#batch-pickup").hidden = !selectedPickupCount || ["settlement","reauction"].includes(state.stage);
-    $("#batch-shipping").hidden = !selectedShippingCount || ["settlement","reauction"].includes(state.stage);
-    $("#batch-delete").hidden = !selectedCount;
+    $("#batch-pickup").hidden = !selectedPickupCount || ["settlement","reauction","preauction"].includes(state.stage);
+    $("#batch-shipping").hidden = !selectedShippingCount || ["settlement","reauction","preauction"].includes(state.stage);
+    $("#batch-delete").hidden = !selectedCount || state.stage === "preauction";
     $("#batch-settle").hidden = !selectedCount || state.stage !== "settlement";
     $("#clear-selection").hidden = !selectedCount;
     $("#selection-count").textContent = `已选 ${selectedCount} 条`;
     renderShippingSummary();
     renderSettlementSummary();
     renderReauctionSummary();
+    renderPreauctionSummary();
 
     const body = $("#records-body");
     if (!visible.length) {
-      const message = state.stage === "reauction" ? "拖回再拍库暂无拍品。把拍品状态设为“拖回/再拍”后会自动进入这里。" : "没有匹配的拍品，调整筛选条件试试。";
-      body.innerHTML = `<tr><td colspan="${state.stage === "settlement" ? 10 : 12}" class="empty-state">${message}</td></tr>`;
+      const message = state.stage === "reauction" ? "拖回再拍库暂无拍品。把拍品状态设为“拖回/再拍”后会自动进入这里。" : state.stage === "preauction" ? "当前筛选下没有待拍或上拍拍品。" : "没有匹配的拍品，调整筛选条件试试。";
+      body.innerHTML = `<tr><td colspan="${state.stage === "preauction" ? 4 : state.stage === "settlement" ? 10 : 12}" class="empty-state">${message}</td></tr>`;
       return;
     }
 
     body.innerHTML = state.stage === "settlement"
       ? settlementList.map(renderSettlementGroupRow).join("")
+      : state.stage === "preauction" ? visible.map(renderPreauctionRow).join("")
       : state.stage === "reauction" ? visible.map((record) => renderRecordRow(record)).join("")
       : packageGroups.map((group) => group.isPackage ? renderPackageRow(group) : renderRecordRow(group.records[0])).join("");
   }
@@ -902,6 +945,7 @@
       if (element.type === "checkbox") element.checked = Boolean(value);
       else element.value = value ?? "";
     });
+    if (record.relisted && record.finalOutcome === "待拍") editForm.elements.returnDisposition.value = "上拍";
     previewCommission();
     editDialog.showModal();
   }
@@ -924,6 +968,7 @@
         shippingForm.elements[name].value = commonValue;
       });
     }
+    if (members.length && members.every((item) => item.relisted && item.finalOutcome === "待拍")) shippingForm.elements.returnDisposition.value = "上拍";
   }
 
   function renderShippingDialog(record, populate = true) {
@@ -1778,6 +1823,7 @@
   $$('[data-stage]').forEach((button) => button.addEventListener("click", () => {
     state.stage = button.dataset.stage;
     if (["reauction","unpaid"].includes(state.stage)) state.filters.status = "";
+    if (state.stage === "preauction") state.filters = {...state.filters,seller:"",status:"",shipping:""};
     state.selected.clear();
     render();
   }));
@@ -1801,6 +1847,14 @@
     if (!button) return;
     state.settlementScope.seller = button.dataset.sellerSummary;
     state.filters.seller = "";
+    state.selected.clear();
+    render();
+  });
+  $("#preauction-seller-list").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-preauction-seller]");
+    if (!button) return;
+    const seller = button.dataset.preauctionSeller;
+    state.filters.seller = state.filters.seller === seller ? "" : seller;
     state.selected.clear();
     render();
   });
@@ -2021,21 +2075,29 @@
     if (records.some((item) => item.outboundTrackingNumber) && PACKAGE_ADDRESS_FIELDS.includes(name)) return;
     if ([...PACKAGE_SHARED_FIELDS, ...PACKAGE_ADDRESS_FIELDS].includes(name)) {
       const value = ["buyerPhone","recipientPhone"].includes(name) ? event.target.value.replace(/\D/g, "") : event.target.value;
-      MxiqiPackages.applySharedFields(records, {[name]:value}, [name]);
-      records.forEach((item) => {
-        if (name === "returnDisposition") {
-          const outcome = MxiqiWorkflow.trackerOutcome(value, item.finalPrice);
-          item.finalOutcome = outcome.finalOutcome;
-          item.returnDisposition = outcome.returnDisposition;
+      if (name === "returnDisposition" && value === "上拍") {
+        records.forEach((item) => {
+          Object.assign(item, MxiqiWorkflow.relistRecord(item));
           syncStoredAssetForRecord(item);
-        }
-        if (["finalOutcome","returnDisposition","auctionAt"].includes(name)) recalculateRecord(item, true);
-        if (["finalOutcome","paymentStatus","auctionAt"].includes(name)) ensurePaymentTracking(item);
-        if (PACKAGE_ADDRESS_FIELDS.includes(name) && item.addressStatus === "reviewed") {
-          item.addressStatus = "pending_review";
-          item.addressReviewedAt = "";
-        }
-      });
+        });
+      } else {
+        MxiqiPackages.applySharedFields(records, {[name]:value}, [name]);
+        records.forEach((item) => {
+          if (name === "returnDisposition") {
+            const outcome = MxiqiWorkflow.trackerOutcome(value, item.finalPrice);
+            item.finalOutcome = outcome.finalOutcome;
+            item.returnDisposition = outcome.returnDisposition;
+            item.relisted = false;
+            syncStoredAssetForRecord(item);
+          }
+          if (["finalOutcome","returnDisposition","auctionAt"].includes(name)) recalculateRecord(item, true);
+          if (["finalOutcome","paymentStatus","auctionAt"].includes(name)) ensurePaymentTracking(item);
+          if (PACKAGE_ADDRESS_FIELDS.includes(name) && item.addressStatus === "reviewed") {
+            item.addressStatus = "pending_review";
+            item.addressReviewedAt = "";
+          }
+        });
+      }
       if (name === "returnDisposition") {
         const label = value || "正常流程";
         shippingForm.elements.finalOutcome.value = MxiqiPackages.sameValue(records, "finalOutcome");
@@ -2142,13 +2204,15 @@
       return;
     }
     if (sellerWechat) state.customers[sellerWechat] = {birthdayMonth, phone:sellerPhone};
-    const record = {
+    const requestedDisposition = String(data.get("returnDisposition") || "");
+    let record = {
       ...existing,
       id: existing.id || uid(),
       lot: Number(data.get("lot")),
       itemName: String(data.get("itemName") || "").trim(),
       auctionHouse: String(data.get("auctionHouse") || ""),
       auctionAt: String(data.get("auctionAt") || ""),
+      auctionPeriodOverride: String(data.get("auctionPeriodOverride") || "").trim(),
       lotLabel: String(data.get("lotLabel") || ""),
       projectName: String(data.get("projectName") || ""),
       startPrice: Number(data.get("startPrice") || 0),
@@ -2156,7 +2220,7 @@
       finalOutcome: String(data.get("finalOutcome") || ""),
       paymentStatus: String(data.get("paymentStatus") || ""),
       paymentDueAt: String(data.get("paymentDueAt") || ""),
-      returnDisposition: String(data.get("returnDisposition") || ""),
+      returnDisposition: requestedDisposition === "上拍" ? String(existing.returnDisposition || "") : requestedDisposition,
       primaryCategory: String(data.get("primaryCategory") || ""),
       secondaryCategory: String(data.get("secondaryCategory") || ""),
       sellerWechat,
@@ -2180,6 +2244,11 @@
       settled: data.get("settled") === "on",
       carrierOverride: String(data.get("carrierOverride") || ""),
     };
+    if (requestedDisposition === "上拍" && !["成交", "流拍"].includes(record.finalOutcome)) record = MxiqiWorkflow.relistRecord(record);
+    else if (requestedDisposition === "上拍") {
+      record.returnDisposition = "";
+      record.relisted = true;
+    } else record.relisted = false;
     ensurePaymentTracking(record);
     if (!Number.isInteger(record.lot) || record.lot <= 0 || !record.itemName) {
       notify("请填写有效 Lot 和拍品名称", "error");

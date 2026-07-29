@@ -8,6 +8,11 @@ test("extracts the auction period from the Mxiqi project title", () => {
   assert.equal(workflow.auctionPeriod({projectName:"长期征集拍品"}), "期数待补");
 });
 
+test("manual auction period overrides platform text for a relisted item", () => {
+  assert.equal(workflow.auctionPeriod({auctionPeriodOverride:"76",projectName:"第75期"}), "第76期");
+  assert.equal(workflow.auctionPeriod({auctionPeriodOverride:"第 81 期",projectName:"第75期"}), "第81期");
+});
+
 test("normalizes tracker special outcomes without losing the exact disposition", () => {
   assert.deepEqual(workflow.trackerOutcome("拖回/再拍", 0), {finalOutcome:"拖回",returnDisposition:"拖回/再拍"});
   assert.deepEqual(workflow.trackerOutcome("寄存", 0), {finalOutcome:"待拍",returnDisposition:"寄存"});
@@ -24,6 +29,18 @@ test("return records remain settlement eligible with zero transaction gross", ()
   assert.equal(workflow.isReturnRecord(record), true);
   assert.equal(workflow.settlementGross(record), 0);
   assert.equal(workflow.isSettlementEligible(record), true);
+});
+
+test("relisting preserves the previous return settlement and resets the new auction round", () => {
+  const relisted = workflow.relistRecord({finalOutcome:"成交",returnDisposition:"拖回/再拍",finalPrice:1160,paymentStatus:"已付款",settled:true,commissionAmount:8,settlementAmount:-8,settlementNote:"已扣拖回费"}, "2026-07-29T10:00:00.000Z");
+  assert.deepEqual(relisted.priorReturnSettlement, {finalOutcome:"成交",returnDisposition:"拖回/再拍",finalPrice:1160,settled:true,settledAt:"",commissionAmount:8,settlementAmount:-8,promotion:"",settlementNote:"已扣拖回费",buyerName:"",buyerPhone:"",recipientName:"",recipientPhone:"",recipientRaw:"",mxiqiOrderId:"",outboundTrackingNumber:""});
+  assert.equal(relisted.finalOutcome, "待拍");
+  assert.equal(relisted.returnDisposition, "");
+  assert.equal(relisted.finalPrice, 0);
+  assert.equal(relisted.paymentStatus, "");
+  assert.equal(relisted.settled, false);
+  assert.equal(workflow.recordStatus(relisted), "上拍");
+  assert.equal(workflow.isSettlementEligible(relisted), false);
 });
 
 test("shipping bucket exposes shipped and unshipped filters", () => {

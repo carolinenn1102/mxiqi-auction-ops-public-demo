@@ -72,3 +72,21 @@ test("combined package synchronizes exact return dispositions and reauction rout
   assert.match(app, /item\.returnDisposition = outcome\.returnDisposition/);
   assert.match(app, /state\.stage === "reauction" && record\.returnDisposition === "拖回\/再拍"/);
 });
+
+test("reauction records can be moved to a manually selected auction period", () => {
+  assert.match(html, /name="auctionPeriodOverride"[^>]*list="auction-period-options"/);
+  assert.match(html, /name="returnDisposition"[\s\S]*?<option>上拍<\/option>/);
+  assert.match(app, /MxiqiWorkflow\.relistRecord\(record\)/);
+  assert.match(app, /MxiqiWorkflow\.relistRecord\(item\)/);
+  assert.match(app, /record\.relisted && record\.finalOutcome === "待拍"/);
+});
+
+test("preauction check groups sellers and renders only four checklist columns", () => {
+  assert.match(html, /id="open-preauction-check"[^>]*data-stage="preauction"/);
+  assert.match(html, /id="preauction-seller-list"/);
+  assert.match(app, /function renderPreauctionSummary\(/);
+  assert.match(app, /data-preauction-seller=/);
+  assert.match(app, /<th>送拍人<\/th><th>Lot<\/th><th>拍品名称<\/th><th>拍卖期数<\/th>/);
+  assert.match(app, /visible\.map\(renderPreauctionRow\)/);
+  assert.match(styles, /\.preauction-summary/);
+});
