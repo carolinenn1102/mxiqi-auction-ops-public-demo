@@ -2922,9 +2922,19 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = `./zhenzhenpu-logo.jpg?v=23`;
+      image.src = `./zhenzhenpu-logo.jpg?v=24`;
     });
     return checklistLogoPromise;
+  }
+
+  function drawChecklistLogo(context, width, logo) {
+    if (!logo) return;
+    context.fillStyle = "#fff";
+    context.fillRect(width - 154, 10, 106, 94);
+    const cropX = Math.round(logo.width * 0.08);
+    const cropY = Math.round(logo.height * 0.1);
+    const cropSize = Math.round(Math.min(logo.width, logo.height) * 0.76);
+    context.drawImage(logo, cropX, cropY, cropSize, cropSize, width - 148, 13, 94, 88);
   }
 
   function checklistPeriod(records) {
@@ -2952,14 +2962,7 @@
     context.font = 'bold 34px "Microsoft YaHei", sans-serif';
     context.fillText(options.title, 48, 68);
     const logo = await loadChecklistLogo();
-    if (logo) {
-      context.fillStyle = "#fff";
-      context.fillRect(width - 154, 10, 106, 94);
-      const cropX = Math.round(logo.width * 0.08);
-      const cropY = Math.round(logo.height * 0.1);
-      const cropSize = Math.round(Math.min(logo.width, logo.height) * 0.76);
-      context.drawImage(logo, cropX, cropY, cropSize, cropSize, width - 148, 13, 94, 88);
-    }
+    drawChecklistLogo(context, width, logo);
     context.fillStyle = "#314b57";
     context.font = '20px "Microsoft YaHei", sans-serif';
     context.fillText(`拍卖期数：${options.period}　送拍人：${options.seller}`, 48, 152);
@@ -3017,22 +3020,95 @@
     });
   }
 
-  function exportSettlementChecklistImage() {
+  function settlementPriceOrDisposition(record) {
+    if (isReturnRecord(record)) return record.returnDisposition || (record.unpaidReturn ? "拖回/等待" : "拖回");
+    if (record.paymentStatus === "待付款") return `待付款 · ${currency.format(record.finalPrice || 0)}`;
+    return currency.format(record.finalPrice || 0);
+  }
+
+  function settlementAuctionLot(record) {
+    const venue = record.auctionHouse || String(record.lotLabel || "").split(/[\/／]/)[0].trim() || "拍场待补";
+    return `${venue} · Lot ${record.lot || "待补"}`;
+  }
+
+  async function exportSettlementChecklistImage() {
     const records = settlementRecords();
     if (!records.length || records.some((record) => !record.settled)) {
       notify("还有未结账记录，暂不能生成结款对账单", "error");
       return;
     }
     const period = checklistPeriod(records);
-    exportChecklistImage(records, {
-      title:`${period}结款对账单`,
-      period,
-      seller:state.settlementScope.seller || "全部送拍人",
-      filePrefix:"结款对账单",
-      auditLabel:"导出结款对账单",
-      successMessage:`${period}结款对账单已下载`,
-      failureMessage:"结款对账单生成失败",
+    const sorted = [...records].sort((left, right) => String(left.sellerWechat || "").localeCompare(String(right.sellerWechat || ""), "zh-CN") || Number(left.lot) - Number(right.lot));
+    const width = 1960;
+    const rowHeight = 64;
+    const headerHeight = 224;
+    const footerHeight = 104;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = headerHeight + rowHeight * (sorted.length + 1) + footerHeight;
+    const context = canvas.getContext("2d");
+    context.fillStyle = "#f7f5ef";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "#102735";
+    context.fillRect(0, 0, width, 112);
+    context.fillStyle = "#f7ead0";
+    context.font = 'bold 34px "Microsoft YaHei", sans-serif';
+    context.fillText(`${period}结款对账单`, 48, 68);
+    drawChecklistLogo(context, width, await loadChecklistLogo());
+    context.fillStyle = "#314b57";
+    context.font = '20px "Microsoft YaHei", sans-serif';
+    context.fillText(`拍卖期数：${period}　送拍人：${state.settlementScope.seller || "全部送拍人"}`, 48, 152);
+    context.font = 'bold 22px "Microsoft YaHei", sans-serif';
+    context.fillText(`${new Set(sorted.map((record) => record.sellerWechat || "待补送拍人")).size} 位送拍人　${sorted.length} 件结款拍品`, 48, 196);
+    const columns = [
+      {label:"送拍卖人",x:48,width:200},
+      {label:"送拍项目（拍品标题）",x:248,width:560},
+      {label:"上拍时间",x:808,width:190},
+      {label:"拍场 Lot 号",x:998,width:230},
+      {label:"拍出价格 / 处理",x:1228,width:250},
+      {label:"送拍佣金",x:1478,width:210},
+      {label:"结款金额",x:1688,width:220},
+    ];
+    context.fillStyle = "#e8e5dd";
+    context.fillRect(36, headerHeight, width - 72, rowHeight);
+    context.fillStyle = "#52636c";
+    context.font = 'bold 18px "Microsoft YaHei", sans-serif';
+    columns.forEach((column) => context.fillText(column.label, column.x + 10, headerHeight + 40));
+    const truncate = (value, max) => String(value || "").length > max ? `${String(value).slice(0, max - 1)}…` : String(value || "");
+    sorted.forEach((record, index) => {
+      const y = headerHeight + rowHeight * (index + 1);
+      context.fillStyle = index % 2 ? "#f1efe9" : "#fffefa";
+      context.fillRect(36, y, width - 72, rowHeight);
+      context.fillStyle = "#213944";
+      context.font = '17px "Microsoft YaHei", sans-serif';
+      const promotion = String(record.promotion || (isReturnRecord(record) ? "拖回处理费" : "送拍佣金")).split(" · ")[0];
+      const values = [
+        truncate(record.sellerWechat || "待补送拍人", 11),
+        truncate(record.itemName, 32),
+        datePart(record.auctionAt || record.platformOrderDate) || "日期待补",
+        truncate(settlementAuctionLot(record), 15),
+        truncate(settlementPriceOrDisposition(record), 16),
+        truncate(`${currency.format(record.commissionAmount || 0)} · ${promotion}`, 15),
+        currency.format(record.settlementAmount || 0),
+      ];
+      values.forEach((value, columnIndex) => context.fillText(String(value), columns[columnIndex].x + 10, y + 40));
     });
+    const totalSettlement = sorted.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0);
+    const footerY = canvas.height - 38;
+    context.fillStyle = "#7b898f";
+    context.font = '14px "Microsoft YaHei", sans-serif';
+    context.fillText(`生成时间：${new Date().toLocaleString("zh-CN")} · 送拍运营工作台`, 48, footerY);
+    context.fillStyle = "#143f35";
+    context.font = 'bold 30px "Microsoft YaHei", sans-serif';
+    const totalText = `结款总金额：${currency.format(totalSettlement)}`;
+    context.fillText(totalText, width - 48 - context.measureText(totalText).width, footerY);
+    canvas.toBlob((blob) => {
+      if (!blob) return notify("结款对账单生成失败", "error");
+      const safePeriod = period.replace(/[^\w\u4e00-\u9fa5-]/g, "");
+      downloadBlob(blob, `结款对账单_${safePeriod}_${new Date().toISOString().slice(0,10)}.png`, "image/png");
+      audit("导出结款对账单", `${sorted.length} 件拍品 · ${totalText}`);
+      notify(`${period}结款对账单已下载`);
+    }, "image/png");
   }
 
   $("#export-tracker").addEventListener("click", exportTracker);

@@ -118,9 +118,22 @@ test("checklist images include consignor phones, branding, and settlement reconc
   assert.match(html, /id="export-settlement-checklist-image"[^>]*>结款对账</);
   assert.match(app, /label:"送拍人手机号"/);
   assert.match(app, /record\.sellerPhone \|\| "手机号待补"/);
-  assert.match(app, /title:`\$\{period\}结款对账单`/);
+  assert.match(app, /fillText\(`\$\{period\}结款对账单`/);
   assert.match(app, /zhenzhenpu-logo\.jpg/);
   assert.match(serviceWorker, /zhenzhenpu-logo\.jpg/);
+});
+
+test("settlement reconciliation image exposes financial columns and payable total", () => {
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  assert.match(app, /label:"送拍卖人"/);
+  assert.match(app, /label:"送拍项目（拍品标题）"/);
+  assert.match(app, /label:"上拍时间"/);
+  assert.match(app, /label:"拍场 Lot 号"/);
+  assert.match(app, /label:"拍出价格 \/ 处理"/);
+  assert.match(app, /label:"送拍佣金"/);
+  assert.match(app, /label:"结款金额"/);
+  assert.match(app, /settlementPriceOrDisposition/);
+  assert.match(app, /结款总金额：\$\{currency\.format\(totalSettlement\)\}/);
 });
 
 test("dashboard exposes wait-pay sync and a dedicated reauction library", () => {
