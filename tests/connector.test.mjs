@@ -154,6 +154,19 @@ test("birthday reconciliation marks consignors and local directory keeps contact
   assert.match(styles, /\.customer-directory-layout/);
 });
 
+test("settlement actions are gated until period unpaid and return work is complete", () => {
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const workflow = fs.readFileSync(path.join(root, "workflow-core.js"), "utf8");
+  assert.match(html, /id="settlement-blockers"/);
+  assert.match(app, /function requireSettlementReady/);
+  assert.match(app, /先处理本期全部待付款和拖回事项/);
+  assert.match(app, /if \(!requireSettlementReady\(\)\) return/);
+  assert.match(workflow, /function settlementReadiness/);
+  assert.match(workflow, /"拖回\/发回", "拖回\/再拍", "寄存"/);
+  assert.match(workflow, /"拆单待付款"/);
+});
+
 test("dashboard exposes wait-pay sync and a dedicated reauction library", () => {
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");

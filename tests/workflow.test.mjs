@@ -69,6 +69,32 @@ test("unpaid return remains a return after choosing any later disposition", () =
   });
 });
 
+test("period settlement waits for unpaid and unresolved returns", () => {
+  const records = [
+    {id:"paid",lot:1,itemName:"已付款",projectName:"第76期",finalOutcome:"成交",finalPrice:100,paymentStatus:"已付款"},
+    {id:"unpaid",lot:2,itemName:"待付款",projectName:"第76期",finalOutcome:"成交",finalPrice:200,paymentStatus:"待付款"},
+    {id:"waiting",lot:3,itemName:"拖回待处理",projectName:"第76期",finalOutcome:"拖回",finalPrice:0,returnDisposition:"拖回/等待"},
+    {id:"other",lot:4,itemName:"其他期",projectName:"第75期",finalOutcome:"成交",finalPrice:300,paymentStatus:"待付款"},
+  ];
+  const gate = workflow.settlementReadiness(records, "第76期");
+  assert.equal(gate.ready, false);
+  assert.equal(gate.pendingPayment, 1);
+  assert.equal(gate.pendingReturn, 1);
+  assert.deepEqual(gate.blockers.map((item) => [item.lot,item.reason]), [[2,"待付款"],[3,"拖回/等待"]]);
+});
+
+test("resolved returns and paid split orders can settle", () => {
+  const records = [
+    {id:"sent",lot:1,itemName:"拖回发回",projectName:"第76期",finalOutcome:"拖回",finalPrice:500,paymentStatus:"待付款",unpaidReturn:true,returnDisposition:"拖回/发回"},
+    {id:"relist",lot:2,itemName:"拖回再拍",projectName:"第76期",finalOutcome:"拖回",finalPrice:600,paymentStatus:"待付款",unpaidReturn:true,returnDisposition:"拖回/再拍"},
+    {id:"stored",lot:3,itemName:"拖回寄存",projectName:"第76期",finalOutcome:"拖回",finalPrice:700,paymentStatus:"待付款",unpaidReturn:true,returnDisposition:"寄存"},
+    {id:"split",lot:4,itemName:"已付款拆单",projectName:"第76期",finalOutcome:"成交",finalPrice:800,paymentStatus:"已付款",returnDisposition:"拆单"},
+  ];
+  assert.equal(workflow.settlementReadiness(records, "76").ready, true);
+  assert.equal(workflow.settlementReadiness(records, "").ready, false);
+  assert.equal(workflow.settlementBlocker({...records[3],paymentStatus:"待付款"}), "拆单待付款");
+});
+
 test("shipping bucket exposes shipped and unshipped filters", () => {
   assert.equal(workflow.shippingBucket({outboundTrackingNumber:"SF123"}), "shipped");
   assert.equal(workflow.shippingBucket({mxiqiShippingStatus:"filled"}), "shipped");

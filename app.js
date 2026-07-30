@@ -621,6 +621,27 @@
     });
   }
 
+  function settlementGate(period = state.filters.auction, records = state.records) {
+    return MxiqiWorkflow.settlementReadiness(records, period);
+  }
+
+  function settlementGateMessage(gate) {
+    if (!gate.period) return "请先在拍卖期数中选择具体期数，再进行结账";
+    if (gate.ready) return `${gate.period} 的待付款和拖回事项已处理完成`;
+    const summary = [
+      gate.pendingPayment ? `${gate.pendingPayment} 件待付款` : "",
+      gate.pendingReturn ? `${gate.pendingReturn} 件拖回待处理` : "",
+    ].filter(Boolean).join("、");
+    const lots = gate.blockers.slice(0, 8).map((item) => `Lot ${item.lot || "待补"}（${item.reason}）`).join("、");
+    return `${gate.period} 暂不能结账：${summary}${lots ? `；${lots}` : ""}${gate.blockers.length > 8 ? ` 等 ${gate.blockers.length} 件` : ""}`;
+  }
+
+  function requireSettlementReady(period = state.filters.auction, records = state.records) {
+    const gate = settlementGate(period, records);
+    if (!gate.ready) notify(settlementGateMessage(gate), "error");
+    return gate.ready;
+  }
+
   function visibleRecords() {
     const query = state.query.trim().toLowerCase();
     return state.records.filter((record) => {
@@ -710,6 +731,7 @@
     const sold = settlementRecords();
     const settled = sold.filter((record) => record.settled);
     const remaining = sold.length - settled.length;
+    const gate = settlementGate();
     const percent = sold.length ? Math.round(settled.length * 100 / sold.length) : 0;
     $("#settlement-summary").hidden = state.stage !== "settlement";
     $("#settled-count").textContent = settled.length;
@@ -720,11 +742,16 @@
     $("#settlement-payable").textContent = currency.format(sold.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0));
     const unpaidReturns = sold.filter((record) => record.unpaidReturn);
     $("#settlement-unpaid-return").textContent = `${unpaidReturns.length} 笔 / ${currency.format(unpaidReturns.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0))}`;
-    $("#settlement-hint").textContent = remaining ? `还有 ${remaining} 条待确认，全部结账后开放结算表导出。` : "本批成交记录已全部结账，可以导出结算表。";
-    $("#export-settlement").disabled = !(sold.length && remaining === 0);
-    $("#export-settlement").textContent = remaining ? `还有 ${remaining} 条未结账` : "导出本批结算表";
-    $("#export-settlement-image").disabled = !(sold.length && remaining === 0);
-    $("#export-settlement-checklist-image").disabled = !(sold.length && remaining === 0);
+    const blockerBox = $("#settlement-blockers");
+    blockerBox.hidden = gate.ready;
+    blockerBox.innerHTML = gate.ready ? "" : `<b>${esc(settlementGateMessage(gate))}</b>${gate.blockers.map((item) => `<span>Lot ${esc(item.lot || "待补")} · ${esc(item.reason)}</span>`).join("")}`;
+    $("#settlement-hint").textContent = !gate.ready
+      ? "先处理本期全部待付款和拖回事项，处理完成后才开放结账。"
+      : remaining ? `前置事项已完成，还有 ${remaining} 条待确认结账。` : "本期前置事项及结账均已完成，可以导出结算表。";
+    $("#export-settlement").disabled = !(gate.ready && sold.length && remaining === 0);
+    $("#export-settlement").textContent = !gate.ready ? "前置事项未处理完" : remaining ? `还有 ${remaining} 条未结账` : "导出本期结算表";
+    $("#export-settlement-image").disabled = !(gate.ready && sold.length && remaining === 0);
+    $("#export-settlement-checklist-image").disabled = !(gate.ready && sold.length && remaining === 0);
     renderSellerSummary();
   }
 
@@ -901,6 +928,7 @@
   }
 
   function renderSettlementItemRow(record) {
+    const gateReady = settlementGate().ready;
     return `<tr class="settlement-child-row ${state.selected.has(record.id) ? "selected-row" : ""}">
       <td class="select-column"><input type="checkbox" data-select="${esc(record.id)}" ${state.selected.has(record.id) ? "checked" : ""}></td>
       <td><small>同上</small></td>
@@ -911,7 +939,7 @@
       <td><b>${currency.format(record.commissionAmount || 0)}</b></td>
       <td><b class="money">${currency.format(record.settlementAmount || 0)}</b></td>
       <td>${record.settled ? '<span class="chip success">已结账</span>' : '<span class="chip neutral">未结账</span>'}</td>
-      <td><div class="row-actions"><button data-action="edit" data-id="${esc(record.id)}">编辑</button><button data-action="toggle-settle" data-id="${esc(record.id)}">${record.settled ? "撤销" : "结账"}</button></div></td>
+      <td><div class="row-actions"><button data-action="edit" data-id="${esc(record.id)}">编辑</button><button data-action="toggle-settle" data-id="${esc(record.id)}" ${!record.settled && !gateReady ? "disabled" : ""}>${record.settled ? "撤销" : "结账"}</button></div></td>
     </tr>`;
   }
 
@@ -923,6 +951,7 @@
     const commission = records.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0);
     const payable = records.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0);
     const settledCount = records.filter((record) => record.settled).length;
+    const gateReady = settlementGate().ready;
     const lots = records.map((record) => record.lot).join("、");
     const periods = [...new Set(records.map(auctionPeriod).filter(Boolean))].join("、") || "期数待补";
     const dates = [...new Set(records.map((record) => datePart(record.auctionAt || record.platformOrderDate)).filter(Boolean))].join("、") || "时间待补";
@@ -937,7 +966,7 @@
       <td><b>${currency.format(commission)}</b></td>
       <td><b class="money">${currency.format(payable)}</b></td>
       <td><span class="settlement-queue-progress">${settledCount}/${records.length}</span><small>${settledCount === records.length ? "全部已结账" : `${records.length - settledCount} 件待结账`}</small></td>
-      <td><div class="row-actions"><button data-settlement-toggle="${esc(group.key)}">${expanded ? "收起" : "展开"}</button><button data-settlement-settle="${esc(group.key)}" ${settledCount === records.length ? "disabled" : ""}>整组结账</button></div></td>
+      <td><div class="row-actions"><button data-settlement-toggle="${esc(group.key)}">${expanded ? "收起" : "展开"}</button><button data-settlement-settle="${esc(group.key)}" ${settledCount === records.length || !gateReady ? "disabled" : ""}>整组结账</button></div></td>
     </tr>${children}`;
   }
 
@@ -985,6 +1014,7 @@
     $("#batch-shipping").hidden = !selectedShippingCount || ["settlement","reauction","preauction"].includes(state.stage);
     $("#batch-delete").hidden = !selectedCount || state.stage === "preauction";
     $("#batch-settle").hidden = !selectedCount || state.stage !== "settlement";
+    $("#batch-settle").disabled = state.stage === "settlement" && !settlementGate().ready;
     $("#clear-selection").hidden = !selectedCount;
     $("#selection-count").textContent = `已选 ${selectedCount} 条`;
     renderShippingSummary();
@@ -2056,6 +2086,7 @@
     }
     const settlementSettle = event.target.closest("[data-settlement-settle]");
     if (settlementSettle) {
+      if (!requireSettlementReady()) return;
       const group = settlementGroups(visibleRecords()).find((item) => item.key === settlementSettle.dataset.settlementSettle);
       let count = 0;
       group?.records.filter((record) => !record.settled).forEach((record) => {
@@ -2121,6 +2152,7 @@
         record.settledAt = "";
         audit("撤销结账", `Lot ${record.lot}`);
       } else {
+        if (!requireSettlementReady()) return;
         recalculateRecord(record, true);
         record.settled = true;
         record.settledAt = new Date().toISOString();
@@ -2167,6 +2199,7 @@
     notify(`已删除 ${ids.length} 条拍品`);
   });
   $("#batch-settle").addEventListener("click", () => {
+    if (!requireSettlementReady()) return;
     let count = 0;
     state.records.filter((item) => state.selected.has(item.id) && isSettlementEligible(item) && !item.settled).forEach((item) => {
       recalculateRecord(item, true);
@@ -2431,6 +2464,12 @@
     if (duplicate) {
       notify(`${auctionPeriod(record)} 的 Lot ${record.lot} 已存在，请直接编辑该记录`, "error");
       return;
+    }
+    if (record.settled && !existing.settled) {
+      const candidateRecords = state.records.some((item) => item.id === record.id)
+        ? state.records.map((item) => item.id === record.id ? record : item)
+        : [...state.records, record];
+      if (!requireSettlementReady(auctionPeriod(record), candidateRecords)) return;
     }
     recalculateRecord(record, true);
     if (record.settled) record.settledAt = existing.settledAt || new Date().toISOString();
@@ -2923,6 +2962,7 @@
   }
 
   async function exportSettlement() {
+    if (!requireSettlementReady()) return;
     const sold = settlementRecords();
     if (!sold.length || sold.some((record) => !record.settled)) {
       notify("还有未结账记录，暂不能导出本批结算表", "error");
@@ -2993,6 +3033,7 @@
   }
 
   function exportSettlementImage() {
+    if (!requireSettlementReady()) return;
     const sold = settlementRecords();
     if (!sold.length || sold.some((record) => !record.settled)) {
       notify("还有未结账记录，暂不能导出结算明细图片", "error");
@@ -3067,7 +3108,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = `./zhenzhenpu-logo.jpg?v=25`;
+      image.src = `./zhenzhenpu-logo.jpg?v=26`;
     });
     return checklistLogoPromise;
   }
@@ -3177,6 +3218,7 @@
   }
 
   async function exportSettlementChecklistImage() {
+    if (!requireSettlementReady()) return;
     const records = settlementRecords();
     if (!records.length || records.some((record) => !record.settled)) {
       notify("还有未结账记录，暂不能生成结款对账单", "error");

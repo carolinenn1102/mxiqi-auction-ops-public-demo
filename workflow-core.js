@@ -116,6 +116,42 @@
     return isReturnRecord(record) || settlementGross(record) > 0;
   }
 
+  function settlementBlocker(record = {}) {
+    const disposition = normalizeReturnDisposition(record.returnDisposition);
+    const returnLike = record.unpaidReturn === true
+      || record.finalOutcome === "拖回"
+      || /^拖回\//.test(String(record.returnDisposition || ""));
+    if (returnLike) {
+      if (["拖回/发回", "拖回/再拍", "寄存"].includes(disposition)) return "";
+      return disposition === "拖回/等待" ? "拖回/等待" : "拖回待选择处理方式";
+    }
+    if (record.paymentStatus === "待付款" && Number(record.finalPrice) > 0) {
+      return disposition === "拆单" ? "拆单待付款" : "待付款";
+    }
+    return "";
+  }
+
+  function settlementReadiness(records = [], period = "") {
+    const normalizedPeriod = period ? auctionPeriod({auctionPeriodOverride:period}) : "";
+    const validPeriod = normalizedPeriod && normalizedPeriod !== "期数待补";
+    const scoped = validPeriod
+      ? records.filter((record) => auctionPeriod(record) === normalizedPeriod)
+      : [];
+    const blockers = scoped.map((record) => ({
+      id:record.id || "",
+      lot:Number(record.lot) || 0,
+      itemName:record.itemName || "",
+      reason:settlementBlocker(record),
+    })).filter((item) => item.reason);
+    return {
+      ready:Boolean(validPeriod) && blockers.length === 0,
+      period:validPeriod ? normalizedPeriod : "",
+      blockers,
+      pendingPayment:blockers.filter((item) => ["待付款", "拆单待付款"].includes(item.reason)).length,
+      pendingReturn:blockers.filter((item) => item.reason.startsWith("拖回")).length,
+    };
+  }
+
   function shippingBucket(record = {}) {
     return record.mxiqiShippingStatus === "filled" || Boolean(record.outboundTrackingNumber)
       ? "shipped"
@@ -271,5 +307,5 @@
     return {records:next,departed};
   }
 
-  return {isReturnRecord,auctionPeriod,normalizeReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
+  return {isReturnRecord,auctionPeriod,normalizeReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
 });
