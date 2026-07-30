@@ -5,7 +5,12 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  function isStorageRecord(record = {}) {
+    return normalizeReturnDisposition(record.returnDisposition) === "寄存";
+  }
+
   function isReturnRecord(record = {}) {
+    if (isStorageRecord(record)) return false;
     return record.unpaidReturn === true || record.finalOutcome === "拖回" || /^拖回\//.test(String(record.returnDisposition || ""));
   }
 
@@ -109,10 +114,12 @@
   }
 
   function settlementGross(record = {}) {
+    if (isStorageRecord(record)) return 0;
     return isReturnRecord(record) ? 0 : Math.max(0, Number(record.finalPrice) || 0);
   }
 
   function isSettlementEligible(record = {}) {
+    if (isStorageRecord(record)) return false;
     return isReturnRecord(record) || settlementGross(record) > 0;
   }
 
@@ -307,5 +314,5 @@
     return {records:next,departed};
   }
 
-  return {isReturnRecord,auctionPeriod,normalizeReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
+  return {isStorageRecord,isReturnRecord,auctionPeriod,normalizeReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
 });

@@ -16,6 +16,8 @@ test("dashboard exposes pending-auction and storage states", () => {
   assert.match(app, /function syncStoredAssetsFromRecords\(/);
   assert.match(app, /recordStorageId/);
   assert.match(app, /record\.returnDisposition !== "寄存"/);
+  assert.match(app, /if \(isStorageRecord\(record\)\)[\s\S]*?record\.commissionAmount = 0;[\s\S]*?record\.settlementAmount = 0;/);
+  assert.match(app, /!record\.settled \|\| isStorageRecord\(record\)/);
 });
 
 test("tracker import preserves phone aliases and special outcomes", () => {

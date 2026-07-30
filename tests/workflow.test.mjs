@@ -64,9 +64,14 @@ test("period settlement matching handles unpaid first and keeps the fixed return
 });
 
 test("unpaid return remains a return after choosing any later disposition", () => {
-  ["拖回/发回","拖回/再拍","拖回/等待","寄存"].forEach((returnDisposition) => {
+  ["拖回/发回","拖回/再拍","拖回/等待"].forEach((returnDisposition) => {
     assert.equal(workflow.isReturnRecord({unpaidReturn:true,returnDisposition,finalOutcome:"成交",finalPrice:100}), true);
   });
+  const stored = {unpaidReturn:true,returnDisposition:"寄存",finalOutcome:"待拍",finalPrice:100};
+  assert.equal(workflow.isStorageRecord(stored), true);
+  assert.equal(workflow.isReturnRecord(stored), false);
+  assert.equal(workflow.settlementGross(stored), 0);
+  assert.equal(workflow.isSettlementEligible(stored), false);
 });
 
 test("period settlement waits for unpaid and unresolved returns", () => {

@@ -417,6 +417,10 @@
     return MxiqiWorkflow.isReturnRecord(record);
   }
 
+  function isStorageRecord(record) {
+    return MxiqiWorkflow.isStorageRecord(record);
+  }
+
   function auctionPeriod(record) {
     return MxiqiWorkflow.auctionPeriod(record);
   }
@@ -441,6 +445,15 @@
 
   function recalculateRecord(record, force = false) {
     const gross = settlementGross(record);
+    if (isStorageRecord(record)) {
+      record.commissionAmount = 0;
+      record.settlementAmount = 0;
+      record.profit = 0;
+      record.promotion = "";
+      record.settled = false;
+      record.settledAt = "";
+      return record;
+    }
     if (record.settled && !force) return record;
     if (!isSettlementEligible(record)) {
       record.commissionAmount = 0;
@@ -581,7 +594,7 @@
 
   function promotionBadges(record) {
     const badges = [];
-    if (record.unpaidReturn) badges.push(`<span class="chip neutral">未付款拖回扣 ${currency.format(state.settings.returnHandlingFee || 0)}</span>`);
+    if (record.unpaidReturn && !isStorageRecord(record)) badges.push(`<span class="chip neutral">未付款拖回扣 ${currency.format(state.settings.returnHandlingFee || 0)}</span>`);
     else if (isReturnRecord(record)) badges.push(`<span class="chip neutral">拖回扣 ${currency.format(state.settings.returnHandlingFee || 0)}</span>`);
     const birthday = birthdayMonthFor(record);
     if (birthday && birthday === auctionMonth(record)) badges.push('<span class="chip birthday">生日月</span>');
@@ -2795,7 +2808,7 @@
       returnHandlingFee: Math.max(0, Number(data.get("returnHandlingFee") || 0)),
       sfThreshold: Math.max(0, Number(data.get("sfThreshold") || 0)),
     };
-    state.records.filter((record) => !record.settled).forEach((record) => recalculateRecord(record));
+    state.records.filter((record) => !record.settled || isStorageRecord(record)).forEach((record) => recalculateRecord(record, isStorageRecord(record)));
     audit("更新佣金规则", `默认 ${formatRule(state.settings.defaultCommissionType, state.settings.defaultCommissionValue)}；低价 ${currency.format(state.settings.lowPriceFee)}；生日月 ${formatRule(state.settings.birthdayCommissionType, state.settings.birthdayCommissionValue)}`);
     save();
     settingsDialog.close();
@@ -3108,7 +3121,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = `./zhenzhenpu-logo.jpg?v=26`;
+      image.src = `./zhenzhenpu-logo.jpg?v=27`;
     });
     return checklistLogoPromise;
   }
@@ -3308,7 +3321,7 @@
   $("#export-settlement-checklist-image").addEventListener("click", exportSettlementChecklistImage);
   $("#export-preauction-image").addEventListener("click", exportPreauctionImage);
 
-  if (localStorage.getItem(MIGRATION_KEY) !== "9") {
+  if (localStorage.getItem(MIGRATION_KEY) !== "10") {
     if (Number(state.settings.birthdayCommissionValue) === 5 && state.settings.birthdayLabel === "生日月优惠") {
       state.settings.birthdayCommissionValue = -2;
       state.settings.birthdayLabel = "生日月返佣";
@@ -3354,17 +3367,18 @@
       record.addressStatus ||= "";
       record.mxiqiShippingStatus ||= "";
     });
-    state.records.filter((record) => !record.settled).forEach((record) => recalculateRecord(record));
+    state.records.filter((record) => !record.settled || isStorageRecord(record)).forEach((record) => recalculateRecord(record, isStorageRecord(record)));
     const demoPhones = {d101:"13900001001",d102:"13900001002",d103:"13900001003",d104:"13900001004"};
     state.records.forEach((record) => {
       record.sellerPhone ||= state.customers[record.sellerWechat]?.phone || demoPhones[record.id] || "";
       if (record.sellerWechat && record.sellerPhone) state.customers[record.sellerWechat] = {...(state.customers[record.sellerWechat] || {}), phone:record.sellerPhone};
     });
     state.assets = Array.isArray(state.assets) ? state.assets.map(normalizeConsignmentAsset) : [];
+    syncStoredAssetsFromRecords();
     state.assets = MxiqiAssets.rematchAssets(state.assets, state.records);
     state.connection = {...defaultConnection, ...state.connection};
     if (!["disconnected","demo_connected","connected"].includes(state.connection.status)) state.connection = clone(defaultConnection);
-    localStorage.setItem(MIGRATION_KEY, "9");
+    localStorage.setItem(MIGRATION_KEY, "10");
     save();
   }
 

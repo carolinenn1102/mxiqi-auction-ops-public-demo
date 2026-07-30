@@ -51,11 +51,18 @@ test("return handling fee is charged per lot", () => {
 });
 
 test("an unpaid return stays at minus eight in the settlement bill after later handling", () => {
-  ["拖回/发回","拖回/再拍","拖回/等待","寄存"].forEach((returnDisposition) => {
+  ["拖回/发回","拖回/再拍","拖回/等待"].forEach((returnDisposition) => {
     const record = {unpaidReturn:true,returnDisposition,finalPrice:49288};
     const gross = workflow.settlementGross(record);
     const plan = commission.calculate({gross,isReturn:workflow.isReturnRecord(record),settings});
     assert.equal(plan.amount, 8);
     assert.equal(gross - plan.amount, -8);
   });
+});
+
+test("stored items bypass return commission and settlement", () => {
+  const record = {unpaidReturn:true,returnDisposition:"寄存",finalOutcome:"待拍",finalPrice:49288};
+  assert.equal(workflow.isReturnRecord(record), false);
+  assert.equal(workflow.settlementGross(record), 0);
+  assert.equal(workflow.isSettlementEligible(record), false);
 });
