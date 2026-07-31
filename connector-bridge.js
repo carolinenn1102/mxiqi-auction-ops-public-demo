@@ -54,5 +54,8 @@
       type: "syncAuctionDeals",
       period,
     }, 180_000),
+    logisticsPing: () => send({type:"logisticsPing"}, 20_000),
+    openCarrierPortal: ({carrier}) => send({type:"openCarrierPortal",carrier}, 20_000),
+    createLogisticsOrder: ({request}) => send({type:"createLogisticsOrder",request}, 120_000),
   });
 })();

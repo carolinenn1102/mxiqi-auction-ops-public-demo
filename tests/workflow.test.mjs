@@ -63,6 +63,34 @@ test("period settlement matching handles unpaid first and keeps the fixed return
   assert.equal(result.records.find((item) => item.id === "p76").unpaidReturn, undefined);
 });
 
+test("settlement sync never replaces an existing consignor with blank platform fields", () => {
+  const records = [{
+    id:"p76-lot21",lot:21,itemName:"拍品",projectName:"第76期",
+    sellerWechat:"Ryan-",sellerPhone:"17751263710",birthdayMonth:7,contactedAt:"2026-07-20",
+  }];
+  const deals = [{
+    lot:21,itemName:"拍品",auctionPeriodOverride:"第76期",finalPrice:1160,
+    finalOutcome:"成交",paymentStatus:"已付款",sellerWechat:"",sellerPhone:"",birthdayMonth:0,
+  }];
+  const result = workflow.applyAuctionSettlementResults(records,deals,[],"第76期","2026-07-30T12:00:00.000Z");
+  const record = result.records[0];
+  assert.equal(record.sellerWechat, "Ryan-");
+  assert.equal(record.sellerPhone, "17751263710");
+  assert.equal(record.birthdayMonth, 7);
+  assert.equal(record.contactedAt, "2026-07-20");
+  assert.equal(record.finalPrice, 1160);
+});
+
+test("missing consignors can be restored from local history by period and Lot", () => {
+  const current = [{id:"now",lot:21,itemName:"拍品",projectName:"第76期",sellerWechat:"",sellerPhone:""}];
+  const history = [{records:[{id:"old",lot:21,itemName:"拍品旧标题",projectName:"第76期",sellerWechat:"Ryan-",sellerPhone:"17751263710"}]}];
+  const restored = workflow.restoreConsignorIdentities(current,history,{"Ryan-":{birthdayMonth:7}});
+  assert.equal(restored.restored, 1);
+  assert.equal(restored.records[0].sellerWechat, "Ryan-");
+  assert.equal(restored.records[0].sellerPhone, "17751263710");
+  assert.equal(restored.records[0].birthdayMonth, 7);
+});
+
 test("unpaid return remains a return after choosing any later disposition", () => {
   ["拖回/发回","拖回/再拍","拖回/等待"].forEach((returnDisposition) => {
     assert.equal(workflow.isReturnRecord({unpaidReturn:true,returnDisposition,finalOutcome:"成交",finalPrice:100}), true);

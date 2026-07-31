@@ -84,8 +84,16 @@ test("connector supports the Mxiqi wait-pay scope and reports its version", () =
   assert.match(content, /"waitconfirm","waitpay"/);
   assert.match(content, /org\.order\.list\/\$\{safeScope\}/);
   assert.match(background, /chrome\.runtime\.getManifest\(\)\.version/);
-  assert.equal(manifest.version, "1.6.0");
-  assert.match(background, /capabilities:\s*\["login", "syncOrders", "syncOrdersByNumbers", "syncAuctionDeals"\]/);
+  assert.equal(manifest.version, "1.8.0");
+  assert.match(background, /capabilities:\s*\["login", "syncOrders", "syncOrdersByNumbers", "syncAuctionDeals", "openCarrierPortal"\]/);
+});
+
+test("auction settlement sync checks every open Mxiqi tab", () => {
+  const background = fs.readFileSync(path.join(extensionRoot, "background.js"), "utf8");
+  const content = fs.readFileSync(path.join(extensionRoot, "content.js"), "utf8");
+  assert.match(background, /sendToAllMxiqiTabs/);
+  assert.match(background, /for \(let tab of tabs\)/);
+  assert.match(content, /auction\\\.info\\\.entry\(\?:\[\/\?\]\|\$\)/);
 });
 
 test("connector parses auction deal rows and exposes period settlement sync", () => {

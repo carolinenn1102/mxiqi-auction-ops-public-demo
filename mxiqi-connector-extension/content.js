@@ -97,7 +97,7 @@
   async function scrapeAuctionDeals({period = ""} = {}) {
     const normalizedPeriod = MxiqiPageParser.auctionPeriod(period) || String(period || "").trim();
     if (!normalizedPeriod) throw new Error("请先在工作台选择拍卖期数");
-    let targetUrl = /\/auction\.info\.entry\//.test(location.pathname) ? location.href : "";
+    let targetUrl = /auction\.info\.entry(?:[/?]|$)/.test(`${location.pathname}${location.search}`) ? location.href : "";
     if (!targetUrl) targetUrl = findAuctionResultLink(document, normalizedPeriod)?.href || "";
     if (!targetUrl) {
       const home = await fetchDocument("/org.home");

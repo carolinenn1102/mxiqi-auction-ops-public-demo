@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "麦稀奇采集助手",
-  "version": "1.6.0",
-  "description": "从送拍业务工作台安全登录麦稀奇，并将授权订单同步到本机。",
+  "version": "1.8.0",
+  "description": "从送拍业务工作台安全登录麦稀奇、同步授权订单，并承接真实物流配置。",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA38aIJIhQpt/TcJfqjoC2ZFBtR7x2a8BAAEqymLLPoN42osro7TRSFJEfD7FBM2zkIbdIGPrzn3vBsBqsnojWCcMc7FQpBK3yRmu+GswGAv1VZqZSGIk4Do9jEfp8+DrFvVnP5SfGyc8UCLRAXzSKnmDcfLj6wBpMLL82hiSGIHZV+wB93EqDbQITcG5Z+0fDif3S5LTvYKpd8cS7c5DO79ADDJUWUKZ/cbVcp/i/HF0OGNowpsIiv/wqCErMkP35cwZB/MRqPBi8Mi8YwVDXUvG3TO0uFtP3iQyAccXPD7/8Gd+v0FQEvtN+Ek/2gkhCNaEeYXkDPkVpSz8PChn7QQIDAQAB",
-  "permissions": ["tabs"],
+  "permissions": ["tabs", "storage"],
   "host_permissions": ["https://www.mxiqi.com/*"],
   "background": {
     "service_worker": "background.js"

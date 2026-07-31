@@ -204,6 +204,62 @@
     return `${normalizedPeriod}:${lot}`;
   }
 
+  function hasConsignorName(value) {
+    const name = String(value || "").trim();
+    return Boolean(name && !["待补送拍人", "手机号用户"].includes(name));
+  }
+
+  function mergePreservingConsignor(existing = {}, incoming = {}) {
+    const merged = {...existing, ...incoming};
+    if (!hasConsignorName(incoming.sellerWechat) && hasConsignorName(existing.sellerWechat)) {
+      merged.sellerWechat = existing.sellerWechat;
+    }
+    if (!String(incoming.sellerPhone || "").trim() && String(existing.sellerPhone || "").trim()) {
+      merged.sellerPhone = existing.sellerPhone;
+    }
+    if (!Number(incoming.birthdayMonth || 0) && Number(existing.birthdayMonth || 0)) {
+      merged.birthdayMonth = Number(existing.birthdayMonth);
+    }
+    if (!String(incoming.contactedAt || "").trim() && String(existing.contactedAt || "").trim()) {
+      merged.contactedAt = existing.contactedAt;
+    }
+    return merged;
+  }
+
+  function restoreConsignorIdentities(records = [], snapshots = [], customers = {}) {
+    const identities = new Map();
+    snapshots.forEach((snapshot) => {
+      const snapshotRecords = Array.isArray(snapshot) ? snapshot : snapshot?.records;
+      if (!Array.isArray(snapshotRecords)) return;
+      snapshotRecords.forEach((record) => {
+        const key = settlementMatchKey(record);
+        if (!key || identities.has(key) || !hasConsignorName(record.sellerWechat)) return;
+        identities.set(key, {
+          sellerWechat:String(record.sellerWechat).trim(),
+          sellerPhone:String(record.sellerPhone || "").trim(),
+          birthdayMonth:Number(record.birthdayMonth || 0),
+          contactedAt:String(record.contactedAt || ""),
+        });
+      });
+    });
+    let restored = 0;
+    const next = records.map((record) => {
+      let updated = {...record};
+      const historical = identities.get(settlementMatchKey(record));
+      if (!hasConsignorName(updated.sellerWechat) && historical) {
+        updated = mergePreservingConsignor(updated, historical);
+        restored += 1;
+      }
+      if (hasConsignorName(updated.sellerWechat)) {
+        const profile = customers?.[updated.sellerWechat] || {};
+        if (!String(updated.sellerPhone || "").trim() && String(profile.phone || "").trim()) updated.sellerPhone = String(profile.phone).trim();
+        if (!Number(updated.birthdayMonth || 0) && Number(profile.birthdayMonth || 0)) updated.birthdayMonth = Number(profile.birthdayMonth);
+      }
+      return updated;
+    });
+    return {records:next,restored};
+  }
+
   function applyAuctionSettlementResults(records = [], deals = [], pendingOrders = [], period = "", timestamp = new Date().toISOString()) {
     const selectedPeriod = auctionPeriod({auctionPeriodOverride:period});
     if (!period || selectedPeriod === "期数待补") throw new Error("请先选择要结算的拍卖期数");
@@ -232,8 +288,7 @@
       const finalPrice = Math.max(0, Number(incoming.finalPrice ?? existing.finalPrice) || 0);
       const platformOutcome = incoming.finalOutcome || (finalPrice > 0 ? "成交" : "流拍");
       const updated = {
-        ...existing,
-        ...incoming,
+        ...mergePreservingConsignor(existing, incoming),
         auctionPeriodOverride:selectedPeriod,
         source:incoming.source || existing.source || "mxiqi_connector",
         sourceUpdatedAt:timestamp,
@@ -314,5 +369,5 @@
     return {records:next,departed};
   }
 
-  return {isStorageRecord,isReturnRecord,auctionPeriod,normalizeReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
+  return {isStorageRecord,isReturnRecord,auctionPeriod,normalizeReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,restoreConsignorIdentities,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
 });

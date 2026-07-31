@@ -38,7 +38,7 @@
 
 ## 本地采集助手安装
 
-1. 从“平台登录”下载 1.6.0 版 `mxiqi-connector.zip` 并解压。
+1. 从“平台登录”下载 1.8.0 版 `mxiqi-connector.zip` 并解压。
 2. Chrome 打开 `chrome://extensions/`，开启开发者模式。
 3. 点击“加载已解压的扩展程序”，选择 `mxiqi-connector-extension` 文件夹。
 4. 回到工作台，打开“平台登录”，输入麦稀奇手机号和密码，点击“登录并抓取待发货”。
