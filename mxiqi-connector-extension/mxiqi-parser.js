@@ -153,11 +153,49 @@
     return [...unique.values()];
   }
 
+  function parseAuctionCatalogRows(rows = [], {period = "", projectName = "", entryKey = ""} = {}) {
+    const normalizedPeriod = auctionPeriod(period) || clean(period);
+    const unique = new Map();
+    rows.forEach((row) => {
+      const cells = Array.isArray(row?.cells) ? row.cells.map(clean) : [];
+      if (cells.length < 8) return;
+      const lot = Number(cells[0].match(/Lot\.?\s*(\d+)/i)?.[1] || cells[0].match(/^\s*(\d+)\s*$/)?.[1] || 0);
+      if (!lot) return;
+      const finalPrice = money(cells[5]);
+      const itemName = clean(cells[1]).replace(/^Lot\.?\s*\d+\s*/i, "") || `Lot ${lot}`;
+      const key = `${normalizedPeriod}:${lot}`;
+      const record = {
+        platformItemKey:`auction-result:${entryKey || normalizedPeriod}:${lot}`,
+        source:"mxiqi_connector",
+        sourceUpdatedAt:new Date().toISOString(),
+        lot,
+        lotLabel:`麦稀奇 / Lot ${lot}`,
+        itemName,
+        projectName:projectName || normalizedPeriod,
+        auctionPeriodOverride:normalizedPeriod,
+        auctionHouse:"麦稀奇",
+        finalPrice,
+        finalOutcome:finalPrice > 0 ? "成交" : "流拍",
+        paymentStatus:finalPrice > 0 ? "已付款" : "",
+        mxiqiAuctionItemUrl:clean(row?.href),
+      };
+      const current = unique.get(key);
+      if (!current || record.finalPrice > current.finalPrice || record.itemName.length > current.itemName.length) unique.set(key, record);
+    });
+    return [...unique.values()];
+  }
+
   function parseAuctionResultDocument(doc, options = {}) {
     const pageText = clean(doc.body?.textContent);
     const projectName = clean(doc.querySelector("h1, h2, .auction-title, [class*='auction'][class*='title']")?.textContent)
       || clean(doc.title).replace(/[-_|].*$/, "");
     const period = auctionPeriod(options.period) || auctionPeriod(`${projectName}\n${pageText}`) || clean(options.period);
+    const currentPath = typeof location === "object" ? location.pathname : "";
+    const entryKey = String(options.entryKey || currentPath || "").match(/(\d{4,})/)?.[1] || "";
+    const catalogRows = Array.from(doc.querySelectorAll("table tr"))
+      .map((row) => ({cells:Array.from(row.querySelectorAll("td")).map((cell) => cell.textContent),href:""}));
+    const catalogRecords = parseAuctionCatalogRows(catalogRows,{period,projectName,entryKey});
+    if (catalogRecords.length) return {records:catalogRecords,period,projectName};
     const elements = Array.from(doc.querySelectorAll('a[href*="auction.item.info"], a[href*="auction.item"], tr, li, article, [class*="auction-item"], [class*="lot-item"]'));
     const rows = [];
     const seen = new Set();
@@ -176,10 +214,8 @@
       seen.add(key);
       rows.push({text,title,href});
     });
-    const currentPath = typeof location === "object" ? location.pathname : "";
-    const entryKey = String(options.entryKey || currentPath || "").match(/(\d{4,})/)?.[1] || "";
     return {records:parseAuctionResultRows(rows,{period,projectName,entryKey}),period,projectName};
   }
 
-  return {clean, money, phoneFrom, orderDate, auctionDate, auctionPeriod, normalizeOrderStatus, parseOrderCard, parseOrderDocument, parseAuctionResultRows, parseAuctionResultDocument};
+  return {clean, money, phoneFrom, orderDate, auctionDate, auctionPeriod, normalizeOrderStatus, parseOrderCard, parseOrderDocument, parseAuctionResultRows, parseAuctionCatalogRows, parseAuctionResultDocument};
 });

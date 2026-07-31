@@ -84,16 +84,19 @@ test("connector supports the Mxiqi wait-pay scope and reports its version", () =
   assert.match(content, /"waitconfirm","waitpay"/);
   assert.match(content, /org\.order\.list\/\$\{safeScope\}/);
   assert.match(background, /chrome\.runtime\.getManifest\(\)\.version/);
-  assert.equal(manifest.version, "1.8.0");
+  assert.equal(manifest.version, "1.9.0");
   assert.match(background, /capabilities:\s*\["login", "syncOrders", "syncOrdersByNumbers", "syncAuctionDeals", "openCarrierPortal"\]/);
 });
 
-test("auction settlement sync checks every open Mxiqi tab", () => {
+test("auction settlement sync automatically locates the period catalog", () => {
   const background = fs.readFileSync(path.join(extensionRoot, "background.js"), "utf8");
   const content = fs.readFileSync(path.join(extensionRoot, "content.js"), "utf8");
   assert.match(background, /sendToAllMxiqiTabs/);
   assert.match(background, /for \(let tab of tabs\)/);
-  assert.match(content, /auction\\\.info\\\.entry\(\?:\[\/\?\]\|\$\)/);
+  assert.match(content, /org\.auction\.list/);
+  assert.match(content, /org\.auction\.dataReport/);
+  assert.match(content, /org\\\.auction\\\.catalog/);
+  assert.match(content, /findAuctionDataLink/);
 });
 
 test("connector parses auction deal rows and exposes period settlement sync", () => {
@@ -108,6 +111,19 @@ test("connector parses auction deal rows and exposes period settlement sync", ()
   assert.equal(records[0].auctionPeriodOverride, "第75期");
   assert.match(bridge, /syncAuctionDeals/);
   assert.match(content, /成交目录/);
+});
+
+test("connector parses the real Mxiqi catalog table columns", () => {
+  const records = parser.parseAuctionCatalogRows([
+    {cells:["Lot.48","PCGS-AU55 孙中山像开国纪念壹圆","","0","0","49,288","2,464.40","51,752.40","","","","",""]},
+    {cells:["Lot.14","未成交拍品","","0","0","0","0","0","","","","",""]},
+  ],{period:"第75期",projectName:"世界币章拍卖（第75期）",entryKey:"309456"});
+  assert.equal(records.length, 2);
+  assert.equal(records[0].lot, 48);
+  assert.equal(records[0].finalPrice, 49288);
+  assert.equal(records[0].finalOutcome, "成交");
+  assert.equal(records[1].finalPrice, 0);
+  assert.equal(records[1].finalOutcome, "流拍");
 });
 
 test("dashboard keeps duplicate Lots separate by auction period and exports full preauction image", () => {

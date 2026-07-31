@@ -1785,8 +1785,8 @@
       const connector = await MxiqiConnector.ping();
       const capabilities = Array.isArray(connector.capabilities) ? connector.capabilities : [];
       state.connection.connectorVersion = connector.version || "";
-      if (!versionAtLeast(connector.version, "1.8.0") || !capabilities.includes("syncAuctionDeals")) {
-        throw new Error("采集助手版本过旧，请重新下载 1.8.0 版并在扩展页面点击重新加载");
+      if (!versionAtLeast(connector.version, "1.9.0") || !capabilities.includes("syncAuctionDeals")) {
+        throw new Error("采集助手版本过旧，请重新下载 1.9.0 版并在扩展页面点击重新加载");
       }
       const pendingResult = await MxiqiConnector.syncOrders({scope:"waitpay",maxPages:20});
       if (pendingResult.requiresLogin) throw new Error("麦稀奇登录已失效，请重新登录后检查连接");

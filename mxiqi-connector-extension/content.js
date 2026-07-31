@@ -114,6 +114,66 @@
     return {requiresLogin:false,records:parsed.records,period:parsed.period || normalizedPeriod,projectName:parsed.projectName || "",sourceUrl:result.finalUrl};
   }
 
+  function findAuctionCatalogLink(doc) {
+    const candidates = Array.from(doc.querySelectorAll("a[href]"))
+      .map((anchor) => {
+        const text = MxiqiPageParser.clean(anchor.textContent);
+        const href = anchor.getAttribute("href") || "";
+        if (!/成交目录|成交记录/.test(text) && !/org\.auction\.catalog/.test(href)) return null;
+        let score = /成交目录/.test(text) ? 10 : 1;
+        if (/org\.auction\.catalog/.test(href)) score += 10;
+        return {href:new URL(href, location.origin).href,score};
+      })
+      .filter(Boolean)
+      .sort((left, right) => right.score - left.score);
+    return candidates[0] || null;
+  }
+
+  function findAuctionDataLink(doc, period = "") {
+    const normalizedPeriod = MxiqiPageParser.auctionPeriod(period) || String(period || "").trim();
+    const candidates = Array.from(doc.querySelectorAll('a[href*="/org.auction.dataReport/"]'))
+      .map((anchor) => {
+        const href = anchor.getAttribute("href") || "";
+        const container = anchor.closest("li.auction, li, article, section, tr, .card, [class*='auction']") || anchor.parentElement;
+        const containerText = MxiqiPageParser.clean(container?.textContent || "");
+        if (normalizedPeriod && !containerText.includes(normalizedPeriod)) return null;
+        const exactPeriod = normalizedPeriod && MxiqiPageParser.auctionPeriod(containerText) === normalizedPeriod;
+        return {href:new URL(href, location.origin).href,score:exactPeriod ? 20 : 10,containerText};
+      })
+      .filter(Boolean)
+      .sort((left, right) => right.score - left.score);
+    return candidates[0] || null;
+  }
+
+  async function resolveAuctionCatalog(period) {
+    if (/\/org\.auction\.catalog\/\d+/.test(location.pathname)) {
+      return {doc:document,finalUrl:location.href,requiresLogin:false};
+    }
+    const currentCatalog = findAuctionCatalogLink(document);
+    if (currentCatalog) return fetchDocument(currentCatalog.href);
+
+    const auctionList = await fetchDocument("/org.auction.list");
+    if (auctionList.requiresLogin) return auctionList;
+    const dataLink = findAuctionDataLink(auctionList.doc, period);
+    if (!dataLink) throw new Error(`没有在“实时专场”找到${period}，请确认期数是否正确`);
+
+    const report = await fetchDocument(dataLink.href);
+    if (report.requiresLogin) return report;
+    const catalogLink = findAuctionCatalogLink(report.doc);
+    if (!catalogLink) throw new Error(`已找到${period}拍场，但页面没有“成交目录”，请确认该场拍卖已经结束`);
+    return fetchDocument(catalogLink.href);
+  }
+
+  async function scrapeAuctionDealsAutomatic({period = ""} = {}) {
+    const normalizedPeriod = MxiqiPageParser.auctionPeriod(period) || String(period || "").trim();
+    if (!normalizedPeriod) throw new Error("请先在工作台选择拍卖期数");
+    const result = await resolveAuctionCatalog(normalizedPeriod);
+    if (result.requiresLogin) return {requiresLogin:true,records:[]};
+    const parsed = MxiqiPageParser.parseAuctionResultDocument(result.doc,{period:normalizedPeriod,entryKey:result.finalUrl});
+    if (!parsed.records.length) throw new Error(`${normalizedPeriod}成交目录已找到，但没有读取到 Lot 与成交价`);
+    return {requiresLogin:false,records:parsed.records,period:parsed.period || normalizedPeriod,projectName:parsed.projectName || "",sourceUrl:result.finalUrl};
+  }
+
   function setInputValue(input, value) {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     if (setter) setter.call(input, value);
@@ -138,7 +198,7 @@
       if (message?.type === "checkSession") return checkSession();
       if (message?.type === "scrapeOrders") return scrapeOrders(message);
       if (message?.type === "scrapeOrdersByNumbers") return scrapeOrdersByNumbers(message);
-      if (message?.type === "scrapeAuctionDeals") return scrapeAuctionDeals(message);
+      if (message?.type === "scrapeAuctionDeals") return scrapeAuctionDealsAutomatic(message);
       if (message?.type === "submitCredentials") return submitCredentials(message);
       throw new Error("不支持的采集命令");
     })().then((result) => sendResponse({ok: true, ...result})).catch((error) => sendResponse({ok: false, error: error.message || "采集失败"}));
