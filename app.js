@@ -1445,6 +1445,27 @@
     state.records.forEach(syncStoredAssetForRecord);
   }
 
+  function remapRecordReferences(idMap = {}) {
+    const resolve = (id) => idMap[id] || id;
+    state.assets = state.assets.map((asset) => ({
+      ...asset,
+      recordStorageId:asset.recordStorageId ? resolve(asset.recordStorageId) : asset.recordStorageId,
+      matchedRecordId:asset.matchedRecordId ? resolve(asset.matchedRecordId) : asset.matchedRecordId,
+    }));
+    state.selected = new Set([...state.selected].map(resolve));
+    state.shippingId = state.shippingId ? resolve(state.shippingId) : state.shippingId;
+    state.shippingIds = [...new Set((state.shippingIds || []).map(resolve))];
+    state.editingId = state.editingId ? resolve(state.editingId) : state.editingId;
+  }
+
+  function deduplicateCurrentRecords() {
+    const result = MxiqiWorkflow.deduplicateAuctionLots(state.records);
+    if (!result.removed) return result;
+    state.records = result.records;
+    remapRecordReferences(result.idMap);
+    return result;
+  }
+
   function upsert(records) {
     let added = 0;
     let updated = 0;
@@ -1454,9 +1475,10 @@
       if (!Number.isInteger(lot) || lot <= 0 || !incoming.itemName) continue;
       accepted += 1;
       const platformItemKey = String(incoming.platformItemKey || "");
-      const index = platformItemKey
+      let index = platformItemKey
         ? state.records.findIndex((item) => item.platformItemKey === platformItemKey)
-        : state.records.findIndex((item) => MxiqiWorkflow.sameAuctionLot(item, incoming));
+        : -1;
+      if (index < 0) index = state.records.findIndex((item) => MxiqiWorkflow.sameAuctionLot(item, incoming));
       if (index >= 0) {
         state.records[index] = {...MxiqiWorkflow.mergePreservingConsignor(state.records[index], incoming), id:state.records[index].id};
         ensurePaymentTracking(state.records[index]);
@@ -2684,19 +2706,25 @@
       notify("请填写有效 Lot 和拍品名称", "error");
       return;
     }
-    const duplicate = state.records.find((item) => item.id !== record.id && MxiqiWorkflow.sameAuctionLot(item, record));
-    if (duplicate) {
+    const duplicateCopies = state.records.filter((item) => item.id !== record.id && MxiqiWorkflow.sameAuctionLot(item, record));
+    if (duplicateCopies.length && !existing.id) {
       notify(`${auctionPeriod(record)} 的 Lot ${record.lot} 已存在，请直接编辑该记录`, "error");
       return;
     }
+    record = duplicateCopies.reduce((merged, item) => MxiqiWorkflow.mergeAuctionRecordCopies(merged, item), record);
+    const duplicateIds = new Set(duplicateCopies.map((item) => item.id));
     if (record.settled && !existing.settled) {
-      const candidateRecords = state.records.some((item) => item.id === record.id)
-        ? state.records.map((item) => item.id === record.id ? record : item)
-        : [...state.records, record];
+      const candidateRecords = state.records
+        .filter((item) => !duplicateIds.has(item.id))
+        .map((item) => item.id === record.id ? record : item);
       if (!requireSettlementReady(auctionPeriod(record), candidateRecords)) return;
     }
     recalculateRecord(record, true);
     if (record.settled) record.settledAt = existing.settledAt || new Date().toISOString();
+    if (duplicateIds.size) {
+      state.records = state.records.filter((item) => !duplicateIds.has(item.id));
+      remapRecordReferences(Object.fromEntries([...duplicateIds].map((id) => [id, record.id])));
+    }
     const index = state.records.findIndex((item) => item.id === record.id);
     if (index >= 0) state.records[index] = record;
     else state.records.push({...record,carrier:"pending",logisticsStatus:"not_requested",pickupCode:""});
@@ -3541,7 +3569,7 @@
   $("#export-settlement-checklist-image").addEventListener("click", exportSettlementChecklistImage);
   $("#export-preauction-image").addEventListener("click", exportPreauctionImage);
 
-  if (localStorage.getItem(MIGRATION_KEY) !== "11") {
+  if (localStorage.getItem(MIGRATION_KEY) !== "12") {
     if (Number(state.settings.birthdayCommissionValue) === 5 && state.settings.birthdayLabel === "生日月优惠") {
       state.settings.birthdayCommissionValue = -2;
       state.settings.birthdayLabel = "生日月返佣";
@@ -3594,13 +3622,14 @@
       if (record.sellerWechat && record.sellerPhone) state.customers[record.sellerWechat] = {...(state.customers[record.sellerWechat] || {}), phone:record.sellerPhone};
     });
     state.assets = Array.isArray(state.assets) ? state.assets.map(normalizeConsignmentAsset) : [];
+    deduplicateCurrentRecords();
     syncStoredAssetsFromRecords();
     state.assets = MxiqiAssets.rematchAssets(state.assets, state.records);
     state.connection = {...defaultConnection, ...state.connection};
     state.settings = {...defaultSettings, ...state.settings};
     if (Number(state.settings.sfThreshold) === 1000) state.settings.sfThreshold = 2000;
     if (!["disconnected","demo_connected","connected"].includes(state.connection.status)) state.connection = clone(defaultConnection);
-    localStorage.setItem(MIGRATION_KEY, "11");
+    localStorage.setItem(MIGRATION_KEY, "12");
     save();
   }
 

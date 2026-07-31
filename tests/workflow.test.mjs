@@ -48,6 +48,29 @@ test("same Lot is unique only inside the same auction period", () => {
   assert.equal(workflow.sameAuctionLot({lot:48,projectName:"第75期"},{lot:48,auctionPeriodOverride:"第76期"}), false);
 });
 
+test("hidden local and connector copies of the same auction Lot are merged", () => {
+  const records = [
+    {
+      id:"local-57",lot:57,itemName:"拍品",projectName:"第76期",
+      sellerWechat:"送拍人",returnDisposition:"拖回/再拍",platformItemKey:"",
+    },
+    {
+      id:"connector-57",lot:57,itemName:"拍品",auctionPeriodOverride:"第76期",
+      sellerWechat:"待补送拍人",platformItemKey:"order-57:57:0",mxiqiOrderId:"order-57",
+    },
+    {id:"other-period",lot:57,itemName:"另一场拍品",projectName:"第75期"},
+  ];
+  const result = workflow.deduplicateAuctionLots(records);
+  assert.equal(result.removed, 1);
+  assert.equal(result.records.length, 2);
+  assert.equal(result.idMap["connector-57"], "local-57");
+  const merged = result.records.find((item) => item.id === "local-57");
+  assert.equal(merged.returnDisposition, "拖回/再拍");
+  assert.equal(merged.sellerWechat, "送拍人");
+  assert.equal(merged.platformItemKey, "order-57:57:0");
+  assert.equal(merged.mxiqiOrderId, "order-57");
+});
+
 test("period settlement matching handles unpaid first and keeps the fixed return marker", () => {
   const records = [
     {id:"p75",lot:48,itemName:"同名拍品",projectName:"第75期",sellerWechat:"甲"},

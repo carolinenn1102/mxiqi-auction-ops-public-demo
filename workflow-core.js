@@ -226,6 +226,56 @@
     return merged;
   }
 
+  function mergeAuctionRecordCopies(preferred = {}, fallback = {}) {
+    const merged = {...preferred};
+    Object.entries(fallback).forEach(([key, value]) => {
+      const current = merged[key];
+      const currentMissing = current === undefined
+        || current === null
+        || current === ""
+        || (Array.isArray(current) && current.length === 0);
+      const fallbackPresent = value !== undefined
+        && value !== null
+        && value !== ""
+        && (!Array.isArray(value) || value.length > 0);
+      if (currentMissing && fallbackPresent) merged[key] = value;
+    });
+    if (!hasConsignorName(merged.sellerWechat) && hasConsignorName(fallback.sellerWechat)) {
+      merged.sellerWechat = fallback.sellerWechat;
+    }
+    if (!String(merged.sellerPhone || "").trim() && String(fallback.sellerPhone || "").trim()) {
+      merged.sellerPhone = fallback.sellerPhone;
+    }
+    if (!Number(merged.birthdayMonth || 0) && Number(fallback.birthdayMonth || 0)) {
+      merged.birthdayMonth = Number(fallback.birthdayMonth);
+    }
+    if (!String(merged.contactedAt || "").trim() && String(fallback.contactedAt || "").trim()) {
+      merged.contactedAt = fallback.contactedAt;
+    }
+    return merged;
+  }
+
+  function deduplicateAuctionLots(records = []) {
+    const next = [];
+    const indexByKey = new Map();
+    const idMap = {};
+    let removed = 0;
+    records.forEach((record) => {
+      const key = settlementMatchKey(record);
+      if (!key || !indexByKey.has(key)) {
+        if (key) indexByKey.set(key, next.length);
+        next.push({...record});
+        return;
+      }
+      const index = indexByKey.get(key);
+      const survivor = next[index];
+      next[index] = mergeAuctionRecordCopies(survivor, record);
+      if (record.id && survivor.id && record.id !== survivor.id) idMap[record.id] = survivor.id;
+      removed += 1;
+    });
+    return {records:next,removed,idMap};
+  }
+
   function restoreConsignorIdentities(records = [], snapshots = [], customers = {}) {
     const identities = new Map();
     snapshots.forEach((snapshot) => {
@@ -369,5 +419,5 @@
     return {records:next,departed};
   }
 
-  return {isStorageRecord,isReturnRecord,auctionPeriod,normalizeReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,restoreConsignorIdentities,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
+  return {isStorageRecord,isReturnRecord,auctionPeriod,normalizeReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,mergeAuctionRecordCopies,deduplicateAuctionLots,restoreConsignorIdentities,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
 });
