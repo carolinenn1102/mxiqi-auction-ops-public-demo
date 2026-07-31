@@ -2706,10 +2706,14 @@
       notify("请填写有效 Lot 和拍品名称", "error");
       return;
     }
-    const duplicateCopies = state.records.filter((item) => item.id !== record.id && MxiqiWorkflow.sameAuctionLot(item, record));
+    let duplicateCopies = state.records.filter((item) => item.id !== record.id && MxiqiWorkflow.sameAuctionLot(item, record));
+    let recoveredDuplicateEdit = false;
     if (duplicateCopies.length && !existing.id) {
-      notify(`${auctionPeriod(record)} 的 Lot ${record.lot} 已存在，请直接编辑该记录`, "error");
-      return;
+      const canonical = duplicateCopies[0];
+      record = {...MxiqiWorkflow.mergePreservingConsignor(canonical, record), id:canonical.id};
+      state.editingId = canonical.id;
+      duplicateCopies = duplicateCopies.slice(1);
+      recoveredDuplicateEdit = true;
     }
     record = duplicateCopies.reduce((merged, item) => MxiqiWorkflow.mergeAuctionRecordCopies(merged, item), record);
     const duplicateIds = new Set(duplicateCopies.map((item) => item.id));
@@ -2735,7 +2739,9 @@
     save();
     editDialog.close();
     render();
-    notify(`Lot ${record.lot} 已保存，佣金已自动计算`);
+    notify(recoveredDuplicateEdit
+      ? `Lot ${record.lot} 已合并更新，佣金已自动计算`
+      : `Lot ${record.lot} 已保存，佣金已自动计算`);
   });
 
   $("#open-assets").addEventListener("click", openAssets);
@@ -3569,7 +3575,7 @@
   $("#export-settlement-checklist-image").addEventListener("click", exportSettlementChecklistImage);
   $("#export-preauction-image").addEventListener("click", exportPreauctionImage);
 
-  if (localStorage.getItem(MIGRATION_KEY) !== "12") {
+  if (localStorage.getItem(MIGRATION_KEY) !== "13") {
     if (Number(state.settings.birthdayCommissionValue) === 5 && state.settings.birthdayLabel === "生日月优惠") {
       state.settings.birthdayCommissionValue = -2;
       state.settings.birthdayLabel = "生日月返佣";
@@ -3629,7 +3635,15 @@
     state.settings = {...defaultSettings, ...state.settings};
     if (Number(state.settings.sfThreshold) === 1000) state.settings.sfThreshold = 2000;
     if (!["disconnected","demo_connected","connected"].includes(state.connection.status)) state.connection = clone(defaultConnection);
-    localStorage.setItem(MIGRATION_KEY, "12");
+    localStorage.setItem(MIGRATION_KEY, "13");
+    save();
+  }
+
+  const startupDuplicateRepair = deduplicateCurrentRecords();
+  if (startupDuplicateRepair.removed) {
+    syncStoredAssetsFromRecords();
+    state.assets = MxiqiAssets.rematchAssets(state.assets, state.records);
+    audit("自动合并重复拍品", `合并 ${startupDuplicateRepair.removed} 条同一期同 Lot 的隐藏重复记录`, {undoable:false});
     save();
   }
 
@@ -3638,7 +3652,14 @@
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", async () => {
       try {
-        await navigator.serviceWorker.register("sw.js");
+        let reloadingForUpdate = false;
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (reloadingForUpdate) return;
+          reloadingForUpdate = true;
+          window.location.reload();
+        });
+        const registration = await navigator.serviceWorker.register("sw.js?v=32", {updateViaCache:"none"});
+        await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
       } catch {

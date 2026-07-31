@@ -1,18 +1,18 @@
-const CACHE_NAME = "mxiqi-ops-demo-v31";
+const CACHE_NAME = "mxiqi-ops-demo-v32";
 const APP_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css",
-  "./app.js",
-  "./matching-core.js",
-  "./package-core.js",
-  "./workflow-core.js",
-  "./commission-core.js",
-  "./logistics-core.js",
-  "./connector-bridge.js",
+  "./styles.css?v=32",
+  "./app.js?v=32",
+  "./matching-core.js?v=32",
+  "./package-core.js?v=32",
+  "./workflow-core.js?v=32",
+  "./commission-core.js?v=32",
+  "./logistics-core.js?v=32",
+  "./connector-bridge.js?v=32",
   "./zhenzhenpu-logo.jpg",
   "./manifest.webmanifest",
-  "./vendor/exceljs.min.js",
+  "./vendor/exceljs.min.js?v=32",
 ];
 
 self.addEventListener("install", (event) => {
@@ -45,10 +45,10 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request).then((response) => {
+    fetch(event.request).then((response) => {
       const copy = response.clone();
       caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
       return response;
-    })),
+    }).catch(() => caches.match(event.request, {ignoreSearch:true})),
   );
 });
