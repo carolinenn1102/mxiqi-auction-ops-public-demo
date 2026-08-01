@@ -1,0 +1,3 @@
+logistics-gateway/.env
+logistics-gateway/data/
+*.local.env

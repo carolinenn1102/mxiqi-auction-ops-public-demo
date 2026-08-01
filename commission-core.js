@@ -14,27 +14,47 @@
       .filter(Boolean);
   }
 
+  function rebateTiers(settings = {}) {
+    return ["", "2", "3", "4"].map((suffix, index) => ({
+      index: index + 1,
+      threshold: Math.max(0, Number(settings[`boxRebateThreshold${suffix}`]) || 0),
+      value: Math.max(0, Number(settings[`boxRebateValue${suffix}`]) || 0),
+    })).filter((tier) => tier.value > 0).sort((a, b) => b.threshold - a.threshold || b.value - a.value);
+  }
+
+  function matchedBoxRebate({gross = 0, title = "", settings = {}} = {}) {
+    const normalizedTitle = String(title || "").toUpperCase();
+    if (!keywords(settings.boxRebateKeywords).some((keyword) => normalizedTitle.includes(keyword))) return null;
+    return rebateTiers(settings).find((tier) => Number(gross || 0) >= tier.threshold) || null;
+  }
+
   function calculate({gross = 0, birthdayMonth = 0, auctionMonth = 0, title = "", isReturn = false, settings = {}} = {}) {
     const price = Math.max(0, Number(gross) || 0);
     if (isReturn) {
       const value = Math.max(0, Number(settings.returnHandlingFee) || 0);
-      return {amount:money(value),label:"拖回处理费",isBirthday:false,isLowPrice:false,isBoxRebate:false,isReturn:true,type:"fixed",value};
+      return {amount:money(value),label:"拖回处理费",isBirthday:false,isLowPrice:false,isBoxRebate:false,isBoxRebateEligible:false,isReturn:true,type:"fixed",value};
     }
     const isBirthday = Boolean(Number(birthdayMonth) && Number(birthdayMonth) === Number(auctionMonth));
-    const isBoxRebate = isBirthday && hasBoxRebate({gross:price,title,settings});
-    const isLowPrice = !isBirthday && price < Number(settings.lowPriceThreshold || 0);
-    const type = isBirthday ? settings.birthdayCommissionType : isLowPrice ? "fixed" : settings.defaultCommissionType;
-    const value = Number(isBirthday ? settings.birthdayCommissionValue : isLowPrice ? settings.lowPriceFee : settings.defaultCommissionValue) || 0;
-    const label = isBoxRebate ? `${settings.birthdayLabel || "生日月返佣"}（盒子达标）` : isBirthday ? settings.birthdayLabel || "生日月优惠" : isLowPrice ? "低价固定佣金" : "普通佣金";
+    const boxRebateTier = matchedBoxRebate({gross:price,title,settings});
+    const isBoxRebateEligible = Boolean(boxRebateTier);
+    const isBoxRebate = !isBirthday && isBoxRebateEligible;
+    const isLowPrice = !isBirthday && !isBoxRebate && price < Number(settings.lowPriceThreshold || 0);
+    const type = isBirthday ? settings.birthdayCommissionType : isBoxRebate ? "percent" : isLowPrice ? "fixed" : settings.defaultCommissionType;
+    const value = Number(isBirthday
+      ? settings.birthdayCommissionValue
+      : isBoxRebate
+        ? -Math.abs(Number(boxRebateTier?.value) || 0)
+        : isLowPrice
+          ? settings.lowPriceFee
+          : settings.defaultCommissionValue) || 0;
+    const label = isBirthday ? settings.birthdayLabel || "生日" : isBoxRebate ? "NP优惠" : isLowPrice ? "低价固定佣金" : "普通佣金";
     const amount = money(type === "fixed" ? value : price * value / 100);
-    return {amount:Math.min(amount, price),label,isBirthday,isLowPrice,isBoxRebate,isReturn:false,type,value};
+    return {amount:Math.min(amount, price),label,isBirthday,isLowPrice,isBoxRebate,isBoxRebateEligible,boxRebateTier,isReturn:false,type,value};
   }
 
   function hasBoxRebate({gross = 0, title = "", settings = {}} = {}) {
-    if (Number(gross || 0) < Number(settings.boxRebateThreshold || 0)) return false;
-    const normalizedTitle = String(title || "").toUpperCase();
-    return keywords(settings.boxRebateKeywords).some((keyword) => normalizedTitle.includes(keyword));
+    return Boolean(matchedBoxRebate({gross,title,settings}));
   }
 
-  return {calculate,hasBoxRebate,keywords};
+  return {calculate,hasBoxRebate,keywords,rebateTiers,matchedBoxRebate};
 });

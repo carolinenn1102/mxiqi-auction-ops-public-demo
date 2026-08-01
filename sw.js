@@ -1,18 +1,19 @@
-const CACHE_NAME = "mxiqi-ops-demo-v32";
+const CACHE_NAME = "mxiqi-ops-demo-v36";
 const APP_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=32",
-  "./app.js?v=32",
-  "./matching-core.js?v=32",
-  "./package-core.js?v=32",
-  "./workflow-core.js?v=32",
-  "./commission-core.js?v=32",
-  "./logistics-core.js?v=32",
-  "./connector-bridge.js?v=32",
+  "./styles.css?v=36",
+  "./app.js?v=36",
+  "./matching-core.js?v=36",
+  "./package-core.js?v=36",
+  "./workflow-core.js?v=36",
+  "./commission-core.js?v=36",
+  "./logistics-core.js?v=36",
+  "./connector-bridge.js?v=36",
+  "./logistics-gateway.js?v=36",
   "./zhenzhenpu-logo.jpg",
   "./manifest.webmanifest",
-  "./vendor/exceljs.min.js?v=32",
+  "./vendor/exceljs.min.js?v=36",
 ];
 
 self.addEventListener("install", (event) => {
@@ -29,7 +30,8 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET" || new URL(event.request.url).origin !== self.location.origin) return;
+  const requestUrl = new URL(event.request.url);
+  if (event.request.method !== "GET" || requestUrl.origin !== self.location.origin || requestUrl.pathname.startsWith("/api/")) return;
 
   if (event.request.mode === "navigate") {
     event.respondWith(

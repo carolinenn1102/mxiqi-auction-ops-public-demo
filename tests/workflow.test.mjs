@@ -86,6 +86,60 @@ test("period settlement matching handles unpaid first and keeps the fixed return
   assert.equal(result.records.find((item) => item.id === "p76").unpaidReturn, undefined);
 });
 
+test("settlement sync preserves return dispositions already handled by the operator", () => {
+  for (const returnDisposition of ["拖回/发回", "拖回/再拍"]) {
+    const records = [{
+      id:`handled-${returnDisposition}`,lot:48,itemName:"已处理拍品",projectName:"第76期",
+      finalOutcome:"拖回",finalPrice:49288,paymentStatus:"待付款",unpaidReturn:true,returnDisposition,
+    }];
+    const deals = [{
+      lot:48,itemName:"已处理拍品",auctionPeriodOverride:"第76期",
+      finalPrice:49288,finalOutcome:"成交",paymentStatus:"已付款",
+    }];
+    const result = workflow.applyAuctionSettlementResults(records,deals,[],"第76期","2026-07-30T12:00:00.000Z");
+    const record = result.records[0];
+    assert.equal(record.returnDisposition, returnDisposition);
+    assert.equal(record.finalOutcome, "拖回");
+    assert.equal(record.paymentStatus, "已付款");
+    assert.equal(record.unpaidReturn, false);
+    assert.equal(workflow.settlementGross(record), 0);
+    assert.equal(workflow.recordStatus(record), returnDisposition);
+  }
+});
+
+test("settlement sync only clears the automatic waiting marker after payment", () => {
+  const records = [{
+    id:"waiting",lot:48,itemName:"待付款拍品",projectName:"第76期",
+    finalOutcome:"拖回",finalPrice:882,paymentStatus:"待付款",unpaidReturn:true,returnDisposition:"拖回/等待",
+  }];
+  const deals = [{
+    lot:48,itemName:"待付款拍品",auctionPeriodOverride:"第76期",
+    finalPrice:882,finalOutcome:"成交",paymentStatus:"已付款",
+  }];
+  const result = workflow.applyAuctionSettlementResults(records,deals,[],"第76期","2026-07-30T12:00:00.000Z");
+  assert.equal(result.records[0].returnDisposition, "");
+  assert.equal(result.records[0].finalOutcome, "成交");
+  assert.equal(result.records[0].paymentStatus, "已付款");
+});
+
+test("handled return dispositions overwritten by an old sync can be restored from history", () => {
+  const current = [{
+    id:"lot-48",lot:48,itemName:"拍品",projectName:"第76期",source:"mxiqi_connector",
+    sourceUpdatedAt:"2026-07-31T12:00:00.000Z",finalOutcome:"成交",finalPrice:49288,
+    paymentStatus:"已付款",returnDisposition:"",settled:false,
+  }];
+  const history = [{records:[{
+    id:"lot-48",lot:48,itemName:"拍品",projectName:"第76期",finalOutcome:"拖回",
+    finalPrice:49288,paymentStatus:"待付款",unpaidReturn:true,returnDisposition:"拖回/再拍",
+  }]}];
+  const result = workflow.restoreHandledReturnDispositions(current,history,"2026-08-01T00:00:00.000Z");
+  assert.equal(result.restored, 1);
+  assert.equal(result.records[0].returnDisposition, "拖回/再拍");
+  assert.equal(result.records[0].finalOutcome, "拖回");
+  assert.equal(result.records[0].paymentStatus, "已付款");
+  assert.equal(workflow.settlementGross(result.records[0]), 0);
+});
+
 test("settlement sync never replaces an existing consignor with blank platform fields", () => {
   const records = [{
     id:"p76-lot21",lot:21,itemName:"拍品",projectName:"第76期",

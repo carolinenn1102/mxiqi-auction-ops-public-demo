@@ -149,12 +149,12 @@ test("checklist images include consignor phones, branding, and settlement reconc
 
 test("settlement reconciliation image exposes financial columns and payable total", () => {
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
-  assert.match(app, /label:"送拍卖人"/);
+  assert.match(app, /label:"送拍人 \/ 手机号"/);
   assert.match(app, /label:"送拍项目（拍品标题）"/);
   assert.match(app, /label:"上拍时间"/);
   assert.match(app, /label:"拍场 Lot 号"/);
   assert.match(app, /label:"拍出价格 \/ 处理"/);
-  assert.match(app, /label:"送拍佣金"/);
+  assert.match(app, /label:"送拍佣金 \/ 调整"/);
   assert.match(app, /label:"结款金额"/);
   assert.match(app, /settlementPriceOrDisposition/);
   assert.match(app, /结款总金额：\$\{currency\.format\(totalSettlement\)\}/);
@@ -174,7 +174,7 @@ test("birthday reconciliation marks consignors and local directory keeps contact
   assert.match(app, /state\.records\.forEach\(merge\)/);
   assert.match(app, /state\.assets\.forEach\(merge\)/);
   assert.match(app, /birthdayDiscount \? "🎂 " : ""/);
-  assert.match(app, /"生日月优惠·盒子返" : "生日月优惠"/);
+  assert.match(app, /birthdayDiscount[\s\S]*\? "生日"[\s\S]*\? "NP优惠"/);
   assert.match(styles, /\.customer-directory-layout/);
 });
 

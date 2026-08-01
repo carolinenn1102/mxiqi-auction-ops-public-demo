@@ -38,6 +38,10 @@
     return "";
   }
 
+  function isHandledReturnDisposition(value) {
+    return ["拖回/发回", "拖回/再拍", "寄存"].includes(normalizeReturnDisposition(value));
+  }
+
   function trackerOutcome(value = "", finalPrice = 0) {
     const source = String(value).trim();
     const returnDisposition = normalizeReturnDisposition(source);
@@ -223,6 +227,9 @@
     if (!String(incoming.contactedAt || "").trim() && String(existing.contactedAt || "").trim()) {
       merged.contactedAt = existing.contactedAt;
     }
+    if (!normalizeReturnDisposition(incoming.returnDisposition) && normalizeReturnDisposition(existing.returnDisposition)) {
+      merged.returnDisposition = normalizeReturnDisposition(existing.returnDisposition);
+    }
     return merged;
   }
 
@@ -310,6 +317,41 @@
     return {records:next,restored};
   }
 
+  function restoreHandledReturnDispositions(records = [], snapshots = [], timestamp = new Date().toISOString()) {
+    const handledById = new Map();
+    const handledByLot = new Map();
+    snapshots.forEach((snapshot) => {
+      const snapshotRecords = Array.isArray(snapshot) ? snapshot : snapshot?.records;
+      if (!Array.isArray(snapshotRecords)) return;
+      snapshotRecords.forEach((record) => {
+        const disposition = normalizeReturnDisposition(record.returnDisposition);
+        if (!isHandledReturnDisposition(disposition)) return;
+        const historical = {...record,returnDisposition:disposition};
+        if (record.id && !handledById.has(String(record.id))) handledById.set(String(record.id), historical);
+        const key = settlementMatchKey(record);
+        if (key && !handledByLot.has(key)) handledByLot.set(key, historical);
+      });
+    });
+    let restored = 0;
+    const next = records.map((record) => {
+      if (record.settled || isHandledReturnDisposition(record.returnDisposition)) return {...record};
+      if (normalizeReturnDisposition(record.returnDisposition)) return {...record};
+      if (!String(record.sourceUpdatedAt || "").trim()) return {...record};
+      const historical = (record.id && handledById.get(String(record.id))) || handledByLot.get(settlementMatchKey(record));
+      if (!historical) return {...record};
+      const disposition = normalizeReturnDisposition(historical.returnDisposition);
+      restored += 1;
+      return {
+        ...record,
+        returnDisposition:disposition,
+        finalOutcome:disposition === "寄存" ? "待拍" : "拖回",
+        unpaidReturn:false,
+        returnDispositionRestoredAt:timestamp,
+      };
+    });
+    return {records:next,restored};
+  }
+
   function applyAuctionSettlementResults(records = [], deals = [], pendingOrders = [], period = "", timestamp = new Date().toISOString()) {
     const selectedPeriod = auctionPeriod({auctionPeriodOverride:period});
     if (!period || selectedPeriod === "期数待补") throw new Error("请先选择要结算的拍卖期数");
@@ -334,7 +376,8 @@
 
     function applyResult(existing = {}, incoming = {}) {
       const pending = isPending({...existing,...incoming});
-      const wasUnpaidReturn = existing.unpaidReturn === true;
+      const localDisposition = normalizeReturnDisposition(existing.returnDisposition);
+      const keepHandledDisposition = isHandledReturnDisposition(localDisposition);
       const finalPrice = Math.max(0, Number(incoming.finalPrice ?? existing.finalPrice) || 0);
       const platformOutcome = incoming.finalOutcome || (finalPrice > 0 ? "成交" : "流拍");
       const updated = {
@@ -344,26 +387,38 @@
         sourceUpdatedAt:timestamp,
       };
       if (pending) {
-        updated.finalOutcome = "拖回";
+        updated.finalOutcome = localDisposition === "寄存" ? "待拍" : "拖回";
         updated.finalPrice = finalPrice;
         updated.paymentStatus = "待付款";
-        updated.unpaidReturn = true;
+        updated.unpaidReturn = localDisposition !== "寄存";
         updated.unpaidReturnDetectedAt = existing.unpaidReturnDetectedAt || timestamp;
-        updated.returnDisposition = /^拖回\//.test(String(existing.returnDisposition || "")) ? existing.returnDisposition : "拖回/等待";
+        updated.returnDisposition = keepHandledDisposition
+          ? localDisposition
+          : /^拖回\//.test(localDisposition)
+            ? localDisposition
+            : "拖回/等待";
         updated.settled = Boolean(existing.settled);
         unpaid += 1;
       } else if (platformOutcome === "成交" && finalPrice > 0) {
-        updated.finalOutcome = "成交";
+        updated.finalOutcome = keepHandledDisposition
+          ? localDisposition === "寄存" ? "待拍" : "拖回"
+          : "成交";
         updated.finalPrice = finalPrice;
         updated.paymentStatus = incoming.paymentStatus || "已付款";
         updated.unpaidReturn = false;
-        if (wasUnpaidReturn && /^拖回\//.test(String(updated.returnDisposition || ""))) updated.returnDisposition = "";
+        updated.returnDisposition = keepHandledDisposition
+          ? localDisposition
+          : localDisposition === "拖回/等待" ? "" : normalizeReturnDisposition(updated.returnDisposition);
       } else {
-        updated.finalOutcome = "流拍";
-        updated.finalPrice = 0;
+        updated.finalOutcome = keepHandledDisposition
+          ? localDisposition === "寄存" ? "待拍" : "拖回"
+          : "流拍";
+        updated.finalPrice = keepHandledDisposition ? finalPrice : 0;
         updated.paymentStatus = "";
         updated.unpaidReturn = false;
-        if (wasUnpaidReturn && /^拖回\//.test(String(updated.returnDisposition || ""))) updated.returnDisposition = "";
+        updated.returnDisposition = keepHandledDisposition
+          ? localDisposition
+          : localDisposition === "拖回/等待" ? "" : normalizeReturnDisposition(updated.returnDisposition);
       }
       return updated;
     }
@@ -419,5 +474,5 @@
     return {records:next,departed};
   }
 
-  return {isStorageRecord,isReturnRecord,auctionPeriod,normalizeReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,mergeAuctionRecordCopies,deduplicateAuctionLots,restoreConsignorIdentities,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
+  return {isStorageRecord,isReturnRecord,auctionPeriod,normalizeReturnDisposition,isHandledReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,mergeAuctionRecordCopies,deduplicateAuctionLots,restoreConsignorIdentities,restoreHandledReturnDispositions,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
 });

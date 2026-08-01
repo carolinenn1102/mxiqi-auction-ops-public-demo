@@ -31,7 +31,13 @@
 
   function buildRequest({records = [], carrier = "cainiao", settings = {}} = {}) {
     const first = records[0] || {};
-    const sender = senderFor(settings, carrier);
+    const localSender = senderFor(settings, carrier);
+    // 月结卡号由服务器物流网关持有，不随浏览器下单请求发送。
+    const sender = {
+      name:localSender.name,
+      phone:localSender.phone,
+      address:localSender.address,
+    };
     const receiver = {
       name:text(first.recipientName),
       phone:phone(first.recipientPhone),
@@ -48,8 +54,8 @@
       receiver,
       parcel:{
         count:1,
-        weightKg:Number(first.shipmentWeightKg || settings.defaultPackageWeightKg || 1),
-        goodsName:text(first.shippingGoodsName || settings.defaultGoodsName || "收藏品"),
+        weightKg:Number(first.shipmentWeightKg || settings.defaultPackageWeightKg || 0.8),
+        goodsName:text(first.shippingGoodsName || settings.defaultGoodsName || "章牌"),
         itemCount:records.length,
         lots:records.map((item) => text(item.lot)).filter(Boolean),
       },

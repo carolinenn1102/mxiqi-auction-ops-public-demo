@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="theme-color" content="#102735">
   <title>送拍运营工作台 · 公开体验版</title>
-  <link rel="stylesheet" href="styles.css?v=32">
+  <link rel="stylesheet" href="styles.css?v=36">
   <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
@@ -180,6 +180,10 @@
           <label class="field"><span>结款金额（自动）</span><input name="settlementAmount" type="number" readonly></label>
           <label class="field"><span>利润（自动）</span><input name="profit" type="number" readonly></label>
           <label class="field"><span>适用优惠方案</span><input name="promotion" readonly></label>
+          <label class="field"><span>佣金规则覆盖</span><select name="commissionOverrideType"><option value="">自动识别</option><option value="percent">手工百分比</option><option value="fixed">手工固定金额</option></select></label>
+          <label class="field"><span>手工佣金数值</span><input name="commissionOverrideValue" type="number" step="0.01" placeholder="百分比或固定金额"></label>
+          <label class="field"><span>额外加减款</span><input name="settlementAdjustment" type="number" step="0.01" placeholder="加款填正数，扣款填负数"></label>
+          <label class="field"><span>手工调整说明</span><input name="commissionOverrideNote" placeholder="例如：客户单独约定"></label>
           <label class="field"><span>结账说明</span><input name="settlementNote"></label>
           <label class="field switch-field"><span>结账状态</span><label><input name="settled" type="checkbox"> 已结账</label></label>
           <label class="field"><span>承运商</span><select name="carrierOverride"><option value="">自动判断</option><option value="sf">顺丰</option><option value="cainiao">菜鸟</option></select></label>
@@ -258,7 +262,7 @@
           </div>
         </section>
       </div>
-      <footer><span class="customer-local-note">资料仅保存在当前浏览器，并包含在“完整备份”中。</span><button class="btn secondary" type="button" data-close-dialog>取消</button><button class="btn primary" type="submit">保存档案</button></footer>
+      <footer><span class="customer-local-note">资料仅保存在当前浏览器，并包含在“完整备份”中。</span><button class="btn secondary" type="button" id="export-customer-image">保存拍品清单图片</button><button class="btn secondary" type="button" data-close-dialog>取消</button><button class="btn primary" type="submit">保存档案</button></footer>
     </form>
   </dialog>
 
@@ -339,10 +343,10 @@
         <div class="address-review-message" id="shipping-address-message">请录入或粘贴收件地址。</div>
         <button class="btn primary" type="button" id="shipping-review-address">确认二次审核无误</button>
       </section>
-      <section class="form-section shipping-section"><div class="form-section-heading"><h3>真实物流下单与回填</h3><p id="shipping-logistics-status">正在检查本地连接器</p></div><div class="form-grid">
+      <section class="form-section shipping-section"><div class="form-section-heading"><h3>真实物流下单与回填</h3><p id="shipping-logistics-status">正在检查真实物流服务</p></div><div class="form-grid">
         <label class="field"><span>承运商</span><select name="shippingCarrier"><option value="cainiao">菜鸟</option><option value="sf">顺丰</option></select></label>
-        <label class="field"><span>物品名称</span><input name="shippingGoodsName" placeholder="例如：收藏品"></label>
-        <label class="field"><span>包裹重量（kg）</span><input name="shipmentWeightKg" type="number" min="0.01" step="0.01" placeholder="1"></label>
+        <label class="field"><span>物品名称</span><input name="shippingGoodsName" placeholder="例如：章牌"></label>
+        <label class="field"><span>包裹重量（kg）</span><input name="shipmentWeightKg" type="number" min="0.01" step="0.01" placeholder="0.8"></label>
         <label class="field"><span>真实出库运单号</span><input name="outboundTrackingNumber" autocomplete="off" placeholder="由顺丰/菜鸟返回"></label>
         <label class="field"><span>取件码（如有）</span><input name="pickupCode" autocomplete="off" placeholder="菜鸟取件后回填"></label>
         <label class="field wide"><span>物流平台业务单号（如有）</span><input name="logisticsOrderId" autocomplete="off"></label>
@@ -354,16 +358,17 @@
   </dialog>
 
   <dialog id="settings-dialog" class="dialog">
-    <form method="dialog" id="settings-form"><header><div><p class="eyebrow">计算规则</p><h2>佣金与生日月优惠</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
+    <form method="dialog" id="settings-form"><header><div><p class="eyebrow">计算规则</p><h2>佣金、生日与 NP 优惠</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
       <p class="modal-copy">客户生日月份与拍卖月份一致时，整个月优先使用生日月规则；普通成交低于设定门槛时使用低价固定佣金，其余使用默认佣金。已结账记录不会被重算。</p>
       <section class="rule-card"><h3>默认送拍佣金</h3><div class="form-grid"><label class="field"><span>计算方式</span><select name="defaultCommissionType"><option value="percent">按成交价百分比</option><option value="fixed">每件固定金额</option></select></label><label class="field"><span>数值</span><input name="defaultCommissionValue" type="number" min="0" step="0.01" required></label></div><p class="rule-preview" id="default-rule-preview"></p></section>
       <section class="rule-card"><h3>低价拍品固定佣金</h3><div class="form-grid"><label class="field"><span>成交价低于</span><input name="lowPriceThreshold" type="number" min="0" step="0.01" required></label><label class="field"><span>每件收取</span><input name="lowPriceFee" type="number" min="0" step="0.01" required></label></div><p class="rule-preview" id="low-price-rule-preview"></p></section>
-      <section class="rule-card"><h3>生日月返佣</h3><div class="form-grid"><label class="field"><span>计算方式</span><select name="birthdayCommissionType"><option value="percent">按成交价百分比</option><option value="fixed">每件固定金额</option></select></label><label class="field"><span>数值（返佣填负数）</span><input name="birthdayCommissionValue" type="number" min="-100" max="100" step="0.01" required></label><label class="field wide"><span>优惠名称</span><input name="birthdayLabel" required></label></div><p class="rule-preview" id="birthday-rule-preview"></p></section>
-      <section class="rule-card"><h3>盒子返佣条件</h3><div class="form-grid"><label class="field"><span>成交价达到</span><input name="boxRebateThreshold" type="number" min="0" step="0.01" required></label><label class="field"><span>标题关键词</span><input name="boxRebateKeywords" placeholder="NGC, PCGS" required></label></div><p class="rule-preview">同时命中金额门槛、盒子关键词和生日月时，负佣金会实际增加应结金额。例如 ¥2,500、-2% 时应结 ¥2,550。</p></section>
+      <section class="rule-card"><h3>生日优惠</h3><div class="form-grid"><label class="field"><span>计算方式</span><select name="birthdayCommissionType"><option value="percent">按成交价百分比</option><option value="fixed">每件固定金额</option></select></label><label class="field"><span>数值（返佣填负数）</span><input name="birthdayCommissionValue" type="number" min="-100" max="100" step="0.01" required></label><label class="field wide"><span>优惠名称</span><input name="birthdayLabel" required></label></div><p class="rule-preview" id="birthday-rule-preview"></p></section>
+      <section class="rule-card"><h3>NP 优惠（可配置多档）</h3><div class="form-grid"><label class="field wide"><span>标题关键词</span><input name="boxRebateKeywords" placeholder="NGC, PCGS" required></label><label class="field"><span>第 1 档成交价达到</span><input name="boxRebateThreshold" type="number" min="0" step="0.01"></label><label class="field"><span>第 1 档返佣比例（%）</span><input name="boxRebateValue" type="number" min="0" max="100" step="0.01"></label><label class="field"><span>第 2 档成交价达到</span><input name="boxRebateThreshold2" type="number" min="0" step="0.01"></label><label class="field"><span>第 2 档返佣比例（%）</span><input name="boxRebateValue2" type="number" min="0" max="100" step="0.01"></label><label class="field"><span>第 3 档成交价达到</span><input name="boxRebateThreshold3" type="number" min="0" step="0.01"></label><label class="field"><span>第 3 档返佣比例（%）</span><input name="boxRebateValue3" type="number" min="0" max="100" step="0.01"></label><label class="field"><span>第 4 档成交价达到</span><input name="boxRebateThreshold4" type="number" min="0" step="0.01"></label><label class="field"><span>第 4 档返佣比例（%）</span><input name="boxRebateValue4" type="number" min="0" max="100" step="0.01"></label></div><p class="rule-preview" id="box-rebate-rule-preview">返佣比例填 0 即停用该档；生日优惠优先。</p></section>
       <section class="rule-card"><h3>拖回扣费</h3><div class="form-grid"><label class="field wide"><span>拖回每 Lot 扣款</span><input name="returnHandlingFee" type="number" min="0" step="0.01" required></label></div><p class="rule-preview">拖回/再拍、拖回/发回、拖回/等待均按每 Lot 扣款，并单独显示在结算明细中。</p></section>
       <section class="rule-card"><h3>物流自动判断</h3><div class="form-grid"><label class="field wide"><span>最终价格达到此金额时默认顺丰</span><input name="sfThreshold" type="number" min="0" step="1" required></label><label class="field"><span>默认物品名称</span><input name="defaultGoodsName" required></label><label class="field"><span>默认包裹重量（kg）</span><input name="defaultPackageWeightKg" type="number" min="0.01" step="0.01" required></label></div></section>
+      <section class="rule-card"><h3>真实物流连接</h3><div class="form-grid"><label class="field wide"><span>物流后台地址（留空使用当前网站）</span><input name="logisticsGatewayUrl" type="url" placeholder="https://物流后台地址"></label><label class="field wide"><span>物流操作授权码（仅本次打开有效）</span><input name="logisticsOperatorKey" type="password" autocomplete="new-password" placeholder="由系统管理员提供"></label></div><p class="rule-preview">授权码只保存在当前浏览器标签页，关闭后自动清除；顺丰和菜鸟的 AppKey、密钥不会进入网页或备份。</p></section>
       <section class="rule-card"><h3>顺丰寄件资料（仅保存在本机）</h3><div class="form-grid"><label class="field"><span>寄件人</span><input name="sfSenderName"></label><label class="field"><span>寄件手机号</span><input name="sfSenderPhone" inputmode="numeric"></label><label class="field"><span>顺丰月结账号</span><input name="sfMonthlyAccount"></label><label class="field wide"><span>完整寄件地址</span><input name="sfSenderAddress"></label></div></section>
-      <section class="rule-card"><h3>菜鸟寄件资料（仅保存在本机）</h3><div class="form-grid"><label class="field"><span>寄件人</span><input name="cainiaoSenderName"></label><label class="field"><span>寄件手机号</span><input name="cainiaoSenderPhone" inputmode="numeric"></label><label class="field wide"><span>完整寄件地址</span><input name="cainiaoSenderAddress"></label></div><p class="rule-preview">验证码、Cookie 和 API 密钥不会保存在网页或备份中；真实接口密钥只允许保存在本地连接器。</p></section>
+      <section class="rule-card"><h3>菜鸟寄件资料（仅保存在本机）</h3><div class="form-grid"><label class="field"><span>寄件人</span><input name="cainiaoSenderName"></label><label class="field"><span>寄件手机号</span><input name="cainiaoSenderPhone" inputmode="numeric"></label><label class="field wide"><span>完整寄件地址</span><input name="cainiaoSenderAddress"></label></div><p class="rule-preview">验证码、Cookie 和 API 密钥不会保存在网页或备份中；真实接口密钥只允许保存在服务器物流网关。</p></section>
     </div><footer><button class="btn secondary" type="button" data-close-dialog>取消</button><button class="btn primary" value="default">保存并重算未结账记录</button></footer></form>
   </dialog>
 
@@ -378,13 +383,14 @@
 
   <datalist id="auction-period-options"></datalist>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="vendor/exceljs.min.js?v=32"></script>
-  <script src="matching-core.js?v=32"></script>
-  <script src="package-core.js?v=32"></script>
-  <script src="workflow-core.js?v=32"></script>
-  <script src="commission-core.js?v=32"></script>
-  <script src="logistics-core.js?v=32"></script>
-  <script src="connector-bridge.js?v=32"></script>
-  <script src="app.js?v=32"></script>
+  <script src="vendor/exceljs.min.js?v=36"></script>
+  <script src="matching-core.js?v=36"></script>
+  <script src="package-core.js?v=36"></script>
+  <script src="workflow-core.js?v=36"></script>
+  <script src="commission-core.js?v=36"></script>
+  <script src="logistics-core.js?v=36"></script>
+  <script src="connector-bridge.js?v=36"></script>
+  <script src="logistics-gateway.js?v=36"></script>
+  <script src="app.js?v=36"></script>
 </body>
 </html>
