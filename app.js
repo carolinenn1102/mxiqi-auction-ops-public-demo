@@ -117,6 +117,14 @@
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const currency = new Intl.NumberFormat("zh-CN", {style:"currency",currency:"CNY",maximumFractionDigits:2});
+  function settlementAdjustmentSummaryLabel(amount) {
+    return Number(amount || 0) < 0 ? "返佣合计" : "佣金合计";
+  }
+
+  function formatSettlementAdjustment(amount) {
+    const value = Number(amount || 0);
+    return value < 0 ? `+${currency.format(Math.abs(value))}` : currency.format(value);
+  }
   const PACKAGE_SHARED_FIELDS = ["buyerName","buyerPhone","projectName","auctionHouse","auctionAt","auctionPeriodOverride","finalOutcome","returnDisposition","paymentStatus","paymentDueAt","mxiqiOrderId","shippingGoodsName","shipmentWeightKg"];
   const PACKAGE_ADDRESS_FIELDS = ["recipientRaw","recipientName","recipientPhone","addressProvince","addressCity","addressDistrict","addressDetail"];
   const editDialog = $("#edit-dialog");
@@ -1171,7 +1179,9 @@
     $("#sold-count").textContent = sold.length;
     $("#settlement-progress").style.width = `${percent}%`;
     $("#settlement-gross").textContent = currency.format(sold.reduce((sum, record) => sum + settlementGross(record), 0));
-    $("#settlement-commission").textContent = currency.format(sold.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0));
+    const adjustmentTotal = sold.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0);
+    $("#settlement-commission-label").textContent = settlementAdjustmentSummaryLabel(adjustmentTotal);
+    $("#settlement-commission").textContent = formatSettlementAdjustment(adjustmentTotal);
     $("#settlement-payable").textContent = currency.format(sold.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0));
     const unpaidReturns = sold.filter((record) => record.unpaidReturn);
     $("#settlement-unpaid-return").textContent = `${unpaidReturns.length} 笔 / ${currency.format(unpaidReturns.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0))}`;
@@ -1181,10 +1191,10 @@
     $("#settlement-hint").textContent = !gate.ready
       ? "先处理本期全部待付款和拖回事项，处理完成后才开放结账。"
       : remaining ? `前置事项已完成，还有 ${remaining} 条待确认结账。` : "本期前置事项及结账均已完成，可以导出结算表。";
-    $("#export-settlement").disabled = !(gate.ready && sold.length && remaining === 0);
-    $("#export-settlement").textContent = !gate.ready ? "前置事项未处理完" : remaining ? `还有 ${remaining} 条未结账` : "导出本期结算表";
-    $("#export-settlement-image").disabled = !(gate.ready && sold.length && remaining === 0);
-    $("#export-settlement-checklist-image").disabled = !(gate.ready && sold.length && remaining === 0);
+    $("#export-settlement").disabled = !(sold.length && remaining === 0);
+    $("#export-settlement").textContent = remaining ? `还有 ${remaining} 条未结账` : "导出本期结算表";
+    $("#export-settlement-image").disabled = !sold.length;
+    $("#export-settlement-checklist-image").disabled = !(sold.length && remaining === 0);
     const repairable = settlementRepairableRecords();
     const repairPanel = $("#seller-repair-panel");
     repairPanel.hidden = !repairable.length;
@@ -1264,7 +1274,7 @@
     const buyerPhone = record.buyerPhone || record.recipientPhone || "";
     const recipientDetail = record.recipientName && record.recipientName !== buyerName ? `收件人：${record.recipientName}` : (record.recipientPhone && record.recipientPhone !== buyerPhone ? `收件手机：${record.recipientPhone}` : "");
     const settlementDetail = isSettlementEligible(record)
-      ? `${record.settlementAmount ? currency.format(record.settlementAmount) : "待计算"} · 佣金 ${currency.format(record.commissionAmount || 0)}`
+      ? `${record.settlementAmount ? currency.format(record.settlementAmount) : "待计算"} · ${Number(record.commissionAmount || 0) < 0 ? "返佣" : "佣金"} ${formatSettlementAdjustment(record.commissionAmount || 0)}`
       : "";
     const deliveryCode = record.outboundTrackingNumber || record.pickupCode || "";
     const deliveryHint = record.outboundTrackingNumber
@@ -1325,7 +1335,7 @@
       <td>${gapCount ? `<button type="button" class="chip warning" data-package-edit="${esc(group.key)}" title="打开整包补资料；公共资料同步到 ${records.length} 件拍品">共缺 ${gapCount} 项 · 整包补资料</button>` : '<span class="chip success">全部完整</span>'}</td>
       <td><span class="carrier ${carrier}">${carrierValues.length === 1 ? carrierLabel(carrier) : "混合"}</span><small>${esc(stageValues.length === 1 ? stageValues[0] : `${stageValues.length} 种发货状态`)}</small></td>
       <td>${deliveryCode ? `<code>${esc(deliveryCode)}</code>` : '<span class="muted">—</span>'}<small>${deliveryCode ? "整包共用单号" : "等待整包下单"}</small></td>
-      <td>${settledCount === records.length ? '<span class="chip success">整包已结账</span>' : `<span class="chip neutral">${settledCount}/${records.length} 已结账</span>`}<small>${currency.format(totalSettlement)} · 佣金 ${currency.format(totalCommission)}</small></td>
+      <td>${settledCount === records.length ? '<span class="chip success">整包已结账</span>' : `<span class="chip neutral">${settledCount}/${records.length} 已结账</span>`}<small>${currency.format(totalSettlement)} · ${totalCommission < 0 ? "返佣" : "佣金"} ${formatSettlementAdjustment(totalCommission)}</small></td>
       <td><div class="row-actions package-actions"><button data-package-toggle="${esc(group.key)}">${expanded ? "收起" : "展开"}</button><button data-package-shipping="${esc(group.key)}" ${canShipPackage ? "" : "disabled"}>整包发货</button></div></td>
     </tr>${childRows}`;
   }
@@ -1346,16 +1356,16 @@
     return [...groups.values()].sort((a, b) => a.seller.localeCompare(b.seller, "zh-CN"));
   }
 
-  function renderTableHeader() {
+  function renderTableHeader(itemCount = 0) {
     if (state.stage === "preauction") {
       $("#records-head").innerHTML = '<tr><th>送拍人</th><th>Lot</th><th>拍品名称</th><th>拍卖期数</th></tr>';
       return;
     }
     if (state.stage === "settlement") {
-      $("#records-head").innerHTML = '<tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选当前结算记录"></th><th>送拍人 / 手机号</th><th>拍品 / Lot</th><th>拍卖期数与时间</th><th>成交总额</th><th>优惠标识</th><th>佣金</th><th>应结金额</th><th>结账进度</th><th>操作</th></tr>';
+      $("#records-head").innerHTML = `<tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选当前结算记录"></th><th>送拍人 / 手机号</th><th>拍品 / Lot（${itemCount} 件）</th><th>拍卖期数与时间</th><th>成交总额</th><th>优惠标识</th><th>佣金 / 返佣</th><th>应结金额</th><th>结账进度</th><th>操作</th></tr>`;
       return;
     }
-    $("#records-head").innerHTML = '<tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选当前记录"></th><th>买家 / 收件人</th><th>Lot / 拍品</th><th>送拍人</th><th>拍品状态</th><th>拍卖期数与时间</th><th>最终价格</th><th>资料</th><th>物流</th><th>取件码 / 运单</th><th>结算</th><th>操作</th></tr>';
+    $("#records-head").innerHTML = `<tr><th class="select-column"><input id="select-all" type="checkbox" aria-label="全选当前记录"></th><th>买家 / 收件人</th><th>Lot / 拍品（${itemCount} 件）</th><th>送拍人</th><th>拍品状态</th><th>拍卖期数与时间</th><th>最终价格</th><th>资料</th><th>物流</th><th>取件码 / 运单</th><th>结算</th><th>操作</th></tr>`;
   }
 
   function renderPreauctionRow(record) {
@@ -1388,7 +1398,7 @@
       <td><b>${esc(auctionPeriod(record))}</b><small>${esc(record.projectName || record.auctionHouse || "项目待补")} · ${esc(record.auctionAt || record.platformOrderDate || "时间待补")}</small></td>
       <td><b class="money">${currency.format(settlementGross(record))}</b><small>${esc(recordStatus(record))}${isReturnRecord(record) ? " · 不计成交额" : ""}</small></td>
       <td>${promotionBadges(record) || '<span class="muted">—</span>'}<small>${esc(record.promotion || "普通规则")}</small></td>
-      <td><b>${currency.format(record.commissionAmount || 0)}</b></td>
+      <td><b>${formatSettlementAdjustment(record.commissionAmount || 0)}</b></td>
       <td><b class="money">${currency.format(record.settlementAmount || 0)}</b></td>
       <td>${record.settled ? '<span class="chip success">已结账</span>' : '<span class="chip neutral">未结账</span>'}</td>
       <td><div class="row-actions"><button data-action="edit" data-id="${esc(record.id)}">编辑</button><button data-action="toggle-settle" data-id="${esc(record.id)}" ${!record.settled && !gateReady ? "disabled" : ""}>${record.settled ? "撤销" : "结账"}</button></div></td>
@@ -1424,7 +1434,6 @@
 
   function render() {
     const records = state.records;
-    renderTableHeader();
     renderFilterOptions();
     $("#metric-total").textContent = records.length;
     $("#metric-unpaid").textContent = records.filter((item) => item.paymentStatus === "待付款").length;
@@ -1447,6 +1456,7 @@
     $("#panel-subtitle").textContent = panelCopy[1];
 
     const visible = visibleRecords();
+    renderTableHeader(visible.length);
     const packageGroups = ["settlement","reauction","preauction"].includes(state.stage) ? [] : MxiqiPackages.groupRecords(visible);
     const settlementList = state.stage === "settlement" ? settlementGroups(visible) : [];
     const mergedCount = packageGroups.filter((group) => group.isPackage).length;
@@ -1870,7 +1880,7 @@
     const tiers = MxiqiCommission.rebateTiers(draftSettings);
     $("#box-rebate-rule-preview").textContent = tiers.length
       ? `标题命中关键词后按最高适用档返佣：${tiers.map((tier) => `满 ${currency.format(tier.threshold)} 返 ${tier.value}%`).join("；")}。填 0 的档位停用，生日优惠优先。`
-      : "当前未启用 NP 优惠；任一档返佣比例填大于 0 后生效，生日优惠优先。";
+      : "当前未启用 NP 优惠；任一档返佣比例填非 0 后生效，生日优惠优先。";
   }
 
   function openSettings() {
@@ -3442,13 +3452,13 @@
       birthdayLabel: String(data.get("birthdayLabel") || "生日").trim(),
       boxRebateThreshold: Math.max(0, Number(data.get("boxRebateThreshold") || 0)),
       boxRebateKeywords: String(data.get("boxRebateKeywords") || "NGC,PCGS").trim(),
-      boxRebateValue: Math.max(0, Math.min(100, Number(data.get("boxRebateValue") || 0))),
+        boxRebateValue: Math.max(-100, Math.min(100, Number(data.get("boxRebateValue") || 0))),
       boxRebateThreshold2: Math.max(0, Number(data.get("boxRebateThreshold2") || 0)),
-      boxRebateValue2: Math.max(0, Math.min(100, Number(data.get("boxRebateValue2") || 0))),
+        boxRebateValue2: Math.max(-100, Math.min(100, Number(data.get("boxRebateValue2") || 0))),
       boxRebateThreshold3: Math.max(0, Number(data.get("boxRebateThreshold3") || 0)),
-      boxRebateValue3: Math.max(0, Math.min(100, Number(data.get("boxRebateValue3") || 0))),
+        boxRebateValue3: Math.max(-100, Math.min(100, Number(data.get("boxRebateValue3") || 0))),
       boxRebateThreshold4: Math.max(0, Number(data.get("boxRebateThreshold4") || 0)),
-      boxRebateValue4: Math.max(0, Math.min(100, Number(data.get("boxRebateValue4") || 0))),
+        boxRebateValue4: Math.max(-100, Math.min(100, Number(data.get("boxRebateValue4") || 0))),
       returnHandlingFee: Math.max(0, Number(data.get("returnHandlingFee") || 0)),
       sfThreshold: Math.max(0, Number(data.get("sfThreshold") || 0)),
       defaultGoodsName: String(data.get("defaultGoodsName") || "章牌").trim(),
@@ -3656,12 +3666,12 @@
         ["成交件数", sold.filter((record) => !isReturnRecord(record)).length],
         ["成交总额", sold.reduce((sum, record) => sum + settlementGross(record), 0)],
         ["未付款拖回扣费", sold.filter((record) => record.unpaidReturn).reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0)],
-        ["佣金合计", sold.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0)],
+        ["佣金 / 返佣合计", sold.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0)],
         ["额外加减款", sold.reduce((sum, record) => sum + Number(record.settlementAdjustment || 0), 0)],
         ["应结金额", sold.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0)],
       ]);
       summary.addRow([]);
-      summary.addRow(["送拍人","送拍人手机号","拍品数","Lot","拍卖期数与时间","成交总额","佣金合计","额外加减款","应结金额"]);
+      summary.addRow(["送拍人","送拍人手机号","拍品数","Lot","拍卖期数与时间","成交总额","佣金 / 返佣","额外加减款","应结金额"]);
       settlementGroups(sold).forEach((group) => {
         const records = group.records;
         const periods = [...new Set(records.map((record) => [auctionPeriod(record), datePart(record.auctionAt || record.platformOrderDate) || "时间待补"].join(" · ")))];
@@ -3769,7 +3779,7 @@
       context.fillStyle = "#213944";
       context.font = '15px "Microsoft YaHei", sans-serif';
       const identity = consignorDirectoryEntry(record);
-      const values = [record.lot,truncate(record.itemName,19),truncate(`${identity.wechat || "待补"} / ${identity.phone || "手机号待补"}`,20),truncate(record.auctionAt,14),currency.format(settlementGross(record)),currency.format(record.commissionAmount || 0),currency.format(record.settlementAdjustment || 0),currency.format(record.settlementAmount || 0),truncate(record.unpaidReturn ? "未付款拖回扣费" : record.returnDisposition || "已结账",10)];
+      const values = [record.lot,truncate(record.itemName,19),truncate(`${identity.wechat || "待补"} / ${identity.phone || "手机号待补"}`,20),truncate(record.auctionAt,14),currency.format(settlementGross(record)),formatSettlementAdjustment(record.commissionAmount || 0),currency.format(record.settlementAdjustment || 0),currency.format(record.settlementAmount || 0),truncate(record.unpaidReturn ? "未付款拖回扣费" : record.returnDisposition || "已结账",10)];
       values.forEach((value, columnIndex) => context.fillText(String(value), columns[columnIndex].x + 8, y + 29));
     });
     context.fillStyle = "#7b898f";
@@ -3790,7 +3800,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = `./zhenzhenpu-logo.jpg?v=37`;
+      image.src = `./zhenzhenpu-logo.jpg?v=38`;
     });
     return checklistLogoPromise;
   }
@@ -3965,7 +3975,7 @@
         datePart(record.auctionAt || record.platformOrderDate) || "日期待补",
         truncate(settlementAuctionLot(record), 15),
         truncate(settlementPriceOrDisposition(record), 16),
-        truncate(`${currency.format(record.commissionAmount || 0)} · ${promotion}${adjustment ? ` · 调整 ${adjustment > 0 ? "+" : ""}${currency.format(adjustment)}` : ""}`, 20),
+        truncate(`${Number(record.commissionAmount || 0) < 0 ? "返佣" : "佣金"} ${formatSettlementAdjustment(record.commissionAmount || 0)} · ${promotion}${adjustment ? ` · 调整 ${adjustment > 0 ? "+" : ""}${currency.format(adjustment)}` : ""}`, 20),
         currency.format(record.settlementAmount || 0),
       ];
       values.forEach((value, columnIndex) => context.fillText(String(value), columns[columnIndex].x + 10, y + 40));
@@ -4080,7 +4090,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-        const registration = await navigator.serviceWorker.register("sw.js?v=37", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=38", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
