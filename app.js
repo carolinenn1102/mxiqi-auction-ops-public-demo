@@ -13,6 +13,7 @@
   const BACKUP_META_KEY = "mxiqi-public-demo-last-backup";
   const LOGISTICS_OPERATOR_KEY = "mxiqi-logistics-operator-key";
   const RETURN_DISPOSITION_REPAIR_KEY = "mxiqi-return-disposition-repair-v1";
+  const RECOVERY_KEY = "mxiqi-public-demo-recovery-v1";
 
   const defaultSettings = {
     defaultCommissionType: "percent",
@@ -151,6 +152,122 @@
     } catch {
       return clone(fallback);
     }
+  }
+
+  const BUSINESS_STORAGE_KEYS = [STORAGE_KEY, AUDIT_KEY, SETTINGS_KEY, CUSTOMERS_KEY, COLLECTOR_KEY, CONNECTION_KEY, ASSETS_KEY, HISTORY_KEY];
+
+  function captureStorageSnapshot() {
+    return Object.fromEntries(BUSINESS_STORAGE_KEYS.map((key) => [key, localStorage.getItem(key)]));
+  }
+
+  function restoreStorageSnapshot(snapshot) {
+    BUSINESS_STORAGE_KEYS.forEach((key) => {
+      if (snapshot[key] === null || snapshot[key] === undefined) localStorage.removeItem(key);
+      else localStorage.setItem(key, snapshot[key]);
+    });
+  }
+
+  function captureMutableState() {
+    return clone({
+      records:state.records,
+      audit:state.audit,
+      settings:state.settings,
+      customers:state.customers,
+      collector:state.collector,
+      connection:state.connection,
+      assets:state.assets,
+      history:state.history,
+    });
+  }
+
+  function restoreMutableState(snapshot) {
+    state.records = clone(snapshot.records);
+    state.audit = clone(snapshot.audit);
+    state.settings = clone(snapshot.settings);
+    state.customers = clone(snapshot.customers);
+    state.collector = clone(snapshot.collector);
+    state.connection = clone(snapshot.connection);
+    state.assets = clone(snapshot.assets);
+    state.history = clone(snapshot.history);
+  }
+
+  function saveRecoveryCopy(reason, payload, error = "") {
+    try {
+      localStorage.setItem(RECOVERY_KEY, JSON.stringify({
+        at:new Date().toISOString(),
+        reason,
+        error:String(error?.message || error || ""),
+        payload,
+      }));
+    } catch {
+      // Recovery data must never block the application from opening.
+    }
+  }
+
+  function safeScalar(value) {
+    if (value === null || value === undefined) return "";
+    if (typeof value !== "object") return value;
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  function sanitizeRecord(record) {
+    if (!record || typeof record !== "object" || Array.isArray(record)) return null;
+    const sanitized = Object.fromEntries(Object.entries(record).map(([key, value]) => [key, safeScalar(value)]));
+    const lot = Number(sanitized.lot);
+    const itemName = String(sanitized.itemName || "").trim();
+    if (!Number.isInteger(lot) || lot <= 0 || !itemName) return null;
+    sanitized.lot = lot;
+    sanitized.itemName = itemName;
+    [
+      "id","platformItemKey","sellerWechat","sellerPhone","buyerName","buyerPhone","projectName",
+      "auctionHouse","auctionAt","lotLabel","recipientRaw","recipientName","recipientPhone",
+      "addressProvince","addressCity","addressDistrict","addressDetail",
+    ].forEach((key) => {
+      if (key in sanitized) sanitized[key] = String(sanitized[key] ?? "");
+    });
+    return sanitized;
+  }
+
+  function sanitizeRecordList(records) {
+    const valid = [];
+    const quarantined = [];
+    (Array.isArray(records) ? records : []).forEach((record) => {
+      const sanitized = sanitizeRecord(record);
+      if (sanitized) valid.push(sanitized);
+      else quarantined.push(record);
+    });
+    return {records:valid, quarantined};
+  }
+
+  function sanitizeCustomerDirectory(customers) {
+    if (!customers || typeof customers !== "object" || Array.isArray(customers)) return {};
+    return Object.fromEntries(Object.entries(customers).flatMap(([key, profile]) => {
+      if (!profile || typeof profile !== "object" || Array.isArray(profile)) return [];
+      const clean = Object.fromEntries(Object.entries(profile).map(([field, value]) => [field, safeScalar(value)]));
+      clean.aliases = Array.isArray(profile.aliases) ? profile.aliases.map((value) => String(value ?? "")).filter(Boolean) : [];
+      ["wechat","phone","notes"].forEach((field) => {
+        if (field in clean) clean[field] = String(clean[field] ?? "");
+      });
+      return [[String(key), clean]];
+    }));
+  }
+
+  function sanitizeLoadedState() {
+    const normalized = sanitizeRecordList(state.records);
+    state.records = normalized.records;
+    state.audit = Array.isArray(state.audit) ? state.audit.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)) : [];
+    state.assets = Array.isArray(state.assets) ? state.assets.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)) : [];
+    state.history = Array.isArray(state.history) ? state.history.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)) : [];
+    state.settings = state.settings && typeof state.settings === "object" && !Array.isArray(state.settings) ? {...defaultSettings, ...state.settings} : clone(defaultSettings);
+    state.customers = sanitizeCustomerDirectory(state.customers);
+    state.collector = state.collector && typeof state.collector === "object" && !Array.isArray(state.collector) ? {...defaultCollector, ...state.collector} : clone(defaultCollector);
+    state.connection = state.connection && typeof state.connection === "object" && !Array.isArray(state.connection) ? {...defaultConnection, ...state.connection} : clone(defaultConnection);
+    if (normalized.quarantined.length) saveRecoveryCopy("startup-sanitize", {quarantined:normalized.quarantined});
+    return normalized.quarantined.length;
   }
 
   const HISTORY_LIMIT = 8;
@@ -387,7 +504,7 @@
     customerForm.elements.lastContactedAt.value = profile.lastContactedAt || "";
     customerForm.elements.notes.value = profile.notes || "";
     $("#customer-profile-title").textContent = profile.wechat || "新增送拍人";
-    $("#customer-avatar").textContent = profile.birthdayMonth ? "🎂" : (profile.wechat.trim().slice(0, 1) || "送");
+    $("#customer-avatar").textContent = profile.birthdayMonth ? "🎂" : (String(profile.wechat || "").trim().slice(0, 1) || "送");
     $("#customer-record-count").textContent = `${profile.recordCount} 件${profile.assetCount ? ` · 寄存 ${profile.assetCount}` : ""}`;
     $("#customer-last-contact").textContent = profile.lastContactedAt || "待补";
     $("#customer-birthday-summary").textContent = profile.birthdayMonth ? `🎂 ${profile.birthdayMonth} 月` : "待补";
@@ -475,7 +592,7 @@
     context.fillText(`生成时间：${new Date().toLocaleString("zh-CN")} · 送拍运营工作台`, 48, canvas.height - 22);
     canvas.toBlob((blob) => {
       if (!blob) return notify("送拍人清单图片生成失败", "error");
-      const safeName = entry.wechat.replace(/[^\w\u4e00-\u9fa5-]/g, "");
+      const safeName = String(entry.wechat || "").replace(/[^\w\u4e00-\u9fa5-]/g, "");
       downloadBlob(blob, `送拍人拍品清单_${safeName}_${entry.phone || "手机号待补"}_${new Date().toISOString().slice(0,10)}.png`, "image/png");
       audit("导出送拍人拍品图片", `${entry.wechat} · ${entry.phone || "手机号待补"} · ${rows.length} 件拍品`);
       notify("送拍人拍品清单图片已下载");
@@ -1690,36 +1807,48 @@
   }
 
   function upsert(records) {
-    let added = 0;
-    let updated = 0;
-    let accepted = 0;
-    for (const incoming of records) {
-      const lot = Number(incoming.lot);
-      if (!Number.isInteger(lot) || lot <= 0 || !incoming.itemName) continue;
-      accepted += 1;
-      const platformItemKey = String(incoming.platformItemKey || "");
-      let index = platformItemKey
-        ? state.records.findIndex((item) => item.platformItemKey === platformItemKey)
-        : -1;
-      if (index < 0) index = state.records.findIndex((item) => MxiqiWorkflow.sameAuctionLot(item, incoming));
-      if (index >= 0) {
-        state.records[index] = {...MxiqiWorkflow.mergePreservingConsignor(state.records[index], incoming), id:state.records[index].id};
-        ensurePaymentTracking(state.records[index]);
-        recalculateRecord(state.records[index]);
-        updated += 1;
-      } else {
-        const record = {...incoming,id:uid(),received:incoming.received || "待确认",settled:Boolean(incoming.settled),carrier:incoming.carrier || "pending",logisticsStatus:incoming.logisticsStatus || "not_requested",pickupCode:incoming.pickupCode || ""};
-        ensurePaymentTracking(record);
-        recalculateRecord(record);
-        state.records.push(record);
-        added += 1;
+    const beforeState = captureMutableState();
+    const beforeStorage = captureStorageSnapshot();
+    try {
+      const normalized = sanitizeRecordList(records);
+      if ((records || []).length && !normalized.records.length) throw new Error("没有可识别的有效拍品记录");
+      let added = 0;
+      let updated = 0;
+      let accepted = 0;
+      for (const incoming of normalized.records) {
+        const lot = Number(incoming.lot);
+        accepted += 1;
+        const platformItemKey = String(incoming.platformItemKey || "");
+        let index = platformItemKey
+          ? state.records.findIndex((item) => item.platformItemKey === platformItemKey)
+          : -1;
+        if (index < 0) index = state.records.findIndex((item) => MxiqiWorkflow.sameAuctionLot(item, incoming));
+        if (index >= 0) {
+          state.records[index] = {...MxiqiWorkflow.mergePreservingConsignor(state.records[index], incoming), id:state.records[index].id};
+          ensurePaymentTracking(state.records[index]);
+          recalculateRecord(state.records[index]);
+          updated += 1;
+        } else {
+          const record = {...incoming,id:uid(),received:incoming.received || "待确认",settled:Boolean(incoming.settled),carrier:incoming.carrier || "pending",logisticsStatus:incoming.logisticsStatus || "not_requested",pickupCode:incoming.pickupCode || ""};
+          ensurePaymentTracking(record);
+          recalculateRecord(record);
+          state.records.push(record);
+          added += 1;
+        }
       }
+      syncStoredAssetsFromRecords();
+      rematchAssetsAndApply();
+      render();
+      save();
+      if (normalized.quarantined.length) saveRecoveryCopy("import-quarantine", {quarantined:normalized.quarantined});
+      return {accepted, added, updated};
+    } catch (error) {
+      restoreMutableState(beforeState);
+      restoreStorageSnapshot(beforeStorage);
+      saveRecoveryCopy("import-rollback", {incoming:records}, error);
+      try { render(); } catch {}
+      throw new Error(`导入失败，已自动恢复导入前数据：${error?.message || error}`);
     }
-    syncStoredAssetsFromRecords();
-    rematchAssetsAndApply();
-    save();
-    render();
-    return {accepted, added, updated};
   }
 
   function removeDefaultDemoRecords() {
@@ -3661,7 +3790,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = `./zhenzhenpu-logo.jpg?v=36`;
+      image.src = `./zhenzhenpu-logo.jpg?v=37`;
     });
     return checklistLogoPromise;
   }
@@ -3866,6 +3995,8 @@
   $("#export-settlement-checklist-image").addEventListener("click", exportSettlementChecklistImage);
   $("#export-preauction-image").addEventListener("click", exportPreauctionImage);
 
+  const startupSanitizedCount = sanitizeLoadedState();
+
   if (localStorage.getItem(MIGRATION_KEY) !== "15") {
     state.settings = {...defaultSettings, ...state.settings};
     if (Number(state.settings.birthdayCommissionValue) === 5 && state.settings.birthdayLabel === "生日月优惠") {
@@ -3949,7 +4080,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-        const registration = await navigator.serviceWorker.register("sw.js?v=36", {updateViaCache:"none"});
+        const registration = await navigator.serviceWorker.register("sw.js?v=37", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
@@ -3975,11 +4106,34 @@
     audit("自动恢复送拍人关联", `从本机历史记录恢复 ${startupConsignorRepair.restored} 件拍品`, {undoable:false});
   }
   syncCustomerDirectory();
-  persistState();
-  render();
+  let startupQuarantinedCount = 0;
+  try {
+    render();
+    persistState();
+  } catch (error) {
+    const originalRecords = clone(state.records);
+    const validRecords = [];
+    const quarantined = [];
+    for (const record of originalRecords) {
+      state.records = [...validRecords, record];
+      try {
+        render();
+        validRecords.push(record);
+      } catch (recordError) {
+        quarantined.push({record, error:String(recordError?.message || recordError)});
+      }
+    }
+    state.records = validRecords;
+    startupQuarantinedCount = quarantined.length;
+    saveRecoveryCopy("startup-render-recovery", {quarantined}, error);
+    render();
+    persistState();
+  }
   renderConnectionPanel();
   renderCollectorPanel();
-  if (startupReturnRepair.restored) {
+  if (startupSanitizedCount || startupQuarantinedCount) {
+    notify(`检测到异常导入数据，已自动隔离 ${startupSanitizedCount + startupQuarantinedCount} 条并恢复页面`, "error");
+  } else if (startupReturnRepair.restored) {
     notify(`已自动恢复 ${startupReturnRepair.restored} 件拍品的拖回处理状态`);
   } else if (startupConsignorRepair.restored) {
     notify(`已自动恢复 ${startupConsignorRepair.restored} 件拍品的送拍人资料`);
