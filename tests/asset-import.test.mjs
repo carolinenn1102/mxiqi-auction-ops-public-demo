@@ -12,7 +12,17 @@ const ExcelJS = excelContext.ExcelJS;
 const excelRow = (values) => vm.runInContext(`JSON.parse(${JSON.stringify(JSON.stringify(values))})`, excelContext);
 await import("../matching-core.js");
 
-const { parseAssetWorkbook, rematchAssets, groupAssetsByBuyer } = globalThis.MxiqiAssets;
+const { parseAssetWorkbook, rematchAssets, groupAssetsByBuyer, parseConsignorLabel } = globalThis.MxiqiAssets;
+
+test("extracts embedded phone and birthday metadata without polluting the consignor nickname", () => {
+  const parsed = parseConsignorLabel("测试昵称，生日，13900000001", "", "260803 周一，77期");
+  assert.deepEqual(parsed, {
+    wechat:"测试昵称",
+    phone:"13900000001",
+    birthdayMarked:true,
+    birthdayMonth:8,
+  });
+});
 
 test("imports consignment and intentionally skips the second grading sheet", () => {
   const workbook = new ExcelJS.Workbook();

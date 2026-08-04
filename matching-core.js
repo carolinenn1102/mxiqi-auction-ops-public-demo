@@ -91,6 +91,36 @@
     return cleaned || "手机号用户";
   }
 
+  function parseAuctionMonthText(value) {
+    const source = String(value || "").trim();
+    const isoMatch = source.match(/(?:^|\D)\d{4}[-/.年](0?[1-9]|1[0-2])(?:[-/.月]|\D|$)/);
+    if (isoMatch) return Number(isoMatch[1]);
+    const compactMatch = source.match(/(?:^|\D)\d{2}(0[1-9]|1[0-2])\d{2}(?:\D|$)/);
+    return compactMatch ? Number(compactMatch[1]) : 0;
+  }
+
+  function parseConsignorLabel(value = "", explicitPhone = "", auctionAt = "") {
+    const source = String(value || "").trim();
+    const phone = normalizePhone(explicitPhone) || normalizePhone(source);
+    const tokens = source.split(/[，,、;；|]+/).map((token) => token.trim()).filter(Boolean);
+    const birthdayMarked = tokens.some((token) => token === "生日")
+      || /(?:^|[，,、;；|\s])生日(?:$|[，,、;；|\s])/.test(source);
+    const nameTokens = tokens.filter((token) => token !== "生日" && !normalizePhone(token));
+    let wechat = nameTokens.join("，") || source;
+    if (phone) wechat = wechat.replace(phone, " ");
+    wechat = wechat
+      .replace(/(?:^|[，,、;；|\s])生日(?:$|[，,、;；|\s])/g, " ")
+      .replace(/[，,、;；|]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return {
+      wechat:wechat || (phone ? "手机号用户" : ""),
+      phone,
+      birthdayMarked,
+      birthdayMonth:birthdayMarked ? parseAuctionMonthText(auctionAt) : 0,
+    };
+  }
+
   function recipientNameFromAddress(value, phone = "") {
     const withoutPhone = String(value || "").replace(phone, " ").replace(/\s+/g, " ").trim();
     const parts = withoutPhone.split(" ").filter(Boolean);
@@ -393,6 +423,7 @@
     TYPE_LABELS,
     normalizePhone,
     extractPhone,
+    parseConsignorLabel,
     itemSimilarity,
     matchScore,
     suggestMatch,
