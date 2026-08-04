@@ -301,6 +301,30 @@
     return overlap / Math.max(a.size, b.size);
   }
 
+  function suggestReauctionMatch(record = {}, candidates = []) {
+    const scored = candidates
+      .filter((candidate) => candidate?.returnDisposition === "拖回/再拍")
+      .map((candidate) => ({
+        record:candidate,
+        similarity:itemSimilarity(record.itemName || record.projectName, candidate.itemName || candidate.projectName),
+      }))
+      .filter((candidate) => candidate.similarity >= 0.45)
+      .sort((left, right) => right.similarity - left.similarity || Number(left.record.lot || 0) - Number(right.record.lot || 0));
+    const best = scored[0];
+    const second = scored[1];
+    if (!best) return {matchedRecordId:"",matchStatus:"unmatched",similarity:0,matchReason:"再拍库未找到相似拍品"};
+    const lead = best.similarity - (second?.similarity || 0);
+    const unique = !second || lead >= 0.12;
+    return {
+      matchedRecordId:unique ? best.record.id : "",
+      matchStatus:unique ? "auto" : "review",
+      similarity:best.similarity,
+      matchReason:unique
+        ? `拍品名称模糊匹配 · 原 Lot ${best.record.lot || "—"}`
+        : `再拍库存在多个相似拍品 · 最高相似度 ${Math.round(best.similarity * 100)}%`,
+    };
+  }
+
   function normalizedId(value) {
     return String(value ?? "").replace(/[^\da-z]/gi, "").toLowerCase();
   }
@@ -368,18 +392,35 @@
   }
 
   function mergeAssets(existing, incoming) {
-    const byKey = new Map(existing.map((asset) => [asset.assetKey, asset]));
+    let nextStorageOrder = 0;
+    const byKey = new Map(existing.map((asset, index) => {
+      const storageOrder = Number(asset.storageOrder) > 0 ? Number(asset.storageOrder) : index + 1;
+      nextStorageOrder = Math.max(nextStorageOrder, storageOrder);
+      return [asset.assetKey, {
+        ...asset,
+        storageOrder,
+        firstImportedAt:asset.firstImportedAt || asset.importedAt || "",
+      }];
+    }));
     incoming.forEach((asset) => {
       const prior = byKey.get(asset.assetKey);
       byKey.set(asset.assetKey, prior ? {
         ...prior,
         ...asset,
         id: prior.id,
+        importedAt:prior.importedAt || asset.importedAt,
+        firstImportedAt:prior.firstImportedAt || prior.importedAt || asset.importedAt || "",
+        lastImportedAt:asset.importedAt || prior.lastImportedAt || "",
+        storageOrder:prior.storageOrder,
         matchedRecordId: prior.matchStatus === "manual" ? prior.matchedRecordId : asset.matchedRecordId,
         matchStatus: prior.matchStatus === "manual" ? "manual" : asset.matchStatus,
         matchScore: prior.matchStatus === "manual" ? prior.matchScore : asset.matchScore,
         matchReason: prior.matchStatus === "manual" ? prior.matchReason : asset.matchReason,
-      } : asset);
+      } : {
+        ...asset,
+        storageOrder:++nextStorageOrder,
+        firstImportedAt:asset.importedAt || "",
+      });
     });
     return [...byKey.values()];
   }
@@ -402,20 +443,25 @@
 
   function groupAssetsByBuyer(assets = []) {
     const groups = new Map();
+    const storageOrder = new Map(assets.map((asset, index) => [
+      asset,
+      Number(asset.storageOrder) > 0 ? Number(asset.storageOrder) : index + 1,
+    ]));
     for (const asset of assets) {
       const key = asset.assetType === "consignment" ? assetBuyerKey(asset) : `asset:${asset.id || asset.assetKey}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(asset);
     }
     return Array.from(groups, ([key, items]) => {
+      items.sort((left, right) => storageOrder.get(left) - storageOrder.get(right));
       const first = items[0] || {};
       const buyerName = items.map(assetBuyerName).find(Boolean) || "买家待补";
       const buyerPhone = items.map(assetBuyerPhone).find(Boolean) || "";
       const recipientRaw = items.map((asset) => String(asset.recipientRaw || asset.address || "").trim()).find(Boolean) || "";
       const completed = items.length > 0 && items.every((asset) => asset.storageShippingStatus === "completed");
-      return {key,assets:items,buyerName,buyerPhone,recipientRaw,completed,assetType:first.assetType || "inventory"};
+      return {key,assets:items,buyerName,buyerPhone,recipientRaw,completed,storageOrder:storageOrder.get(first),assetType:first.assetType || "inventory"};
     }).sort((left, right) => Number(left.completed) - Number(right.completed)
-      || left.buyerName.localeCompare(right.buyerName, "zh-CN")
+      || left.storageOrder - right.storageOrder
       || left.key.localeCompare(right.key));
   }
 
@@ -425,6 +471,7 @@
     extractPhone,
     parseConsignorLabel,
     itemSimilarity,
+    suggestReauctionMatch,
     matchScore,
     suggestMatch,
     rematchAssets,

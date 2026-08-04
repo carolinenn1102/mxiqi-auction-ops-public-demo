@@ -244,7 +244,40 @@
     const nonBlankIncoming = Object.fromEntries(
       Object.entries(incoming).filter(([, value]) => !isBlankImportValue(value)),
     );
-    return mergePreservingConsignor(existing, nonBlankIncoming);
+    const merged = mergePreservingConsignor(existing, nonBlankIncoming);
+    if (existing.paymentStatusManual && !incoming.paymentStatusManual) {
+      merged.paymentStatus = existing.paymentStatus;
+      merged.paymentStatusManual = true;
+      merged.paymentStatusManualAt = existing.paymentStatusManualAt || "";
+      if (existing.paymentStatus === "已付款" && !normalizeReturnDisposition(existing.returnDisposition)) {
+        merged.finalOutcome = existing.finalOutcome || merged.finalOutcome;
+        merged.returnDisposition = "";
+        merged.unpaidReturn = false;
+        merged.unpaidReturnDetectedAt = "";
+        merged.paymentDueAt = "";
+      }
+    }
+    return merged;
+  }
+
+  function applyManualPaymentResolution(record = {}, previous = {}, timestamp = new Date().toISOString()) {
+    const updated = {...record};
+    const changed = String(record.paymentStatus || "") !== String(previous.paymentStatus || "");
+    if (changed) {
+      updated.paymentStatusManual = true;
+      updated.paymentStatusManualAt = timestamp;
+    } else if (previous.paymentStatusManual) {
+      updated.paymentStatusManual = true;
+      updated.paymentStatusManualAt = previous.paymentStatusManualAt || timestamp;
+    }
+    if (updated.paymentStatus === "已付款"
+      && updated.finalOutcome === "成交"
+      && !normalizeReturnDisposition(updated.returnDisposition)) {
+      updated.unpaidReturn = false;
+      updated.unpaidReturnDetectedAt = "";
+      updated.paymentDueAt = "";
+    }
+    return updated;
   }
 
   function mergeAuctionRecordCopies(preferred = {}, fallback = {}) {
@@ -389,7 +422,10 @@
     }
 
     function applyResult(existing = {}, incoming = {}) {
-      const pending = isPending({...existing,...incoming});
+      const manualPaidNormal = existing.paymentStatusManual
+        && existing.paymentStatus === "已付款"
+        && !normalizeReturnDisposition(existing.returnDisposition);
+      const pending = isPending({...existing,...incoming}) && !manualPaidNormal;
       const localDisposition = normalizeReturnDisposition(existing.returnDisposition);
       const keepHandledDisposition = isHandledReturnDisposition(localDisposition);
       const finalPrice = Math.max(0, Number(incoming.finalPrice ?? existing.finalPrice) || 0);
@@ -433,6 +469,18 @@
         updated.returnDisposition = keepHandledDisposition
           ? localDisposition
           : localDisposition === "拖回/等待" ? "" : normalizeReturnDisposition(updated.returnDisposition);
+      }
+      if (existing.paymentStatusManual && existing.paymentStatus) {
+        updated.paymentStatus = existing.paymentStatus;
+        updated.paymentStatusManual = true;
+        updated.paymentStatusManualAt = existing.paymentStatusManualAt || "";
+        if (existing.paymentStatus === "已付款" && !normalizeReturnDisposition(existing.returnDisposition)) {
+          updated.finalOutcome = existing.finalOutcome === "成交" ? "成交" : updated.finalOutcome;
+          updated.returnDisposition = "";
+          updated.unpaidReturn = false;
+          updated.unpaidReturnDetectedAt = "";
+          updated.paymentDueAt = "";
+        }
       }
       return updated;
     }
@@ -488,5 +536,5 @@
     return {records:next,departed};
   }
 
-  return {isStorageRecord,isReturnRecord,auctionPeriod,normalizeReturnDisposition,isHandledReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,mergeImportedRecord,mergeAuctionRecordCopies,deduplicateAuctionLots,restoreConsignorIdentities,restoreHandledReturnDispositions,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
+  return {isStorageRecord,isReturnRecord,auctionPeriod,normalizeReturnDisposition,isHandledReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,mergeImportedRecord,applyManualPaymentResolution,mergeAuctionRecordCopies,deduplicateAuctionLots,restoreConsignorIdentities,restoreHandledReturnDispositions,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
 });
