@@ -84,6 +84,10 @@ try {
   await page.click('[data-settlement-settle="phone:13900000002"]');
   assert.equal(await primaryAction.innerText(), "导出本期结算表");
   assert.equal(await page.locator("#result-count").innerText(), "3 位送拍人 · 3 件拍品");
+  const completeLabels = page.locator("#records-body .settlement-queue-complete small");
+  assert.equal(await completeLabels.count(), 3);
+  assert.ok((await completeLabels.allTextContents()).every((label) => label === "全部已结账"));
+  assert.ok((await completeLabels.evaluateAll((labels) => labels.map((label) => getComputedStyle(label).color))).every((color) => color === "rgb(29, 97, 74)"));
   assert.deepEqual(pageErrors, []);
 
   process.stdout.write(JSON.stringify({
@@ -93,6 +97,7 @@ try {
     sellerDrilldown:true,
     allRecordsRestored:true,
     autoRestoredAfterFinalSettlement:true,
+    completedGroupsGreen:true,
   }));
 } finally {
   await browser.close();

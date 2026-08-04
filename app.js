@@ -1436,6 +1436,7 @@
     const commission = records.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0);
     const payable = records.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0);
     const settledCount = records.filter((record) => record.settled).length;
+    const allSettled = settledCount === records.length;
     const gateReady = settlementGate().ready;
     const lots = records.map((record) => record.lot).join("、");
     const periods = [...new Set(records.map(auctionPeriod).filter(Boolean))].join("、") || "期数待补";
@@ -1450,8 +1451,8 @@
       <td>${settlementBadgeSummary(records)}</td>
       <td><b>${currency.format(commission)}</b></td>
       <td><b class="money">${currency.format(payable)}</b></td>
-      <td><span class="settlement-queue-progress">${settledCount}/${records.length}</span><small>${settledCount === records.length ? "全部已结账" : `${records.length - settledCount} 件待结账`}</small></td>
-      <td><div class="row-actions"><button data-settlement-toggle="${esc(group.key)}">${expanded ? "收起" : "展开"}</button><button data-settlement-settle="${esc(group.key)}" ${settledCount === records.length || !gateReady ? "disabled" : ""}>整组结账</button></div></td>
+      <td class="${allSettled ? "settlement-queue-complete" : ""}"><span class="settlement-queue-progress">${settledCount}/${records.length}</span><small>${allSettled ? "全部已结账" : `${records.length - settledCount} 件待结账`}</small></td>
+      <td><div class="row-actions"><button data-settlement-toggle="${esc(group.key)}">${expanded ? "收起" : "展开"}</button><button data-settlement-settle="${esc(group.key)}" ${allSettled || !gateReady ? "disabled" : ""}>整组结账</button></div></td>
     </tr>${children}`;
   }
 
@@ -3924,7 +3925,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = `./zhenzhenpu-logo.jpg?v=41`;
+      image.src = `./zhenzhenpu-logo.jpg?v=42`;
     });
     return checklistLogoPromise;
   }
@@ -4252,7 +4253,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=41", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=42", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
