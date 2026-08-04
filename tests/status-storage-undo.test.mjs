@@ -105,6 +105,12 @@ test("the unsettled count opens a consignor-focused work queue", () => {
   assert.match(styles, /\.btn\.unsettled-action/);
 });
 
+test("fully settled consignor groups use the green completion state", () => {
+  assert.match(app, /const allSettled = settledCount === records\.length/);
+  assert.match(app, /allSettled \? "settlement-queue-complete"/);
+  assert.match(styles, /\.settlement-queue-complete \.settlement-queue-progress,\.settlement-queue-complete small\{color:#1d614a\}/);
+});
+
 test("preauction check groups sellers and renders only four checklist columns", () => {
   assert.match(html, /id="open-preauction-check"[^>]*data-stage="preauction"/);
   assert.match(html, /id="preauction-seller-list"/);

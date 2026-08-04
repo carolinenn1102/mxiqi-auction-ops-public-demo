@@ -27,7 +27,7 @@ test("startup sanitizes persisted records and quarantines records that still can
 });
 
 test("the recovery release uses one cache-busting version everywhere", () => {
-  assert.match(indexSource, /app\.js\?v=41/);
-  assert.match(appSource, /sw\.js\?v=41/);
-  assert.match(workerSource, /mxiqi-ops-demo-v41/);
+  assert.match(indexSource, /app\.js\?v=42/);
+  assert.match(appSource, /sw\.js\?v=42/);
+  assert.match(workerSource, /mxiqi-ops-demo-v42/);
 });
