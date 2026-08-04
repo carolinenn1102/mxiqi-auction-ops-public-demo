@@ -48,6 +48,39 @@ test("same Lot is unique only inside the same auction period", () => {
   assert.equal(workflow.sameAuctionLot({lot:48,projectName:"第75期"},{lot:48,auctionPeriodOverride:"第76期"}), false);
 });
 
+test("blank import cells never overwrite existing non-blank business data", () => {
+  const existing = {
+    id:"existing",
+    lot:8,
+    itemName:"已有拍品",
+    projectName:"第77期",
+    received:"是",
+    finalOutcome:"成交",
+    finalPrice:2500,
+    settled:true,
+    sellerWechat:"已有送拍人",
+    sellerPhone:"13900000001",
+  };
+  const merged = workflow.mergeImportedRecord(existing, {
+    lot:8,
+    itemName:"更新后的拍品标题",
+    projectName:"第77期",
+    received:"",
+    finalOutcome:null,
+    finalPrice:undefined,
+    settled:undefined,
+    sellerWechat:"",
+    sellerPhone:"",
+  });
+  assert.equal(merged.itemName, "更新后的拍品标题");
+  assert.equal(merged.received, "是");
+  assert.equal(merged.finalOutcome, "成交");
+  assert.equal(merged.finalPrice, 2500);
+  assert.equal(merged.settled, true);
+  assert.equal(merged.sellerWechat, "已有送拍人");
+  assert.equal(merged.sellerPhone, "13900000001");
+});
+
 test("hidden local and connector copies of the same auction Lot are merged", () => {
   const records = [
     {

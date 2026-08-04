@@ -342,6 +342,14 @@
     return Object.fromEntries(Object.entries(record).filter(([, value]) => value !== "" && value !== undefined && value !== null));
   }
 
+  function importRecordFingerprint(record = {}) {
+    const comparable = {...record};
+    delete comparable.id;
+    delete comparable.importBatchId;
+    delete comparable.importedAt;
+    return JSON.stringify(comparable);
+  }
+
   function roundMoney(value) {
     return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
   }
@@ -1824,17 +1832,38 @@
       if ((records || []).length && !normalized.records.length) throw new Error("没有可识别的有效拍品记录");
       let added = 0;
       let updated = 0;
+      let skipped = normalized.quarantined.length;
+      let conflicts = 0;
       let accepted = 0;
       for (const incoming of normalized.records) {
-        const lot = Number(incoming.lot);
         accepted += 1;
-        const platformItemKey = String(incoming.platformItemKey || "");
-        let index = platformItemKey
-          ? state.records.findIndex((item) => item.platformItemKey === platformItemKey)
-          : -1;
-        if (index < 0) index = state.records.findIndex((item) => MxiqiWorkflow.sameAuctionLot(item, incoming));
-        if (index >= 0) {
-          state.records[index] = {...MxiqiWorkflow.mergePreservingConsignor(state.records[index], incoming), id:state.records[index].id};
+        const platformKey = MxiqiWorkflow.platformRecordKey(incoming);
+        const exact = platformKey
+          ? state.records.filter((item) => MxiqiWorkflow.platformRecordKey(item) === platformKey)
+          : [];
+        const byLot = state.records.filter((item) => MxiqiWorkflow.sameAuctionLot(item, incoming));
+        const candidates = [...new Set([...exact, ...byLot])];
+        if (candidates.length) {
+          const canonical = exact[0] || candidates[0];
+          const canonicalId = canonical.id || uid();
+          const duplicates = candidates.filter((item) => item !== canonical);
+          const duplicateSet = new Set(duplicates);
+          const duplicateIds = new Set(duplicates.map((item) => item.id).filter(Boolean));
+          const mergedExisting = duplicates
+            .reduce((merged, item) => MxiqiWorkflow.mergeAuctionRecordCopies(merged, item), canonical);
+          const merged = {...MxiqiWorkflow.mergeImportedRecord(mergedExisting, incoming), id:canonicalId};
+          const changed = importRecordFingerprint(merged) !== importRecordFingerprint(canonical) || duplicates.length > 0 || !canonical.id;
+          if (!changed) {
+            skipped += 1;
+            continue;
+          }
+          if (duplicates.length) {
+            state.records = state.records.filter((item) => !duplicateSet.has(item));
+            remapRecordReferences(Object.fromEntries([...duplicateIds].map((id) => [id, canonicalId])));
+            conflicts += duplicates.length;
+          }
+          const index = state.records.indexOf(canonical);
+          state.records[index] = merged;
           ensurePaymentTracking(state.records[index]);
           recalculateRecord(state.records[index]);
           updated += 1;
@@ -1851,7 +1880,7 @@
       render();
       save();
       if (normalized.quarantined.length) saveRecoveryCopy("import-quarantine", {quarantined:normalized.quarantined});
-      return {accepted, added, updated};
+      return {accepted, added, updated, skipped, conflicts};
     } catch (error) {
       restoreMutableState(beforeState);
       restoreStorageSnapshot(beforeStorage);
@@ -3347,17 +3376,17 @@
         const parsed = JSON.parse(json);
         records = Array.isArray(parsed) ? parsed : [parsed];
       } else throw new Error("请选择 Excel 文件或粘贴 JSON");
-      const valid = records.filter((item) => Number(item.lot) > 0 && item.itemName);
-      if (!valid.length) throw new Error("文件中没有可导入的数据行");
+      if (!records.length) throw new Error("文件中没有可导入的数据行");
       const importBatchId = uid();
       const importedAt = new Date().toISOString();
-      valid.forEach((record) => Object.assign(record, {importBatchId, importedAt}));
-      const stats = upsert(valid);
-      audit("导入数据", `${valid.length} 条拍品 · 新增 ${stats.added} · 更新 ${stats.updated}`);
+      records.filter((record) => record && typeof record === "object").forEach((record) => Object.assign(record, {importBatchId, importedAt}));
+      const stats = upsert(records);
+      const statsText = `识别 ${stats.accepted} · 新增 ${stats.added} · 更新 ${stats.updated} · 跳过 ${stats.skipped} · 冲突已合并 ${stats.conflicts}`;
+      audit("导入数据", statsText);
       importDialog.close();
       $("#import-form").reset();
       $("#file-name").textContent = "选择 .xlsx 文件";
-      notify(`已导入 ${valid.length} 条记录并套用佣金规则`);
+      notify(`导入完成：${statsText}`);
     } catch (error) {
       notify(error.message || "导入失败", "error");
     }
@@ -3572,7 +3601,7 @@
     await workbook.xlsx.load(buffer);
     let found = null;
     for (const sheet of workbook.worksheets) {
-      for (let rowNo = 1; rowNo <= Math.min(sheet.rowCount || 1, 8); rowNo += 1) {
+      for (let rowNo = 1; rowNo <= Math.min(sheet.rowCount || 1, 30); rowNo += 1) {
         const map = headerMap(sheet.getRow(rowNo));
         if (column(map, "Lot") && column(map, "拍品名称")) { found = {kind:"mxiqi",sheet,rowNo,map}; break; }
         if (column(map, "送拍人（微信名）", "送拍人微信名") && column(map, "拍场/Lot", "拍场Lot")) { found = {kind:"tracker",sheet,rowNo,map}; break; }
@@ -3595,8 +3624,36 @@
         if (!lot && !projectName) continue;
         const outcome = textAt(row, found.map, "拍出价格/拖回", "拍出价格拖回");
         const price = numberAt(row, found.map, "拍出价格/拖回");
-        const normalizedOutcome = MxiqiWorkflow.trackerOutcome(outcome, price);
-        if (lot > 0 && projectName) records.push(compact({lot,itemName:projectName,projectName,lotLabel,auctionHouse:lotLabel.split(/[\/／]/)[0].trim(),sellerWechat:textAt(row,found.map,"送拍人（微信名）","送拍人微信名"),sellerPhone:MxiqiAssets.normalizePhone(textAt(row,found.map,"送拍人手机号","手机号","电话")),contactedAt:textAt(row,found.map,"联系时间"),coinBoxId:textAt(row,found.map,"盒子币编号"),trackingNumber:textAt(row,found.map,"快递单号"),auctionAt:textAt(row,found.map,"上拍时间（拍卖时间）","上拍时间拍卖时间"),received:textAt(row,found.map,"是/否收到","是否收到") || "待确认",finalOutcome:normalizedOutcome.finalOutcome,returnDisposition:normalizedOutcome.returnDisposition,finalPrice:normalizedOutcome.finalOutcome === "成交" ? price : 0,settled:textAt(row,found.map,"是/否已结账","是否已结账") === "是",settlementNote:textAt(row,found.map,"结账")}));
+        const auctionAt = textAt(row, found.map, "上拍时间（拍卖时间）", "上拍时间拍卖时间");
+        const sellerRaw = textAt(row, found.map, "送拍人（微信名）", "送拍人微信名");
+        const seller = MxiqiAssets.parseConsignorLabel(
+          sellerRaw,
+          textAt(row, found.map, "送拍人手机号", "手机号", "电话"),
+          auctionAt,
+        );
+        const received = textAt(row, found.map, "是/否收到", "是否收到");
+        const settledText = textAt(row, found.map, "是/否已结账", "是否已结账");
+        const normalizedOutcome = outcome ? MxiqiWorkflow.trackerOutcome(outcome, price) : null;
+        if (lot > 0 && projectName) records.push(compact({
+          lot,
+          itemName:projectName,
+          projectName,
+          lotLabel,
+          auctionHouse:lotLabel.split(/[\/／]/)[0].trim(),
+          sellerWechat:seller.wechat,
+          sellerPhone:seller.phone,
+          birthdayMonth:seller.birthdayMonth,
+          contactedAt:textAt(row,found.map,"联系时间"),
+          coinBoxId:textAt(row,found.map,"盒子币编号"),
+          trackingNumber:textAt(row,found.map,"快递单号"),
+          auctionAt,
+          received,
+          finalOutcome:normalizedOutcome?.finalOutcome,
+          returnDisposition:normalizedOutcome?.returnDisposition,
+          finalPrice:normalizedOutcome ? (normalizedOutcome.finalOutcome === "成交" ? price : 0) : undefined,
+          settled:settledText ? settledText === "是" : undefined,
+          settlementNote:textAt(row,found.map,"结账"),
+        }));
       }
     }
     if (found.kind === "tracker" && column(found.map, "送拍人手机号", "手机号", "电话")) {
@@ -3606,7 +3663,8 @@
         const lotLabel = textAt(row, found.map, "拍场/Lot", "拍场Lot");
         const projectName = textAt(row, found.map, "送拍项目");
         if (lotFromLabel(lotLabel) > 0 && projectName && records[recordIndex]) {
-          records[recordIndex].sellerPhone = MxiqiAssets.normalizePhone(textAt(row, found.map, "送拍人手机号", "手机号", "电话"));
+          const phone = MxiqiAssets.normalizePhone(textAt(row, found.map, "送拍人手机号", "手机号", "电话"));
+          if (phone) records[recordIndex].sellerPhone = phone;
           recordIndex += 1;
         }
       }
@@ -3800,7 +3858,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = `./zhenzhenpu-logo.jpg?v=38`;
+      image.src = `./zhenzhenpu-logo.jpg?v=39`;
     });
     return checklistLogoPromise;
   }
@@ -4007,8 +4065,35 @@
 
   const startupSanitizedCount = sanitizeLoadedState();
 
-  if (localStorage.getItem(MIGRATION_KEY) !== "15") {
+  function repairEmbeddedConsignorLabels() {
+    let repaired = 0;
+    state.records.forEach((record) => {
+      const oldName = String(record.sellerWechat || "").trim();
+      if (!oldName) return;
+      const parsed = MxiqiAssets.parseConsignorLabel(oldName, record.sellerPhone, record.auctionAt);
+      if (!MxiqiAssets.normalizePhone(oldName) && !parsed.birthdayMarked) return;
+      const nextName = parsed.wechat || oldName;
+      if (nextName !== oldName) record.sellerWechat = nextName;
+      if (!normalizeCustomerPhone(record.sellerPhone) && parsed.phone) record.sellerPhone = parsed.phone;
+      if (!Number(record.birthdayMonth || 0) && parsed.birthdayMonth) record.birthdayMonth = parsed.birthdayMonth;
+      const oldProfile = state.customers[oldName] && typeof state.customers[oldName] === "object" ? state.customers[oldName] : {};
+      const nextProfile = state.customers[nextName] && typeof state.customers[nextName] === "object" ? state.customers[nextName] : {};
+      state.customers[nextName] = {
+        ...oldProfile,
+        ...nextProfile,
+        phone:normalizeCustomerPhone(nextProfile.phone || oldProfile.phone || parsed.phone),
+        birthdayMonth:Number(nextProfile.birthdayMonth || oldProfile.birthdayMonth || parsed.birthdayMonth || 0),
+        aliases:[...new Set([...(oldProfile.aliases || []), ...(nextProfile.aliases || []), oldName].filter(Boolean))],
+      };
+      if (nextName !== oldName) delete state.customers[oldName];
+      repaired += 1;
+    });
+    return repaired;
+  }
+
+  if (localStorage.getItem(MIGRATION_KEY) !== "16") {
     state.settings = {...defaultSettings, ...state.settings};
+    repairEmbeddedConsignorLabels();
     if (Number(state.settings.birthdayCommissionValue) === 5 && state.settings.birthdayLabel === "生日月优惠") {
       state.settings.birthdayCommissionValue = -2;
     }
@@ -4067,7 +4152,7 @@
     state.connection = {...defaultConnection, ...state.connection};
     if (Number(state.settings.sfThreshold) === 1000) state.settings.sfThreshold = 2000;
     if (!["disconnected","demo_connected","connected"].includes(state.connection.status)) state.connection = clone(defaultConnection);
-    localStorage.setItem(MIGRATION_KEY, "15");
+    localStorage.setItem(MIGRATION_KEY, "16");
     save();
   }
 
@@ -4090,7 +4175,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=38", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=39", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";

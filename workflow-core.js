@@ -233,6 +233,20 @@
     return merged;
   }
 
+  function isBlankImportValue(value) {
+    return value === undefined
+      || value === null
+      || (typeof value === "string" && value.trim() === "")
+      || (Array.isArray(value) && value.length === 0);
+  }
+
+  function mergeImportedRecord(existing = {}, incoming = {}) {
+    const nonBlankIncoming = Object.fromEntries(
+      Object.entries(incoming).filter(([, value]) => !isBlankImportValue(value)),
+    );
+    return mergePreservingConsignor(existing, nonBlankIncoming);
+  }
+
   function mergeAuctionRecordCopies(preferred = {}, fallback = {}) {
     const merged = {...preferred};
     Object.entries(fallback).forEach(([key, value]) => {
@@ -474,5 +488,5 @@
     return {records:next,departed};
   }
 
-  return {isStorageRecord,isReturnRecord,auctionPeriod,normalizeReturnDisposition,isHandledReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,mergeAuctionRecordCopies,deduplicateAuctionLots,restoreConsignorIdentities,restoreHandledReturnDispositions,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
+  return {isStorageRecord,isReturnRecord,auctionPeriod,normalizeReturnDisposition,isHandledReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,mergeImportedRecord,mergeAuctionRecordCopies,deduplicateAuctionLots,restoreConsignorIdentities,restoreHandledReturnDispositions,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
 });

@@ -22,8 +22,10 @@ test("dashboard exposes pending-auction and storage states", () => {
 
 test("tracker import preserves phone aliases and special outcomes", () => {
   assert.match(app, /trackerOutcome\(outcome, price\)/);
-  assert.match(app, /"送拍人手机号","手机号","电话"/);
-  assert.match(app, /returnDisposition:normalizedOutcome\.returnDisposition/);
+  assert.match(app, /parseConsignorLabel\(/);
+  assert.match(app, /"送拍人手机号",\s*"手机号",\s*"电话"/);
+  assert.match(app, /birthdayMonth:seller\.birthdayMonth/);
+  assert.match(app, /returnDisposition:normalizedOutcome\?\.returnDisposition/);
 });
 
 test("operation log exposes selectable rollback history", () => {
