@@ -93,6 +93,18 @@ test("manual paid records and uploaded reauction matches are wired into the dash
   assert.match(app, /再拍库匹配/);
 });
 
+test("the unsettled count opens a consignor-focused work queue", () => {
+  assert.match(app, /settlementView: "all"/);
+  assert.match(app, /state\.settlementView !== "unsettled" \|\| !record\.settled/);
+  assert.match(app, /`查看 \$\{remaining\} 条未结账`/);
+  assert.match(app, /state\.settlementView === "unsettled" \? "all" : "unsettled"/);
+  assert.match(app, /!settlementRecords\(\)\.some\(\(record\) => !record\.settled\)\) state\.settlementView = "all"/);
+  assert.match(app, /已列出 \$\{remaining\.length\} 条未结账记录，可按送拍人查看和处理/);
+  assert.match(app, /未结账送拍人/);
+  assert.match(styles, /\.seller-summary-item\.has-unsettled/);
+  assert.match(styles, /\.btn\.unsettled-action/);
+});
+
 test("preauction check groups sellers and renders only four checklist columns", () => {
   assert.match(html, /id="open-preauction-check"[^>]*data-stage="preauction"/);
   assert.match(html, /id="preauction-seller-list"/);

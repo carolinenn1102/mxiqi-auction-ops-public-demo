@@ -103,6 +103,7 @@
     query: "",
     filters: {seller:"",auction:"",status:"",shipping:""},
     settlementScope: {seller:"",from:"",to:""},
+    settlementView: "all",
     selected: new Set(),
     expandedPackages: new Set(),
     expandedSettlements: new Set(),
@@ -1091,7 +1092,9 @@
         || (state.stage === "preauction" && isPreauctionRecord(record))
         || (state.stage === "pickup" && Number(record.finalPrice) > 0 && !record.pickupCode)
         || (state.stage === "shipping" && isShippingCandidate(record) && shippingStage(record) !== "completed")
-        || (state.stage === "settlement" && settlementRecords().some((item) => item.id === record.id));
+        || (state.stage === "settlement"
+          && settlementRecords().some((item) => item.id === record.id)
+          && (state.settlementView !== "unsettled" || !record.settled));
       return search && filters && stage;
     });
   }
@@ -1149,8 +1152,10 @@
       if (!record.settled) current.pending += 1;
       grouped.set(identity.key, current);
     });
-    const entries = [...grouped.values()].sort((a, b) => b.payable - a.payable);
-    $("#seller-summary-list").innerHTML = entries.length ? entries.map((item) => `<button class="seller-summary-item ${state.settlementScope.seller === item.key ? "active" : ""}" data-seller-summary="${esc(item.key === "__missing__" ? "" : item.key)}"><span><b>${esc(item.seller)}</b><small>${esc(item.phone || "手机号待补")} · ${item.count} 件 · ${item.pending} 件待结账 · 成交 ${currency.format(item.gross)}</small></span><strong>${currency.format(item.payable)}</strong></button>`).join("") : '<div class="audit-empty">当前时间段暂无成交记录</div>';
+    const entries = [...grouped.values()]
+      .filter((item) => state.settlementView !== "unsettled" || item.pending > 0)
+      .sort((a, b) => Number(b.pending > 0) - Number(a.pending > 0) || b.pending - a.pending || b.payable - a.payable);
+    $("#seller-summary-list").innerHTML = entries.length ? entries.map((item) => `<button class="seller-summary-item ${item.pending ? "has-unsettled" : ""} ${state.settlementScope.seller === item.key ? "active" : ""}" data-seller-summary="${esc(item.key === "__missing__" ? "" : item.key)}"><span><b>${esc(item.seller)}</b><small>${esc(item.phone || "手机号待补")} · ${item.count} 件 · ${item.pending} 件待结账 · 成交 ${currency.format(item.gross)}</small></span><strong>${item.pending ? `${item.pending} 件未结` : "已结清"}<small>${currency.format(item.payable)}</small></strong></button>`).join("") : '<div class="audit-empty">当前范围内没有未结账送拍人</div>';
   }
 
   function renderPreauctionSummary() {
@@ -1180,6 +1185,7 @@
     const sold = settlementRecords();
     const settled = sold.filter((record) => record.settled);
     const remaining = sold.length - settled.length;
+    if (!remaining) state.settlementView = "all";
     const gate = settlementGate();
     const percent = sold.length ? Math.round(settled.length * 100 / sold.length) : 0;
     $("#settlement-summary").hidden = state.stage !== "settlement";
@@ -1199,8 +1205,14 @@
     $("#settlement-hint").textContent = !gate.ready
       ? "先处理本期全部待付款和拖回事项，处理完成后才开放结账。"
       : remaining ? `前置事项已完成，还有 ${remaining} 条待确认结账。` : "本期前置事项及结账均已完成，可以导出结算表。";
-    $("#export-settlement").disabled = !(sold.length && remaining === 0);
-    $("#export-settlement").textContent = remaining ? `还有 ${remaining} 条未结账` : "导出本期结算表";
+    const primaryAction = $("#export-settlement");
+    primaryAction.disabled = !sold.length;
+    primaryAction.classList.toggle("unsettled-action", remaining > 0);
+    primaryAction.setAttribute("aria-pressed", state.settlementView === "unsettled" ? "true" : "false");
+    primaryAction.title = remaining ? "点击查看未结账送拍人和拍品明细" : "导出本期结算表";
+    primaryAction.textContent = remaining
+      ? state.settlementView === "unsettled" ? "显示全部结算记录" : `查看 ${remaining} 条未结账`
+      : "导出本期结算表";
     $("#export-settlement-image").disabled = !sold.length;
     $("#export-settlement-checklist-image").disabled = !(sold.length && remaining === 0);
     const repairable = settlementRepairableRecords();
@@ -1445,6 +1457,9 @@
 
   function render() {
     const records = state.records;
+    if (state.stage === "settlement"
+      && state.settlementView === "unsettled"
+      && !settlementRecords().some((record) => !record.settled)) state.settlementView = "all";
     renderFilterOptions();
     $("#metric-total").textContent = records.length;
     $("#metric-unpaid").textContent = records.filter((item) => item.paymentStatus === "待付款").length;
@@ -1462,6 +1477,10 @@
         ? ["拍前核对", "按送拍人核对本期上拍拍品，只保留 Lot、拍品名称和拍卖期数"]
       : state.stage === "unpaid"
         ? ["待付款拍品", "来自麦稀奇待付款订单；超时项目会单独标红提醒"]
+        : state.stage === "settlement"
+          ? state.settlementView === "unsettled"
+            ? ["未结账送拍人", "仅显示仍需结账的送拍人和拍品；可展开查看 Lot，并直接整组结账"]
+            : ["结算复核", "按送拍人汇总本期成交拍品、佣金和应结金额"]
         : ["拍品明细", "平台字段、送拍资料、物流与结算状态集中复核"];
     $("#panel-title").textContent = panelCopy[0];
     $("#panel-subtitle").textContent = panelCopy[1];
@@ -1472,7 +1491,7 @@
     const settlementList = state.stage === "settlement" ? settlementGroups(visible) : [];
     const mergedCount = packageGroups.filter((group) => group.isPackage).length;
     $("#result-count").textContent = state.stage === "settlement"
-      ? `${settlementList.length} 位送拍人 · ${visible.length} 件拍品`
+      ? `${state.settlementView === "unsettled" ? "未结账：" : ""}${settlementList.length} 位送拍人 · ${visible.length} 件拍品`
       : state.stage === "preauction" ? `${consignorCount(visible)} 位送拍人 · ${visible.length} 件待核对`
       : state.stage === "reauction" ? `${visible.length} 件待重新上拍`
       : mergedCount ? `${packageGroups.length} 个包裹 · ${visible.length} 件拍品` : `${visible.length} 条结果`;
@@ -2617,7 +2636,9 @@
   }
 
   $$('[data-stage]').forEach((button) => button.addEventListener("click", () => {
-    state.stage = button.dataset.stage;
+    const nextStage = button.dataset.stage;
+    if (state.stage === "settlement" && nextStage !== "settlement") state.settlementView = "all";
+    state.stage = nextStage;
     if (["reauction","unpaid"].includes(state.stage)) state.filters.status = "";
     if (state.stage === "preauction") state.filters = {...state.filters,seller:"",status:"",shipping:""};
     state.selected.clear();
@@ -3903,7 +3924,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = `./zhenzhenpu-logo.jpg?v=40`;
+      image.src = `./zhenzhenpu-logo.jpg?v=41`;
     });
     return checklistLogoPromise;
   }
@@ -4103,7 +4124,18 @@
 
   $("#export-tracker").addEventListener("click", exportTracker);
   $("#export-mxiqi").addEventListener("click", exportMxiqi);
-  $("#export-settlement").addEventListener("click", exportSettlement);
+  $("#export-settlement").addEventListener("click", () => {
+    const remaining = settlementRecords().filter((record) => !record.settled);
+    if (!remaining.length) return exportSettlement();
+    state.settlementView = state.settlementView === "unsettled" ? "all" : "unsettled";
+    state.selected.clear();
+    render();
+    const viewingUnsettled = state.settlementView === "unsettled";
+    (viewingUnsettled ? $("#seller-summary-list") : $("#settlement-summary")).scrollIntoView({behavior:"smooth",block:"start"});
+    notify(viewingUnsettled
+      ? `已列出 ${remaining.length} 条未结账记录，可按送拍人查看和处理`
+      : "已恢复显示全部结算记录");
+  });
   $("#export-settlement-image").addEventListener("click", exportSettlementImage);
   $("#export-settlement-checklist-image").addEventListener("click", exportSettlementChecklistImage);
   $("#export-preauction-image").addEventListener("click", exportPreauctionImage);
@@ -4220,7 +4252,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=40", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=41", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
