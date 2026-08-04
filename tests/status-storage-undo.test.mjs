@@ -85,6 +85,14 @@ test("reauction records can be moved to a manually selected auction period", () 
   assert.match(app, /record\.relisted && record\.finalOutcome === "待拍"/);
 });
 
+test("manual paid records and uploaded reauction matches are wired into the dashboard", () => {
+  assert.match(app, /applyManualPaymentResolution\(record, existing\)/);
+  assert.match(app, /upsert\(records, \{matchReauction:true\}\)/);
+  assert.match(app, /suggestReauctionMatch\(/);
+  assert.match(app, /reauctionMatchedAt/);
+  assert.match(app, /再拍库匹配/);
+});
+
 test("preauction check groups sellers and renders only four checklist columns", () => {
   assert.match(html, /id="open-preauction-check"[^>]*data-stage="preauction"/);
   assert.match(html, /id="preauction-seller-list"/);

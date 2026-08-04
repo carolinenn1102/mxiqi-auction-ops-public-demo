@@ -7,7 +7,7 @@ const indexSource = await fs.readFile(new URL("../index.html", import.meta.url),
 const workerSource = await fs.readFile(new URL("../sw.js", import.meta.url), "utf8");
 
 test("imports are transactional and restore the previous browser data when rendering fails", () => {
-  const start = appSource.indexOf("function upsert(records)");
+  const start = appSource.indexOf("function upsert(records,");
   const end = appSource.indexOf("function removeDefaultDemoRecords", start);
   const upsertSource = appSource.slice(start, end);
 
@@ -27,7 +27,7 @@ test("startup sanitizes persisted records and quarantines records that still can
 });
 
 test("the recovery release uses one cache-busting version everywhere", () => {
-  assert.match(indexSource, /app\.js\?v=39/);
-  assert.match(appSource, /sw\.js\?v=39/);
-  assert.match(workerSource, /mxiqi-ops-demo-v39/);
+  assert.match(indexSource, /app\.js\?v=40/);
+  assert.match(appSource, /sw\.js\?v=40/);
+  assert.match(workerSource, /mxiqi-ops-demo-v40/);
 });

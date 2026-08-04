@@ -1272,7 +1272,10 @@
     const status = recordStatus(record);
     const payment = record.paymentStatus ? `付款：${record.paymentStatus}` : "付款状态未同步";
     const deadline = record.paymentStatus === "待付款" && record.paymentDueAt ? ` · 截止 ${String(record.paymentDueAt).replace("T", " ")}` : "";
-    return `<td class="status-cell"><span class="chip ${statusChipClass(status)}">${esc(status)}</span><small>${esc(payment + deadline)}</small></td>`;
+    const reauctionMatch = record.reauctionMatchedAt
+      ? `<small class="reauction-match-note" title="${esc(record.reauctionMatchReason || "拍品名称模糊匹配")}">↻ 再拍库匹配${Number(record.reauctionMatchSimilarity) > 0 ? ` ${Math.round(Number(record.reauctionMatchSimilarity) * 100)}%` : ""}</small>`
+      : "";
+    return `<td class="status-cell"><span class="chip ${statusChipClass(status)}">${esc(status)}</span><small>${esc(payment + deadline)}</small>${reauctionMatch}</td>`;
   }
 
   function renderRecordRow(record, child = false) {
@@ -1764,6 +1767,11 @@
       if (index >= 0) state.assets.splice(index, 1);
       return;
     }
+    const priorAsset = index >= 0 ? state.assets[index] : null;
+    const storedAt = priorAsset?.firstImportedAt || priorAsset?.importedAt || new Date().toISOString();
+    const storageOrder = Number(priorAsset?.storageOrder) > 0
+      ? Number(priorAsset.storageOrder)
+      : Math.max(0, ...state.assets.map((asset) => Number(asset.storageOrder) || 0)) + 1;
     const storedAsset = {
       ...(index >= 0 ? state.assets[index] : {}),
       id: index >= 0 ? state.assets[index].id : `stored-${record.id}`,
@@ -1772,6 +1780,9 @@
       sourceFile: "拍品工作台",
       sourceSheet: "寄存流转",
       sourceRow: record.lot || "自动",
+      importedAt:priorAsset?.importedAt || storedAt,
+      firstImportedAt:storedAt,
+      storageOrder,
       itemName: record.itemName,
       sellerWechat: record.sellerWechat || "待补送拍人",
       sellerPhone: record.sellerPhone || "",
@@ -1824,7 +1835,7 @@
     return result;
   }
 
-  function upsert(records) {
+  function upsert(records, {matchReauction = false} = {}) {
     const beforeState = captureMutableState();
     const beforeStorage = captureStorageSnapshot();
     try {
@@ -1834,7 +1845,9 @@
       let updated = 0;
       let skipped = normalized.quarantined.length;
       let conflicts = 0;
+      let reauctionMatched = 0;
       let accepted = 0;
+      const usedReauctionIds = new Set();
       for (const incoming of normalized.records) {
         accepted += 1;
         const platformKey = MxiqiWorkflow.platformRecordKey(incoming);
@@ -1843,15 +1856,40 @@
           : [];
         const byLot = state.records.filter((item) => MxiqiWorkflow.sameAuctionLot(item, incoming));
         const candidates = [...new Set([...exact, ...byLot])];
+        let reauctionMatch = null;
+        let reauctionCanonical = null;
+        if (matchReauction && !candidates.length) {
+          reauctionMatch = MxiqiAssets.suggestReauctionMatch(
+            incoming,
+            state.records.filter((item) => !usedReauctionIds.has(item.id)),
+          );
+          if (reauctionMatch.matchStatus === "auto" && reauctionMatch.matchedRecordId) {
+            reauctionCanonical = state.records.find((item) => item.id === reauctionMatch.matchedRecordId) || null;
+            if (reauctionCanonical) candidates.push(reauctionCanonical);
+          }
+        }
         if (candidates.length) {
-          const canonical = exact[0] || candidates[0];
+          const canonical = exact[0] || byLot[0] || reauctionCanonical || candidates[0];
           const canonicalId = canonical.id || uid();
           const duplicates = candidates.filter((item) => item !== canonical);
           const duplicateSet = new Set(duplicates);
           const duplicateIds = new Set(duplicates.map((item) => item.id).filter(Boolean));
+          const canonicalBase = reauctionCanonical === canonical
+            ? {...MxiqiWorkflow.relistRecord(canonical, incoming.importedAt || new Date().toISOString()), auctionPeriodOverride:""}
+            : canonical;
           const mergedExisting = duplicates
-            .reduce((merged, item) => MxiqiWorkflow.mergeAuctionRecordCopies(merged, item), canonical);
+            .reduce((merged, item) => MxiqiWorkflow.mergeAuctionRecordCopies(merged, item), canonicalBase);
           const merged = {...MxiqiWorkflow.mergeImportedRecord(mergedExisting, incoming), id:canonicalId};
+          if (reauctionCanonical === canonical) Object.assign(merged, {
+            reauctionMatchedAt:incoming.importedAt || new Date().toISOString(),
+            reauctionMatchSimilarity:Number(reauctionMatch?.similarity || 0),
+            reauctionMatchReason:reauctionMatch?.matchReason || "拍品名称模糊匹配",
+            reauctionMatchedFrom:{
+              lot:Number(canonical.lot) || 0,
+              itemName:canonical.itemName || "",
+              auctionPeriod:auctionPeriod(canonical),
+            },
+          });
           const changed = importRecordFingerprint(merged) !== importRecordFingerprint(canonical) || duplicates.length > 0 || !canonical.id;
           if (!changed) {
             skipped += 1;
@@ -1866,6 +1904,10 @@
           state.records[index] = merged;
           ensurePaymentTracking(state.records[index]);
           recalculateRecord(state.records[index]);
+          if (reauctionCanonical === canonical) {
+            usedReauctionIds.add(canonicalId);
+            reauctionMatched += 1;
+          }
           updated += 1;
         } else {
           const record = {...incoming,id:uid(),received:incoming.received || "待确认",settled:Boolean(incoming.settled),carrier:incoming.carrier || "pending",logisticsStatus:incoming.logisticsStatus || "not_requested",pickupCode:incoming.pickupCode || ""};
@@ -1880,7 +1922,7 @@
       render();
       save();
       if (normalized.quarantined.length) saveRecoveryCopy("import-quarantine", {quarantined:normalized.quarantined});
-      return {accepted, added, updated, skipped, conflicts};
+      return {accepted, added, updated, skipped, conflicts, reauctionMatched};
     } catch (error) {
       restoreMutableState(beforeState);
       restoreStorageSnapshot(beforeStorage);
@@ -2851,6 +2893,7 @@
     if (records.some((item) => item.outboundTrackingNumber) && PACKAGE_ADDRESS_FIELDS.includes(name)) return;
     if ([...PACKAGE_SHARED_FIELDS, ...PACKAGE_ADDRESS_FIELDS].includes(name)) {
       const value = ["buyerPhone","recipientPhone"].includes(name) ? event.target.value.replace(/\D/g, "") : event.target.value;
+      const previousRecords = new Map(records.map((item) => [item.id, {...item}]));
       if (name === "returnDisposition" && value === "上拍") {
         records.forEach((item) => {
           Object.assign(item, MxiqiWorkflow.relistRecord(item));
@@ -2867,6 +2910,7 @@
             syncStoredAssetForRecord(item);
           }
           if (["finalOutcome","returnDisposition","auctionAt"].includes(name)) recalculateRecord(item, true);
+          if (name === "paymentStatus") Object.assign(item, MxiqiWorkflow.applyManualPaymentResolution(item, previousRecords.get(item.id) || {}));
           if (["finalOutcome","paymentStatus","auctionAt"].includes(name)) ensurePaymentTracking(item);
           if (PACKAGE_ADDRESS_FIELDS.includes(name) && item.addressStatus === "reviewed") {
             item.addressStatus = "pending_review";
@@ -3112,6 +3156,7 @@
       record.returnDisposition = "";
       record.relisted = true;
     } else record.relisted = false;
+    record = MxiqiWorkflow.applyManualPaymentResolution(record, existing);
     ensurePaymentTracking(record);
     if (!Number.isInteger(record.lot) || record.lot <= 0 || !record.itemName) {
       notify("请填写有效 Lot 和拍品名称", "error");
@@ -3380,8 +3425,8 @@
       const importBatchId = uid();
       const importedAt = new Date().toISOString();
       records.filter((record) => record && typeof record === "object").forEach((record) => Object.assign(record, {importBatchId, importedAt}));
-      const stats = upsert(records);
-      const statsText = `识别 ${stats.accepted} · 新增 ${stats.added} · 更新 ${stats.updated} · 跳过 ${stats.skipped} · 冲突已合并 ${stats.conflicts}`;
+      const stats = upsert(records, {matchReauction:true});
+      const statsText = `识别 ${stats.accepted} · 新增 ${stats.added} · 更新 ${stats.updated} · 跳过 ${stats.skipped} · 冲突已合并 ${stats.conflicts} · 再拍匹配 ${stats.reauctionMatched}`;
       audit("导入数据", statsText);
       importDialog.close();
       $("#import-form").reset();
@@ -3858,7 +3903,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = `./zhenzhenpu-logo.jpg?v=39`;
+      image.src = `./zhenzhenpu-logo.jpg?v=40`;
     });
     return checklistLogoPromise;
   }
@@ -4175,7 +4220,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=39", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=40", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";

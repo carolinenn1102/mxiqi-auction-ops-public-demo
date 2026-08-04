@@ -81,6 +81,98 @@ test("blank import cells never overwrite existing non-blank business data", () =
   assert.equal(merged.sellerPhone, "13900000001");
 });
 
+test("manual paid normal flow clears a cancelled unpaid-return blocker", () => {
+  const existing = {
+    id:"cancelled",
+    lot:19,
+    itemName:"已取消平台订单",
+    projectName:"第77期",
+    finalOutcome:"成交",
+    finalPrice:1428,
+    paymentStatus:"待付款",
+    paymentDueAt:"2026-08-04T20:00",
+    unpaidReturn:true,
+    unpaidReturnDetectedAt:"2026-08-04T21:00:00.000Z",
+    returnDisposition:"拖回/等待",
+  };
+  const resolved = workflow.applyManualPaymentResolution({
+    ...existing,
+    paymentStatus:"已付款",
+    returnDisposition:"",
+  }, existing, "2026-08-05T01:00:00.000Z");
+  assert.equal(resolved.paymentStatusManual, true);
+  assert.equal(resolved.unpaidReturn, false);
+  assert.equal(resolved.unpaidReturnDetectedAt, "");
+  assert.equal(resolved.paymentDueAt, "");
+  assert.equal(workflow.settlementBlocker(resolved), "");
+  assert.equal(workflow.settlementReadiness([resolved], "第77期").ready, true);
+});
+
+test("platform imports do not overwrite an explicit manual payment resolution", () => {
+  const existing = {
+    id:"manual-paid",
+    finalOutcome:"成交",
+    finalPrice:1428,
+    paymentStatus:"已付款",
+    paymentStatusManual:true,
+    paymentStatusManualAt:"2026-08-05T01:00:00.000Z",
+    unpaidReturn:false,
+    returnDisposition:"",
+  };
+  const merged = workflow.mergeImportedRecord(existing, {
+    paymentStatus:"待付款",
+    unpaidReturn:true,
+    returnDisposition:"拖回/等待",
+  });
+  assert.equal(merged.paymentStatus, "已付款");
+  assert.equal(merged.unpaidReturn, false);
+  assert.equal(merged.returnDisposition, "");
+});
+
+test("settlement sync keeps a manual paid normal-flow order eligible", () => {
+  const records = [{
+    id:"manual-paid-sync",
+    lot:19,
+    itemName:"人工确认付款拍品",
+    projectName:"第77期",
+    finalOutcome:"成交",
+    finalPrice:1428,
+    paymentStatus:"已付款",
+    paymentStatusManual:true,
+    paymentStatusManualAt:"2026-08-05T01:00:00.000Z",
+    unpaidReturn:false,
+    returnDisposition:"",
+  }];
+  const deals = [{
+    lot:19,
+    itemName:"人工确认付款拍品",
+    auctionPeriodOverride:"第77期",
+    finalOutcome:"成交",
+    finalPrice:1428,
+    paymentStatus:"待付款",
+  }];
+  const pending = [{
+    lot:19,
+    itemName:"人工确认付款拍品",
+    auctionPeriodOverride:"第77期",
+    paymentStatus:"待付款",
+  }];
+  const result = workflow.applyAuctionSettlementResults(
+    records,
+    deals,
+    pending,
+    "第77期",
+    "2026-08-05T02:00:00.000Z",
+  );
+  const record = result.records[0];
+  assert.equal(result.unpaid, 0);
+  assert.equal(record.paymentStatus, "已付款");
+  assert.equal(record.unpaidReturn, false);
+  assert.equal(record.returnDisposition, "");
+  assert.equal(workflow.settlementBlocker(record), "");
+  assert.equal(workflow.settlementReadiness([record], "第77期").ready, true);
+});
+
 test("hidden local and connector copies of the same auction Lot are merged", () => {
   const records = [
     {

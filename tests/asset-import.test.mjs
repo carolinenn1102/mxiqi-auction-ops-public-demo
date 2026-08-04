@@ -12,7 +12,7 @@ const ExcelJS = excelContext.ExcelJS;
 const excelRow = (values) => vm.runInContext(`JSON.parse(${JSON.stringify(JSON.stringify(values))})`, excelContext);
 await import("../matching-core.js");
 
-const { parseAssetWorkbook, rematchAssets, groupAssetsByBuyer, parseConsignorLabel } = globalThis.MxiqiAssets;
+const { parseAssetWorkbook, rematchAssets, groupAssetsByBuyer, parseConsignorLabel, mergeAssets, suggestReauctionMatch } = globalThis.MxiqiAssets;
 
 test("extracts embedded phone and birthday metadata without polluting the consignor nickname", () => {
   const parsed = parseConsignorLabel("测试昵称，生日，13900000001", "", "260803 周一，77期");
@@ -69,6 +69,39 @@ test("completed consignment groups move behind pending groups", () => {
   ]);
   assert.equal(groups[0].buyerName, "乙");
   assert.equal(groups[1].completed, true);
+});
+
+test("consignment groups keep their first storage order across repeated imports", () => {
+  const first = mergeAssets([], [
+    {id:"a",assetKey:"a",assetType:"consignment",buyerName:"后入名称排前",importedAt:"2026-08-01T10:00:00.000Z"},
+    {id:"b",assetKey:"b",assetType:"consignment",buyerName:"先入名称排后",importedAt:"2026-08-01T10:01:00.000Z"},
+  ]);
+  const repeated = mergeAssets(first, [
+    {id:"b-new",assetKey:"b",assetType:"consignment",buyerName:"先入名称排后",importedAt:"2026-08-02T10:00:00.000Z"},
+  ]);
+  const groups = groupAssetsByBuyer(repeated);
+  assert.deepEqual(groups.map((group) => group.buyerName), ["后入名称排前", "先入名称排后"]);
+  assert.deepEqual(repeated.map((asset) => asset.storageOrder), [1, 2]);
+  assert.equal(repeated[1].firstImportedAt, "2026-08-01T10:01:00.000Z");
+});
+
+test("uploaded item names can uniquely consume a fuzzy match from the reauction library", () => {
+  const match = suggestReauctionMatch({itemName:"NGC MS63 日本明治16年一厘铜元"}, [
+    {id:"reauction-1",lot:13,itemName:"NGC—MS63B 日本明治16年一厘铜元，近代东洋机制钱币珍稀小品",returnDisposition:"拖回/再拍"},
+    {id:"normal",lot:14,itemName:"NGC MS63 日本银币",returnDisposition:""},
+  ]);
+  assert.equal(match.matchStatus, "auto");
+  assert.equal(match.matchedRecordId, "reauction-1");
+  assert.ok(match.similarity >= 0.45);
+});
+
+test("ambiguous reauction names stay in the library for review", () => {
+  const match = suggestReauctionMatch({itemName:"袁世凯像银元"}, [
+    {id:"a",lot:1,itemName:"袁世凯像银元一枚",returnDisposition:"拖回/再拍"},
+    {id:"b",lot:2,itemName:"袁世凯像银元壹圆",returnDisposition:"拖回/再拍"},
+  ]);
+  assert.equal(match.matchStatus, "review");
+  assert.equal(match.matchedRecordId, "");
 });
 
 test("imports only the current inventory sheet", () => {
