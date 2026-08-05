@@ -1007,6 +1007,10 @@
     return MxiqiWorkflow.recordStatus(record);
   }
 
+  function isAuctionResultPending(record) {
+    return MxiqiWorkflow.isAuctionResultPending(record);
+  }
+
   function isPreauctionRecord(record) {
     return ["待拍", "上拍"].includes(recordStatus(record));
   }
@@ -1275,6 +1279,7 @@
   function statusChipClass(status) {
     if (status === "超时未付款") return "overdue";
     if (status === "待付款") return "payment";
+    if (status === "成交结果待同步") return "warning";
     if (/^拖回\//.test(status) || status === "拆单/成交") return "disposition";
     if (status === "成交") return "success";
     return "neutral";
@@ -1282,7 +1287,8 @@
 
   function renderStatusCell(record) {
     const status = recordStatus(record);
-    const payment = record.paymentStatus ? `付款：${record.paymentStatus}` : "付款状态未同步";
+    const resultPending = isAuctionResultPending(record);
+    const payment = resultPending ? "请同步本期成交目录" : record.paymentStatus ? `付款：${record.paymentStatus}` : "付款状态未同步";
     const deadline = record.paymentStatus === "待付款" && record.paymentDueAt ? ` · 截止 ${String(record.paymentDueAt).replace("T", " ")}` : "";
     const reauctionMatch = record.reauctionMatchedAt
       ? `<small class="reauction-match-note" title="${esc(record.reauctionMatchReason || "拍品名称模糊匹配")}">↻ 再拍库匹配${Number(record.reauctionMatchSimilarity) > 0 ? ` ${Math.round(Number(record.reauctionMatchSimilarity) * 100)}%` : ""}</small>`
@@ -1306,19 +1312,20 @@
       ? `${record.mxiqiShippingStatus === "filled" ? "麦稀奇已回填" : "出库单号待回填"} · ${addressStatusLabel(record.addressStatus)}`
       : record.pickupCode ? "模拟取件码，不可寄件" : shippingStageLabel(record);
     const consignor = consignorDirectoryEntry(record);
+    const resultPending = isAuctionResultPending(record);
     return `<tr class="${state.selected.has(record.id) ? "selected-row" : ""}${child ? " package-child-row" : ""}">
       <td class="select-column"><input type="checkbox" data-select="${esc(record.id)}" ${state.selected.has(record.id) ? "checked" : ""}></td>
-      <td class="role-cell"><span class="role-label">买家 / 发货对象</span><b class="${buyerName ? "" : "muted"}">${esc(buyerName || (Number(record.finalPrice) > 0 ? "待同步买家" : "尚未成交"))}</b><small>${esc(buyerPhone || (Number(record.finalPrice) > 0 ? "买家手机号待同步" : "—"))}</small>${recipientDetail ? `<small>${esc(recipientDetail)}</small>` : ""}</td>
+      <td class="role-cell"><span class="role-label">买家 / 发货对象</span><b class="${buyerName ? "" : "muted"}">${esc(buyerName || (resultPending ? "成交结果待同步" : Number(record.finalPrice) > 0 ? "待同步买家" : "尚未成交"))}</b><small>${esc(buyerPhone || (resultPending ? "同步后显示买家" : Number(record.finalPrice) > 0 ? "买家手机号待同步" : "—"))}</small>${recipientDetail ? `<small>${esc(recipientDetail)}</small>` : ""}</td>
       <td><div class="lot-cell ${child ? "package-child-lot" : ""}"><span>${record.lot}</span><div><b>${esc(record.itemName)}</b><small>${esc(record.projectName || record.primaryCategory || "未设置项目")}</small></div></div></td>
       <td class="role-cell"><span class="role-label">送拍人 / 结算对象</span><b class="${consignor.wechat ? "" : "muted"}">${esc(consignor.wechat || "待补")}</b><small>${esc(consignor.phone || record.sellerPhone || "送拍人手机号待补")}</small><small>${esc(record.trackingNumber || "未填寄入快递单号")}</small></td>
       ${renderStatusCell(record)}
       <td><b>${esc(auctionPeriod(record))}</b><small>${esc(record.projectName || record.auctionHouse || "项目待补")} · ${esc(record.auctionAt || "待设置时间")}</small></td>
-      <td><b class="money">${Number(record.finalPrice) > 0 ? currency.format(record.finalPrice) : "待拍"}</b>${promotionBadges(record)}</td>
+      <td><b class="money">${Number(record.finalPrice) > 0 ? currency.format(record.finalPrice) : resultPending ? "待同步" : "待拍"}</b>${promotionBadges(record)}</td>
       <td>${gaps.length ? `<button class="chip warning" data-action="edit" data-id="${esc(record.id)}" title="${esc(gaps.join("、"))}">缺 ${gaps.length} 项</button>` : '<span class="chip success">完整</span>'}</td>
       <td><span class="carrier ${carrier}">${carrierLabel(carrier)}</span><small>${logisticsLabel(record.logisticsStatus)} · ${esc(shippingStageLabel(record))}</small></td>
       <td>${deliveryCode ? `<code>${esc(deliveryCode)}</code>` : '<span class="muted">—</span>'}<small>${esc(deliveryHint)}</small></td>
       <td>${record.settled ? '<span class="chip success">已结账</span>' : '<span class="chip neutral">未结账</span>'}<small>${esc(settlementDetail)}</small><small>${esc(record.promotion || "")}</small>${promotionBadges(record)}</td>
-      <td><div class="row-actions"><button data-action="edit" data-id="${esc(record.id)}">编辑</button><button data-action="pickup" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>取件</button><button data-action="manual" data-id="${esc(record.id)}">录码</button><button data-action="shipping" data-id="${esc(record.id)}" ${!isShippingCandidate(record) ? "disabled" : ""}>发货</button><button data-action="toggle-settle" data-id="${esc(record.id)}" ${!isSettlementEligible(record) ? "disabled" : ""}>${record.settled ? "撤销" : "结账"}</button></div></td>
+      <td><div class="row-actions">${resultPending ? `<button data-action="sync-result" data-id="${esc(record.id)}">同步成交</button>` : ""}<button data-action="edit" data-id="${esc(record.id)}">编辑</button><button data-action="pickup" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>取件</button><button data-action="manual" data-id="${esc(record.id)}">录码</button><button data-action="shipping" data-id="${esc(record.id)}" ${!isShippingCandidate(record) ? "disabled" : ""}>发货</button><button data-action="toggle-settle" data-id="${esc(record.id)}" ${!isSettlementEligible(record) ? "disabled" : ""}>${record.settled ? "撤销" : "结账"}</button></div></td>
     </tr>`;
   }
 
@@ -2730,7 +2737,7 @@
     render();
   });
 
-  $("#records-body").addEventListener("click", (event) => {
+  $("#records-body").addEventListener("click", async (event) => {
     const settlementToggle = event.target.closest("[data-settlement-toggle]");
     if (settlementToggle) {
       const key = settlementToggle.dataset.settlementToggle;
@@ -2779,6 +2786,15 @@
     if (!button) return;
     const record = state.records.find((item) => item.id === button.dataset.id);
     if (!record) return;
+    if (button.dataset.action === "sync-result") {
+      const period = auctionPeriod(record);
+      if (!period || period === "期数待补") return notify("请先补充拍卖期数，再同步成交结果", "error");
+      state.filters.auction = period;
+      state.filters.status = "";
+      render();
+      await runSettlementSync();
+      return;
+    }
     if (button.dataset.action === "edit") openEditor(record.id);
     if (button.dataset.action === "shipping") openShipping(record.id);
     if (button.dataset.action === "pickup") {
@@ -3945,7 +3961,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = `./zhenzhenpu-logo.jpg?v=43`;
+      image.src = `./zhenzhenpu-logo.jpg?v=44`;
     });
     return checklistLogoPromise;
   }
@@ -4273,7 +4289,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=43", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=44", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";

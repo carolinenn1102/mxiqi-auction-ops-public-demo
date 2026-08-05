@@ -99,6 +99,26 @@ try {
   assert.match(reviewed.incoming.reauctionMatchReason, /手机号不一致/);
   assert.match(await page.locator(".reauction-match-note.review").innerText(), /再拍待确认/);
   assert.match(await page.locator("#toast").innerText(), /成交结果空白 73/);
+
+  await page.evaluate((recordsKey) => {
+    localStorage.clear();
+    localStorage.setItem("mxiqi-public-demo-schema", "16");
+    localStorage.setItem(recordsKey, JSON.stringify([
+      {id:"closed-77",lot:9,itemName:"第77期已结束拍品",auctionAt:"260803 周一，77期",auctionPeriodOverride:"第77期",finalOutcome:"待拍",finalPrice:0},
+      {id:"upcoming-78",lot:10,itemName:"第78期待拍拍品",auctionAt:"260806 周四，78期",auctionPeriodOverride:"第78期",finalOutcome:"待拍",finalPrice:0},
+    ]));
+  }, recordsKey);
+  await page.reload({waitUntil:"networkidle"});
+  const lifecycleRows = await page.evaluate(() => {
+    const closedButton = document.querySelector('button[data-action="sync-result"][data-id="closed-77"]');
+    const futureButton = document.querySelector('button[data-action="edit"][data-id="upcoming-78"]');
+    return {closed:closedButton?.closest("tr")?.innerText || "",upcoming:futureButton?.closest("tr")?.innerText || ""};
+  });
+  assert.match(lifecycleRows.closed, /成交结果待同步/);
+  assert.match(lifecycleRows.closed, /同步成交/);
+  assert.match(lifecycleRows.closed, /待同步/);
+  assert.match(lifecycleRows.upcoming, /待拍/);
+  assert.doesNotMatch(lifecycleRows.upcoming, /成交结果待同步/);
   assert.deepEqual(pageErrors, []);
 
   process.stdout.write(JSON.stringify({
@@ -108,6 +128,8 @@ try {
     conflictingConsignorReview:true,
     periodNormalized:"第77期",
     blankOutcomeExplained:true,
+    closedAuctionResultSync:true,
+    upcomingAuctionStillPending:true,
   }));
 } finally {
   await browser.close();
