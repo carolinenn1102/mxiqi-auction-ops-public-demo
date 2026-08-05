@@ -11,6 +11,7 @@ const [html, app, styles] = await Promise.all([
 
 test("dashboard exposes pending-auction and storage states", () => {
   assert.match(html, /id="filter-status"[\s\S]*?<option>待拍<\/option>/);
+  assert.match(html, /id="filter-status"[\s\S]*?<option>成交结果待同步<\/option>/);
   assert.match(html, /id="filter-status"[\s\S]*?<option>寄存<\/option>/);
   assert.match(html, /name="returnDisposition"[\s\S]*?<option>寄存<\/option>/);
   assert.match(app, /function syncStoredAssetsFromRecords\(/);
@@ -18,6 +19,13 @@ test("dashboard exposes pending-auction and storage states", () => {
   assert.match(app, /record\.returnDisposition !== "寄存"/);
   assert.match(app, /if \(isStorageRecord\(record\)\)[\s\S]*?record\.commissionAmount = 0;[\s\S]*?record\.settlementAmount = 0;/);
   assert.match(app, /!record\.settled \|\| isStorageRecord\(record\)/);
+});
+
+test("closed auctions expose an explicit result-sync action instead of looking pending", () => {
+  assert.match(app, /MxiqiWorkflow\.isAuctionResultPending\(record\)/);
+  assert.match(app, /成交结果待同步/);
+  assert.match(app, /data-action="sync-result"/);
+  assert.match(app, /await runSettlementSync\(\)/);
 });
 
 test("tracker import preserves phone aliases and special outcomes", () => {

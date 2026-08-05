@@ -19,6 +19,29 @@
     return match ? `第${Number(match[1])}期` : "";
   }
 
+  function auctionDateEnd(value = "") {
+    const source = String(value || "").trim();
+    const full = source.match(/(?:^|\D)(20\d{2})[-\/]?(\d{2})[-\/]?(\d{2})(?:\D|$)/);
+    const compact = full ? null : source.match(/(?:^|\D)(\d{2})(\d{2})(\d{2})(?:\D|$)/);
+    const year = Number(full?.[1] || (compact ? `20${compact[1]}` : 0));
+    const month = Number(full?.[2] || compact?.[2] || 0);
+    const day = Number(full?.[3] || compact?.[3] || 0);
+    if (!year || month < 1 || month > 12 || day < 1 || day > 31) return NaN;
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return NaN;
+    const nextDay = new Date(year, month - 1, day + 1);
+    return nextDay.getTime();
+  }
+
+  function isAuctionResultPending(record = {}, now = Date.now()) {
+    if (normalizeReturnDisposition(record.returnDisposition)) return false;
+    if (["成交", "流拍", "拖回"].includes(record.finalOutcome)) return false;
+    if (Number(record.finalPrice) > 0 || record.paymentStatus === "待付款" || record.paymentStatus === "已付款") return false;
+    const end = auctionDateEnd(record.auctionAt || record.platformAuctionAt);
+    const current = now instanceof Date ? now.getTime() : Number(now);
+    return Number.isFinite(end) && Number.isFinite(current) && current >= end;
+  }
+
   function auctionPeriod(record = {}) {
     const override = String(record.auctionPeriodOverride || "").trim();
     if (override) {
@@ -187,6 +210,7 @@
     if (record.relisted && record.finalOutcome === "待拍") return "上拍";
     if (isPaymentOverdue(record, now)) return "超时未付款";
     if (record.paymentStatus === "待付款") return "待付款";
+    if (isAuctionResultPending(record, now)) return "成交结果待同步";
     if (record.finalOutcome) return record.finalOutcome;
     return Number(record.finalPrice) > 0 ? "成交" : "待拍";
   }
@@ -541,5 +565,5 @@
     return {records:next,departed};
   }
 
-  return {isStorageRecord,isReturnRecord,trackerAuctionPeriod,auctionPeriod,normalizeReturnDisposition,isHandledReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,mergeImportedRecord,applyManualPaymentResolution,mergeAuctionRecordCopies,deduplicateAuctionLots,restoreConsignorIdentities,restoreHandledReturnDispositions,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
+  return {isStorageRecord,isReturnRecord,trackerAuctionPeriod,auctionPeriod,auctionDateEnd,isAuctionResultPending,normalizeReturnDisposition,isHandledReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,mergeImportedRecord,applyManualPaymentResolution,mergeAuctionRecordCopies,deduplicateAuctionLots,restoreConsignorIdentities,restoreHandledReturnDispositions,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
 });

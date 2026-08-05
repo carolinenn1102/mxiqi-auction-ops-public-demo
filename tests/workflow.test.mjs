@@ -30,6 +30,18 @@ test("blank unsold records are exposed as pending auction", () => {
   assert.equal(workflow.recordStatus({returnDisposition:"寄存",finalOutcome:"待拍",finalPrice:0}), "寄存");
 });
 
+test("closed auctions with blank results wait for catalog sync instead of looking unauctioned", () => {
+  const now = new Date(2026, 7, 5, 12, 0, 0);
+  const closed = {auctionAt:"260803 周一，77期",finalOutcome:"待拍",finalPrice:0};
+  const upcoming = {auctionAt:"260806 周四，78期",finalOutcome:"待拍",finalPrice:0};
+  assert.equal(workflow.isAuctionResultPending(closed, now), true);
+  assert.equal(workflow.recordStatus(closed, now), "成交结果待同步");
+  assert.equal(workflow.isAuctionResultPending(upcoming, now), false);
+  assert.equal(workflow.recordStatus(upcoming, now), "待拍");
+  assert.equal(workflow.recordStatus({...closed,finalOutcome:"成交",finalPrice:800}, now), "成交");
+  assert.equal(workflow.recordStatus({...closed,finalOutcome:"流拍"}, now), "流拍");
+});
+
 test("return records remain settlement eligible with zero transaction gross", () => {
   const record = {finalOutcome:"成交",finalPrice:860,returnDisposition:"拖回/再拍"};
   assert.equal(workflow.isReturnRecord(record), true);
