@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="theme-color" content="#102735">
   <title>送拍运营工作台 · 公开体验版</title>
-  <link rel="stylesheet" href="styles.css?v=44">
+  <link rel="stylesheet" href="styles.css?v=45">
   <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
@@ -204,7 +204,7 @@
   <dialog id="import-dialog" class="dialog">
     <form method="dialog" id="import-form"><header><h2>导入拍品数据</h2><button class="icon-close" type="button" value="cancel" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
       <p class="modal-copy">支持送拍跟踪表、麦稀奇 v3.7 `.xlsx` 和 JSON 数组。寄存与外拍库存请使用左侧“寄存与库存”；“送评”附表暂不导入。体验数据只写入当前浏览器。</p>
-      <label class="file-drop"><input id="excel-file" type="file" accept=".xlsx"><span class="file-icon">⇧</span><b id="file-name">选择 .xlsx 文件</b><small>自动识别两种模板，重复 Lot 会更新</small></label>
+      <label class="file-drop"><input id="excel-file" type="file" accept=".xlsx,.json,application/json"><span class="file-icon">⇧</span><b id="file-name">选择 .xlsx / .json 文件</b><small>Excel 自动识别两种模板；JSON 可保留付款状态，重复 Lot 会更新</small></label>
       <div class="divider"><span>或者粘贴 JSON</span></div>
       <textarea id="json-input" class="import-area" placeholder='[{"lot":106,"itemName":"拍品名称","finalPrice":680}]'></textarea>
     </div><footer><button class="btn secondary" type="button" value="cancel" data-close-dialog>取消</button><button class="btn primary" id="run-import" value="default">导入并校验</button></footer></form>
@@ -383,14 +383,14 @@
 
   <datalist id="auction-period-options"></datalist>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="vendor/exceljs.min.js?v=44"></script>
-  <script src="matching-core.js?v=44"></script>
-  <script src="package-core.js?v=44"></script>
-  <script src="workflow-core.js?v=44"></script>
-  <script src="commission-core.js?v=44"></script>
-  <script src="logistics-core.js?v=44"></script>
-  <script src="connector-bridge.js?v=44"></script>
-  <script src="logistics-gateway.js?v=44"></script>
-  <script src="app.js?v=44"></script>
+  <script src="vendor/exceljs.min.js?v=45"></script>
+  <script src="matching-core.js?v=45"></script>
+  <script src="package-core.js?v=45"></script>
+  <script src="workflow-core.js?v=45"></script>
+  <script src="commission-core.js?v=45"></script>
+  <script src="logistics-core.js?v=45"></script>
+  <script src="connector-bridge.js?v=45"></script>
+  <script src="logistics-gateway.js?v=45"></script>
+  <script src="app.js?v=45"></script>
 </body>
 </html>

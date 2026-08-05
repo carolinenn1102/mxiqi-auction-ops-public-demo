@@ -3460,18 +3460,24 @@
   });
 
   $("#open-import").addEventListener("click", () => importDialog.showModal());
-  $("#excel-file").addEventListener("change", (event) => { $("#file-name").textContent = event.target.files[0]?.name || "选择 .xlsx 文件"; });
+  $("#excel-file").addEventListener("change", (event) => { $("#file-name").textContent = event.target.files[0]?.name || "选择 .xlsx / .json 文件"; });
   $("#import-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
       let records = [];
       const file = $("#excel-file").files[0];
       const json = $("#json-input").value.trim();
-      if (file) records = await parseWorkbook(await file.arrayBuffer());
+      if (file) {
+        const isJsonFile = /\.json$/i.test(file.name || "") || /\bjson\b/i.test(file.type || "");
+        if (isJsonFile) {
+          const parsed = JSON.parse(await file.text());
+          records = Array.isArray(parsed) ? parsed : [parsed];
+        } else records = await parseWorkbook(await file.arrayBuffer());
+      }
       else if (json) {
         const parsed = JSON.parse(json);
         records = Array.isArray(parsed) ? parsed : [parsed];
-      } else throw new Error("请选择 Excel 文件或粘贴 JSON");
+      } else throw new Error("请选择 .xlsx / .json 文件或粘贴 JSON");
       if (!records.length) throw new Error("文件中没有可导入的数据行");
       const importMeta = records.importMeta || {};
       const importBatchId = uid();
@@ -3482,7 +3488,7 @@
       audit("导入数据", statsText);
       importDialog.close();
       $("#import-form").reset();
-      $("#file-name").textContent = "选择 .xlsx 文件";
+      $("#file-name").textContent = "选择 .xlsx / .json 文件";
       notify(`导入完成：${statsText}`);
     } catch (error) {
       notify(error.message || "导入失败", "error");
@@ -3961,7 +3967,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = `./zhenzhenpu-logo.jpg?v=44`;
+      image.src = `./zhenzhenpu-logo.jpg?v=45`;
     });
     return checklistLogoPromise;
   }
@@ -4289,7 +4295,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=44", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=45", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
