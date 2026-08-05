@@ -1286,7 +1286,9 @@
     const deadline = record.paymentStatus === "待付款" && record.paymentDueAt ? ` · 截止 ${String(record.paymentDueAt).replace("T", " ")}` : "";
     const reauctionMatch = record.reauctionMatchedAt
       ? `<small class="reauction-match-note" title="${esc(record.reauctionMatchReason || "拍品名称模糊匹配")}">↻ 再拍库匹配${Number(record.reauctionMatchSimilarity) > 0 ? ` ${Math.round(Number(record.reauctionMatchSimilarity) * 100)}%` : ""}</small>`
-      : "";
+      : record.reauctionMatchStatus === "review"
+        ? `<small class="reauction-match-note review" title="${esc(record.reauctionMatchReason || "存在相似再拍拍品，需人工确认")}">⚠ 再拍待确认${Number(record.reauctionMatchSimilarity) > 0 ? ` ${Math.round(Number(record.reauctionMatchSimilarity) * 100)}%` : ""}</small>`
+        : "";
     return `<td class="status-cell"><span class="chip ${statusChipClass(status)}">${esc(status)}</span><small>${esc(payment + deadline)}</small>${reauctionMatch}</td>`;
   }
 
@@ -1866,6 +1868,7 @@
       let skipped = normalized.quarantined.length;
       let conflicts = 0;
       let reauctionMatched = 0;
+      let reauctionReview = 0;
       let accepted = 0;
       const usedReauctionIds = new Set();
       for (const incoming of normalized.records) {
@@ -1886,6 +1889,14 @@
           if (reauctionMatch.matchStatus === "auto" && reauctionMatch.matchedRecordId) {
             reauctionCanonical = state.records.find((item) => item.id === reauctionMatch.matchedRecordId) || null;
             if (reauctionCanonical) candidates.push(reauctionCanonical);
+          } else if (reauctionMatch.matchStatus === "review" && reauctionMatch.candidateRecordId) {
+            Object.assign(incoming, {
+              reauctionMatchStatus:"review",
+              reauctionMatchCandidateId:reauctionMatch.candidateRecordId,
+              reauctionMatchSimilarity:Number(reauctionMatch.similarity || 0),
+              reauctionMatchReason:reauctionMatch.matchReason || "存在相似再拍拍品，需人工确认",
+            });
+            reauctionReview += 1;
           }
         }
         if (candidates.length) {
@@ -1902,6 +1913,8 @@
           const merged = {...MxiqiWorkflow.mergeImportedRecord(mergedExisting, incoming), id:canonicalId};
           if (reauctionCanonical === canonical) Object.assign(merged, {
             reauctionMatchedAt:incoming.importedAt || new Date().toISOString(),
+            reauctionMatchStatus:"auto",
+            reauctionMatchCandidateId:"",
             reauctionMatchSimilarity:Number(reauctionMatch?.similarity || 0),
             reauctionMatchReason:reauctionMatch?.matchReason || "拍品名称模糊匹配",
             reauctionMatchedFrom:{
@@ -1942,7 +1955,7 @@
       render();
       save();
       if (normalized.quarantined.length) saveRecoveryCopy("import-quarantine", {quarantined:normalized.quarantined});
-      return {accepted, added, updated, skipped, conflicts, reauctionMatched};
+      return {accepted, added, updated, skipped, conflicts, reauctionMatched, reauctionReview};
     } catch (error) {
       restoreMutableState(beforeState);
       restoreStorageSnapshot(beforeStorage);
@@ -3444,11 +3457,12 @@
         records = Array.isArray(parsed) ? parsed : [parsed];
       } else throw new Error("请选择 Excel 文件或粘贴 JSON");
       if (!records.length) throw new Error("文件中没有可导入的数据行");
+      const importMeta = records.importMeta || {};
       const importBatchId = uid();
       const importedAt = new Date().toISOString();
       records.filter((record) => record && typeof record === "object").forEach((record) => Object.assign(record, {importBatchId, importedAt}));
       const stats = upsert(records, {matchReauction:true});
-      const statsText = `识别 ${stats.accepted} · 新增 ${stats.added} · 更新 ${stats.updated} · 跳过 ${stats.skipped} · 冲突已合并 ${stats.conflicts} · 再拍匹配 ${stats.reauctionMatched}`;
+      const statsText = `识别 ${stats.accepted} · 新增 ${stats.added} · 更新 ${stats.updated} · 跳过 ${stats.skipped} · 冲突已合并 ${stats.conflicts} · 再拍匹配 ${stats.reauctionMatched} · 再拍待确认 ${stats.reauctionReview}${importMeta.trackerOutcomeBlank ? ` · 成交结果空白 ${importMeta.trackerOutcomeBlank}` : ""}`;
       audit("导入数据", statsText);
       importDialog.close();
       $("#import-form").reset();
@@ -3677,6 +3691,7 @@
     }
     if (!found) throw new Error("无法识别表格，请使用送拍跟踪表或麦稀奇 v3.7 模板");
     const records = [];
+    let trackerOutcomeBlank = 0;
     for (let rowNo = found.rowNo + 1; rowNo <= found.sheet.rowCount; rowNo += 1) {
       const row = found.sheet.getRow(rowNo);
       if (found.kind === "mxiqi") {
@@ -3701,26 +3716,30 @@
         const received = textAt(row, found.map, "是/否收到", "是否收到");
         const settledText = textAt(row, found.map, "是/否已结账", "是否已结账");
         const normalizedOutcome = outcome ? MxiqiWorkflow.trackerOutcome(outcome, price) : null;
-        if (lot > 0 && projectName) records.push(compact({
-          lot,
-          itemName:projectName,
-          projectName,
-          lotLabel,
-          auctionHouse:lotLabel.split(/[\/／]/)[0].trim(),
-          sellerWechat:seller.wechat,
-          sellerPhone:seller.phone,
-          birthdayMonth:seller.birthdayMonth,
-          contactedAt:textAt(row,found.map,"联系时间"),
-          coinBoxId:textAt(row,found.map,"盒子币编号"),
-          trackingNumber:textAt(row,found.map,"快递单号"),
-          auctionAt,
-          received,
-          finalOutcome:normalizedOutcome?.finalOutcome,
-          returnDisposition:normalizedOutcome?.returnDisposition,
-          finalPrice:normalizedOutcome ? (normalizedOutcome.finalOutcome === "成交" ? price : 0) : undefined,
-          settled:settledText ? settledText === "是" : undefined,
-          settlementNote:textAt(row,found.map,"结账"),
-        }));
+        if (lot > 0 && projectName) {
+          if (!outcome) trackerOutcomeBlank += 1;
+          records.push(compact({
+            lot,
+            itemName:projectName,
+            projectName,
+            lotLabel,
+            auctionHouse:lotLabel.split(/[\/／]/)[0].trim(),
+            sellerWechat:seller.wechat,
+            sellerPhone:seller.phone,
+            birthdayMonth:seller.birthdayMonth,
+            contactedAt:textAt(row,found.map,"联系时间"),
+            coinBoxId:textAt(row,found.map,"盒子币编号"),
+            trackingNumber:textAt(row,found.map,"快递单号"),
+            auctionAt,
+            auctionPeriodOverride:MxiqiWorkflow.trackerAuctionPeriod(auctionAt),
+            received,
+            finalOutcome:normalizedOutcome?.finalOutcome,
+            returnDisposition:normalizedOutcome?.returnDisposition,
+            finalPrice:normalizedOutcome ? (normalizedOutcome.finalOutcome === "成交" ? price : 0) : undefined,
+            settled:settledText ? settledText === "是" : undefined,
+            settlementNote:textAt(row,found.map,"结账"),
+          }));
+        }
       }
     }
     if (found.kind === "tracker" && column(found.map, "送拍人手机号", "手机号", "电话")) {
@@ -3736,6 +3755,7 @@
         }
       }
     }
+    records.importMeta = {kind:found.kind, trackerOutcomeBlank};
     return records;
   }
 
@@ -3925,7 +3945,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = `./zhenzhenpu-logo.jpg?v=42`;
+      image.src = `./zhenzhenpu-logo.jpg?v=43`;
     });
     return checklistLogoPromise;
   }
@@ -4253,7 +4273,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=42", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=43", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";

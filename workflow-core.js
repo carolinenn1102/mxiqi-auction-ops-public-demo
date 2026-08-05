@@ -14,6 +14,11 @@
     return record.unpaidReturn === true || record.finalOutcome === "拖回" || /^拖回\//.test(String(record.returnDisposition || ""));
   }
 
+  function trackerAuctionPeriod(value = "") {
+    const match = String(value || "").match(/(?:第\s*)?(\d{1,4})\s*期/);
+    return match ? `第${Number(match[1])}期` : "";
+  }
+
   function auctionPeriod(record = {}) {
     const override = String(record.auctionPeriodOverride || "").trim();
     if (override) {
@@ -23,8 +28,8 @@
     const source = [record.projectName, record.auctionHouse, record.auctionAt, record.lotLabel, record.itemName]
       .filter(Boolean)
       .join(" · ");
-    const match = source.match(/(?:第\s*)?(\d{1,4})\s*期/);
-    if (match) return `第${Number(match[1])}期`;
+    const parsed = trackerAuctionPeriod(source);
+    if (parsed) return parsed;
     return "期数待补";
   }
 
@@ -536,5 +541,5 @@
     return {records:next,departed};
   }
 
-  return {isStorageRecord,isReturnRecord,auctionPeriod,normalizeReturnDisposition,isHandledReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,mergeImportedRecord,applyManualPaymentResolution,mergeAuctionRecordCopies,deduplicateAuctionLots,restoreConsignorIdentities,restoreHandledReturnDispositions,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
+  return {isStorageRecord,isReturnRecord,trackerAuctionPeriod,auctionPeriod,normalizeReturnDisposition,isHandledReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,mergeImportedRecord,applyManualPaymentResolution,mergeAuctionRecordCopies,deduplicateAuctionLots,restoreConsignorIdentities,restoreHandledReturnDispositions,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
 });

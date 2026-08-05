@@ -91,6 +91,10 @@ test("manual paid records and uploaded reauction matches are wired into the dash
   assert.match(app, /suggestReauctionMatch\(/);
   assert.match(app, /reauctionMatchedAt/);
   assert.match(app, /再拍库匹配/);
+  assert.match(app, /auctionPeriodOverride:MxiqiWorkflow\.trackerAuctionPeriod\(auctionAt\)/);
+  assert.match(app, /再拍待确认/);
+  assert.match(app, /成交结果空白/);
+  assert.match(styles, /\.reauction-match-note\.review/);
 });
 
 test("the unsettled count opens a consignor-focused work queue", () => {

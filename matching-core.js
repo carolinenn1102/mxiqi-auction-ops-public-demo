@@ -281,8 +281,20 @@
     return { assets, kinds: [...kinds] };
   }
 
+  function chineseNumber(value) {
+    const digits = {零:0,〇:0,一:1,二:2,两:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9};
+    const source = String(value || "");
+    if (!source.includes("十")) return [...source].reduce((number, character) => number * 10 + (digits[character] ?? 0), 0);
+    const [tens, ones] = source.split("十");
+    return (tens ? digits[tens] ?? 0 : 1) * 10 + (ones ? digits[ones] ?? 0 : 0);
+  }
+
   function normalizedItem(value) {
-    return String(value ?? "").toLowerCase().replace(/lot\.?\s*\d+/g, "").replace(/[\s\p{P}\p{S}]/gu, "");
+    return String(value ?? "")
+      .toLowerCase()
+      .replace(/lot\.?\s*\d+/g, "")
+      .replace(/([零〇一二两三四五六七八九十]+)(?=马克|泰勒|比索|卢布|法郎|克朗|盾|先令|便士|里拉|皮亚斯特)/g, (number) => String(chineseNumber(number)))
+      .replace(/[\s\p{P}\p{S}]/gu, "");
   }
 
   function bigrams(value) {
@@ -301,27 +313,82 @@
     return overlap / Math.max(a.size, b.size);
   }
 
+  function itemContainment(left, right) {
+    const a = bigrams(left);
+    const b = bigrams(right);
+    if (!a.size || !b.size) return 0;
+    let overlap = 0;
+    a.forEach((item) => { if (b.has(item)) overlap += 1; });
+    return overlap / Math.min(a.size, b.size);
+  }
+
+  function denominationTokens(value) {
+    const normalized = String(value ?? "")
+      .toLowerCase()
+      .replace(/([零〇一二两三四五六七八九十]+)(?=马克|泰勒|比索|卢布|法郎|克朗|盾|先令|便士|里拉|皮亚斯特)/g, (number) => String(chineseNumber(number)))
+      .replace(/[^\da-z\u3400-\u9fff/]/g, "");
+    return new Set([...normalized.matchAll(/(\d+(?:\/\d+)?)(马克|泰勒|比索|卢布|法郎|克朗|盾|先令|便士|里拉|皮亚斯特|piastres?)/g)].map((match) => `${match[1]}${match[2]}`));
+  }
+
+  function reauctionSimilarity(left, right) {
+    const direct = itemSimilarity(left, right);
+    const containment = itemContainment(left, right);
+    let similarity = Math.max(direct, containment * 0.9);
+    const leftDenominations = denominationTokens(left);
+    const rightDenominations = denominationTokens(right);
+    if (leftDenominations.size && rightDenominations.size) {
+      const sameDenomination = [...leftDenominations].some((value) => rightDenominations.has(value));
+      similarity = sameDenomination ? similarity + 0.12 : similarity * 0.55;
+    }
+    return Math.min(1, similarity);
+  }
+
+  function consignorComparison(record = {}, candidate = {}) {
+    const incomingPhone = normalizePhone(record.sellerPhone);
+    const candidatePhone = normalizePhone(candidate.sellerPhone);
+    if (incomingPhone && candidatePhone) return incomingPhone === candidatePhone
+      ? {same:true, conflict:false, reason:"送拍人手机号一致"}
+      : {same:false, conflict:true, reason:"送拍人手机号不一致"};
+    const ignoredNames = new Set(["", "待补送拍人", "手机号用户"]);
+    const incomingName = normalizeHeader(record.sellerWechat);
+    const candidateName = normalizeHeader(candidate.sellerWechat);
+    if (!ignoredNames.has(incomingName) && !ignoredNames.has(candidateName)) return incomingName === candidateName
+      ? {same:true, conflict:false, reason:"送拍人一致"}
+      : {same:false, conflict:true, reason:"送拍人不一致"};
+    return {same:false, conflict:false, reason:""};
+  }
+
   function suggestReauctionMatch(record = {}, candidates = []) {
     const scored = candidates
       .filter((candidate) => candidate?.returnDisposition === "拖回/再拍")
-      .map((candidate) => ({
-        record:candidate,
-        similarity:itemSimilarity(record.itemName || record.projectName, candidate.itemName || candidate.projectName),
-      }))
-      .filter((candidate) => candidate.similarity >= 0.45)
+      .map((candidate) => {
+        const consignor = consignorComparison(record, candidate);
+        const similarity = reauctionSimilarity(record.itemName || record.projectName, candidate.itemName || candidate.projectName);
+        return {record:candidate, similarity:Math.min(1, similarity + (consignor.same ? 0.08 : 0)), consignor};
+      })
+      .filter((candidate) => candidate.similarity >= 0.42)
       .sort((left, right) => right.similarity - left.similarity || Number(left.record.lot || 0) - Number(right.record.lot || 0));
     const best = scored[0];
     const second = scored[1];
-    if (!best) return {matchedRecordId:"",matchStatus:"unmatched",similarity:0,matchReason:"再拍库未找到相似拍品"};
+    if (!best) return {matchedRecordId:"",candidateRecordId:"",matchStatus:"unmatched",similarity:0,matchReason:"再拍库未找到相似拍品"};
+    if (best.consignor.conflict) return {
+      matchedRecordId:"",
+      candidateRecordId:best.record.id || "",
+      matchStatus:"review",
+      similarity:best.similarity,
+      matchReason:`名称相似但${best.consignor.reason} · 原 Lot ${best.record.lot || "—"}`,
+    };
     const lead = best.similarity - (second?.similarity || 0);
-    const unique = !second || lead >= 0.12;
+    const strongEnough = best.similarity >= (best.consignor.same ? 0.48 : 0.58);
+    const unique = strongEnough && (!second || lead >= 0.1);
     return {
       matchedRecordId:unique ? best.record.id : "",
+      candidateRecordId:best.record.id || "",
       matchStatus:unique ? "auto" : "review",
       similarity:best.similarity,
       matchReason:unique
-        ? `拍品名称模糊匹配 · 原 Lot ${best.record.lot || "—"}`
-        : `再拍库存在多个相似拍品 · 最高相似度 ${Math.round(best.similarity * 100)}%`,
+        ? `${best.consignor.reason ? `${best.consignor.reason} · ` : ""}拍品核心特征匹配 · 原 Lot ${best.record.lot || "—"}`
+        : `再拍库存在相似拍品，需人工确认 · 原 Lot ${best.record.lot || "—"} · 相似度 ${Math.round(best.similarity * 100)}%`,
     };
   }
 
