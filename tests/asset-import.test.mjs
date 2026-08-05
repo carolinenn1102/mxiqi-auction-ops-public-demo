@@ -95,6 +95,44 @@ test("uploaded item names can uniquely consume a fuzzy match from the reauction 
   assert.ok(match.similarity >= 0.45);
 });
 
+test("0806 tracker titles match rewritten reauction names using core wording and denomination", () => {
+  const match = suggestReauctionMatch({
+    itemName:"德国普鲁士战胜拿破仑3马克银币",
+    sellerWechat:"野",
+    sellerPhone:"13845470978",
+  }, [
+    {
+      id:"expected",lot:115,
+      itemName:"NGC-MS63 1913 年 A，德国普鲁士战胜拿破仑一百周年纪念三马克。",
+      sellerWechat:"野",sellerPhone:"13845470978",returnDisposition:"拖回/再拍",
+    },
+    {
+      id:"wrong-denomination",lot:116,
+      itemName:"NGC-UNCD 德国普鲁士1913年威廉二世戎装像5马克大银币",
+      sellerWechat:"野",sellerPhone:"13845470978",returnDisposition:"拖回/再拍",
+    },
+  ]);
+  assert.equal(match.matchStatus, "auto");
+  assert.equal(match.matchedRecordId, "expected");
+  assert.match(match.matchReason, /送拍人手机号一致/);
+});
+
+test("similar 0806 titles with a conflicting consignor require review", () => {
+  const match = suggestReauctionMatch({
+    itemName:"德国普鲁士战胜拿破仑3马克银币",
+    sellerWechat:"野",
+    sellerPhone:"13845470978",
+  }, [{
+    id:"different-owner",lot:115,
+    itemName:"NGC-MS63 1913 年 A，德国普鲁士战胜拿破仑一百周年纪念三马克。",
+    sellerWechat:"飞",sellerPhone:"13821659662",returnDisposition:"拖回/再拍",
+  }]);
+  assert.equal(match.matchStatus, "review");
+  assert.equal(match.matchedRecordId, "");
+  assert.equal(match.candidateRecordId, "different-owner");
+  assert.match(match.matchReason, /手机号不一致/);
+});
+
 test("ambiguous reauction names stay in the library for review", () => {
   const match = suggestReauctionMatch({itemName:"袁世凯像银元"}, [
     {id:"a",lot:1,itemName:"袁世凯像银元一枚",returnDisposition:"拖回/再拍"},

@@ -8,6 +8,12 @@ test("extracts the auction period from the Mxiqi project title", () => {
   assert.equal(workflow.auctionPeriod({projectName:"长期征集拍品"}), "期数待补");
 });
 
+test("normalizes the compact auction period used by the 0806 tracker", () => {
+  assert.equal(workflow.trackerAuctionPeriod("260806 周四，77期"), "第77期");
+  assert.equal(workflow.trackerAuctionPeriod("第 77 期"), "第77期");
+  assert.equal(workflow.trackerAuctionPeriod("260806 周四"), "");
+});
+
 test("manual auction period overrides platform text for a relisted item", () => {
   assert.equal(workflow.auctionPeriod({auctionPeriodOverride:"76",projectName:"第75期"}), "第76期");
   assert.equal(workflow.auctionPeriod({auctionPeriodOverride:"第 81 期",projectName:"第75期"}), "第81期");
