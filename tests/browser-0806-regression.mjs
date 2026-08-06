@@ -33,7 +33,7 @@ try {
 
   await page.evaluate((recordsKey) => {
     localStorage.clear();
-    localStorage.setItem("mxiqi-public-demo-schema", "16");
+    localStorage.setItem("mxiqi-public-demo-schema", "17");
     localStorage.setItem(recordsKey, JSON.stringify([{
       id:"same-consignor-reauction",
       lot:115,
@@ -57,7 +57,12 @@ try {
   }, recordsKey);
   assert.equal(matched.records.length, 73);
   assert.equal(matched.record.lot, 10);
-  assert.equal(matched.record.auctionPeriodOverride, "第77期");
+  assert.equal(matched.record.auctionPeriodOverride, "第78期");
+  assert.match(matched.record.auctionAt, /78期/);
+  assert.equal(matched.record.birthdayMonth, 0);
+  assert.equal(matched.record.birthdayPending, true);
+  assert.ok(matched.records.some((record) => record.sellerWechat === "四维" && record.birthdayMonth === 12 && record.birthdayPending === false));
+  assert.ok(matched.records.filter((record) => record.birthdayPending).every((record) => Number(record.birthdayMonth || 0) === 0));
   assert.equal(matched.record.returnDisposition, "");
   assert.equal(matched.record.finalOutcome, "待拍");
   assert.equal(matched.record.reauctionMatchStatus, "auto");
@@ -65,7 +70,7 @@ try {
 
   await page.evaluate((recordsKey) => {
     localStorage.clear();
-    localStorage.setItem("mxiqi-public-demo-schema", "16");
+    localStorage.setItem("mxiqi-public-demo-schema", "17");
     localStorage.setItem(recordsKey, JSON.stringify([{
       id:"conflicting-consignor-reauction",
       lot:115,
@@ -94,7 +99,7 @@ try {
   assert.equal(reviewed.records.length, 74);
   assert.equal(reviewed.source.returnDisposition, "拖回/再拍");
   assert.equal(reviewed.source.lot, 115);
-  assert.equal(reviewed.incoming.auctionPeriodOverride, "第77期");
+  assert.equal(reviewed.incoming.auctionPeriodOverride, "第78期");
   assert.equal(reviewed.incoming.reauctionMatchStatus, "review");
   assert.match(reviewed.incoming.reauctionMatchReason, /手机号不一致/);
   assert.match(await page.locator(".reauction-match-note.review").innerText(), /再拍待确认/);
@@ -102,7 +107,7 @@ try {
 
   await page.evaluate((recordsKey) => {
     localStorage.clear();
-    localStorage.setItem("mxiqi-public-demo-schema", "16");
+    localStorage.setItem("mxiqi-public-demo-schema", "17");
     localStorage.setItem(recordsKey, JSON.stringify([
       {id:"closed-77",lot:9,itemName:"第77期已结束拍品",auctionAt:"260803 周一，77期",auctionPeriodOverride:"第77期",finalOutcome:"待拍",finalPrice:0},
       {id:"upcoming-78",lot:10,itemName:"第78期待拍拍品",auctionAt:"260806 周四，78期",auctionPeriodOverride:"第78期",finalOutcome:"待拍",finalPrice:0},
@@ -119,6 +124,43 @@ try {
   assert.match(lifecycleRows.closed, /待同步/);
   assert.match(lifecycleRows.upcoming, /待拍/);
   assert.doesNotMatch(lifecycleRows.upcoming, /成交结果待同步/);
+
+  await page.evaluate((recordsKey) => {
+    localStorage.clear();
+    localStorage.setItem("mxiqi-public-demo-schema", "17");
+    localStorage.setItem(recordsKey, JSON.stringify([{
+      id:"polluted-0806",lot:8,itemName:"1917年英属埃及5 PIASTRES银币",sellerWechat:"野",sellerPhone:"13845470978",
+      auctionAt:"260806 周四，77期",auctionPeriodOverride:"第77期",platformItemKey:"auction-result:312210:8",
+      source:"mxiqi_connector",finalOutcome:"成交",finalPrice:369,paymentStatus:"已付款",buyerName:"错误买家",
+      birthdayMonth:8,commissionAmount:-7.38,settlementAmount:376.38,promotion:"生日 · -2%",settled:false,
+    }]));
+  }, recordsKey);
+  await page.reload({waitUntil:"networkidle"});
+  const repaired = await page.evaluate((recordsKey) => JSON.parse(localStorage.getItem(recordsKey) || "[]")[0], recordsKey);
+  assert.equal(repaired.auctionPeriodOverride, "第78期");
+  assert.match(repaired.auctionAt, /78期/);
+  assert.equal(repaired.finalPrice, 0);
+  assert.equal(repaired.finalOutcome, undefined);
+  assert.equal(repaired.paymentStatus, undefined);
+  assert.equal(repaired.buyerName, undefined);
+  assert.equal(repaired.birthdayMonth, 0);
+  assert.equal(repaired.birthdayPending, true);
+
+  await page.click("#open-import");
+  await page.setInputFiles("#excel-file", {
+    name:"第77期成交结果.json",
+    mimeType:"application/json",
+    buffer:Buffer.from(JSON.stringify([{
+      lot:8,itemName:"第77期另一件拍品",auctionPeriodOverride:"第77期",platformItemKey:"auction-result:312210:8",
+      source:"mxiqi_connector",finalOutcome:"成交",finalPrice:369,paymentStatus:"已付款",
+    }]), "utf8"),
+  });
+  await page.click("#run-import");
+  await page.waitForFunction(() => !document.querySelector("#import-dialog")?.open, null, {timeout:20000});
+  const separated = await page.evaluate((recordsKey) => JSON.parse(localStorage.getItem(recordsKey) || "[]"), recordsKey);
+  assert.equal(separated.length, 2);
+  assert.equal(separated.find((record) => record.id === "polluted-0806").finalPrice, 0);
+  assert.equal(separated.find((record) => record.auctionPeriodOverride === "第77期").finalPrice, 369);
   assert.deepEqual(pageErrors, []);
 
   process.stdout.write(JSON.stringify({
@@ -126,7 +168,10 @@ try {
     originalWorkbookRows:73,
     safeReauctionAutoMatch:true,
     conflictingConsignorReview:true,
-    periodNormalized:"第77期",
+    periodNormalized:"第78期",
+    bareBirthdayRequiresMonth:true,
+    pollutedPeriod77SettlementCleared:true,
+    oldPeriod77ImportSeparated:true,
     blankOutcomeExplained:true,
     closedAuctionResultSync:true,
     upcomingAuctionStillPending:true,

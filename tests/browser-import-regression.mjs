@@ -80,7 +80,7 @@ try {
   assert.equal(importState.protectedRecord.finalOutcome, "成交");
   assert.equal(importState.protectedRecord.finalPrice, 2500);
   assert.equal(importState.protectedRecord.settled, true);
-  assert.equal(importState.protectedRecord.birthdayMonth, 8);
+  assert.equal(Number(importState.protectedRecord.birthdayMonth || 0), 0);
   assert.doesNotMatch(importState.protectedRecord.sellerWechat, /生日|1\d{10}/);
   assert.equal(importState.protectedLots.length, 1, "same-period duplicate lot must be merged");
   assert.equal(importState.protectedRecord.coinBoxId, "duplicate-rich-field");

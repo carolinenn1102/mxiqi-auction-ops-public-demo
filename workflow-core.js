@@ -14,21 +14,38 @@
     return record.unpaidReturn === true || record.finalOutcome === "拖回" || /^拖回\//.test(String(record.returnDisposition || ""));
   }
 
-  function trackerAuctionPeriod(value = "") {
-    const match = String(value || "").match(/(?:第\s*)?(\d{1,4})\s*期/);
-    return match ? `第${Number(match[1])}期` : "";
-  }
-
-  function auctionDateEnd(value = "") {
+  function auctionDateKey(value = "") {
     const source = String(value || "").trim();
     const full = source.match(/(?:^|\D)(20\d{2})[-\/]?(\d{2})[-\/]?(\d{2})(?:\D|$)/);
     const compact = full ? null : source.match(/(?:^|\D)(\d{2})(\d{2})(\d{2})(?:\D|$)/);
     const year = Number(full?.[1] || (compact ? `20${compact[1]}` : 0));
     const month = Number(full?.[2] || compact?.[2] || 0);
     const day = Number(full?.[3] || compact?.[3] || 0);
-    if (!year || month < 1 || month > 12 || day < 1 || day > 31) return NaN;
+    if (!year || month < 1 || month > 12 || day < 1 || day > 31) return "";
     const date = new Date(year, month - 1, day);
-    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return NaN;
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return "";
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
+  function trackerAuctionPeriod(value = "") {
+    const match = String(value || "").match(/(?:第\s*)?(\d{1,4})\s*期/);
+    if (!match) return "";
+    const period = Number(match[1]);
+    // The supplied 0806 tracker accidentally labelled the 2026-08-06 auction as period 77.
+    if (period === 77 && auctionDateKey(value) === "2026-08-06") return "第78期";
+    return `第${period}期`;
+  }
+
+  function correctKnown0806AuctionText(value = "") {
+    const source = String(value || "");
+    if (auctionDateKey(source) !== "2026-08-06") return source;
+    return source.replace(/((?:第\s*)?)77(\s*期)/g, (_match, prefix, suffix) => `${prefix}78${suffix}`);
+  }
+
+  function auctionDateEnd(value = "") {
+    const key = auctionDateKey(value);
+    if (!key) return NaN;
+    const [year, month, day] = key.split("-").map(Number);
     const nextDay = new Date(year, month - 1, day + 1);
     return nextDay.getTime();
   }
@@ -224,10 +241,14 @@
   function sameAuctionLot(left = {}, right = {}) {
     const leftLot = Number(left.lot);
     const rightLot = Number(right.lot);
-    return Number.isInteger(leftLot)
+    const sameIdentity = Number.isInteger(leftLot)
       && leftLot > 0
       && leftLot === rightLot
       && auctionPeriod(left) === auctionPeriod(right);
+    if (!sameIdentity) return false;
+    const leftDate = auctionDateKey(left.auctionAt || left.platformAuctionAt);
+    const rightDate = auctionDateKey(right.auctionAt || right.platformAuctionAt);
+    return !(leftDate && rightDate && leftDate !== rightDate);
   }
 
   function settlementMatchKey(record = {}, period = "") {
@@ -250,7 +271,13 @@
     if (!String(incoming.sellerPhone || "").trim() && String(existing.sellerPhone || "").trim()) {
       merged.sellerPhone = existing.sellerPhone;
     }
-    if (!Number(incoming.birthdayMonth || 0) && Number(existing.birthdayMonth || 0)) {
+    if (incoming.birthdayPending === true) {
+      merged.birthdayMonth = 0;
+      merged.birthdayPending = true;
+    } else if (Number(incoming.birthdayMonth || 0)) {
+      merged.birthdayMonth = Number(incoming.birthdayMonth);
+      merged.birthdayPending = false;
+    } else if (!Number(incoming.birthdayMonth || 0) && Number(existing.birthdayMonth || 0)) {
       merged.birthdayMonth = Number(existing.birthdayMonth);
     }
     if (!String(incoming.contactedAt || "").trim() && String(existing.contactedAt || "").trim()) {
@@ -260,6 +287,83 @@
       merged.returnDisposition = normalizeReturnDisposition(existing.returnDisposition);
     }
     return merged;
+  }
+
+  function mergePlatformOrderRecords(records = [], incomingOrders = [], timestamp = new Date().toISOString()) {
+    const next = records.map((record) => ({...record}));
+    let matched = 0;
+    let added = 0;
+    let skipped = 0;
+    for (const incomingRecord of incomingOrders) {
+      const incoming = {...incomingRecord};
+      const lot = Number(incoming.lot);
+      if (!Number.isInteger(lot) || lot <= 0 || !String(incoming.itemName || "").trim()) {
+        skipped += 1;
+        continue;
+      }
+      const platformKey = platformRecordKey(incoming);
+      const index = next.findIndex((record) => (platformKey && platformRecordKey(record) === platformKey)
+        || sameAuctionLot(record, incoming));
+      if (index >= 0) {
+        next[index] = {
+          ...mergeImportedRecord(next[index], incoming),
+          id:next[index].id || incoming.id || "",
+          sourceUpdatedAt:incoming.sourceUpdatedAt || timestamp,
+        };
+        matched += 1;
+      } else {
+        next.push({...incoming,sourceUpdatedAt:incoming.sourceUpdatedAt || timestamp});
+        added += 1;
+      }
+    }
+    return {records:next,matched,added,skipped};
+  }
+
+  const CROSS_AUCTION_RESULT_FIELDS = [
+    "platformItemKey","source","sourceUpdatedAt","mxiqiAuctionItemUrl","mxiqiOrderId","mxiqiOrderUrl",
+    "mxiqiMemberId","mxiqiOrderStatus","mxiqiSeenScopes","platformOrderDate","platformAuctionAt",
+    "finalOutcome","finalPrice","paymentStatus","paymentDueAt","paymentResolvedAt","paymentStatusManual",
+    "paymentStatusManualAt","buyerName","buyerPhone","recipientRaw","recipientName","recipientPhone",
+    "addressProvince","addressCity","addressDistrict","addressDetail","addressStatus","addressWarnings",
+    "addressReviewedAt","commissionPlatformAmount","incomePlatformAmount","commissionAmount","settlementAmount",
+    "settlementAdjustment","profit","promotion","settledAt","settlementNote","unpaidReturn",
+    "unpaidReturnDetectedAt","returnDisposition","outboundTrackingNumber","shippingOrderedAt","mxiqiShippingStatus",
+  ];
+
+  function repairKnown0806Import(records = [], timestamp = new Date().toISOString()) {
+    let periodCorrected = 0;
+    let settlementCleared = 0;
+    let birthdayPending = 0;
+    const affectedConsignors = new Set();
+    const next = records.map((record) => {
+      if (auctionDateKey(record.auctionAt || record.platformAuctionAt) !== "2026-08-06") return {...record};
+      const updated = {...record};
+      const rawPeriodText = [record.auctionPeriodOverride,record.auctionAt,record.projectName,record.lotLabel]
+        .filter(Boolean)
+        .join(" · ");
+      if (/(?:第\s*)?77\s*期/.test(rawPeriodText)) {
+        updated.auctionPeriodOverride = "第78期";
+        updated.auctionAt = correctKnown0806AuctionText(record.auctionAt);
+        updated.periodCorrectedAt = timestamp;
+        periodCorrected += 1;
+      }
+      if (Number(record.birthdayMonth || 0) === 8) {
+        updated.birthdayMonth = 0;
+        updated.birthdayPending = true;
+        updated.birthdayRuleCorrectedAt = timestamp;
+        if (record.sellerWechat) affectedConsignors.add(String(record.sellerWechat));
+        birthdayPending += 1;
+      }
+      if (/^auction-result:312210:/.test(String(record.platformItemKey || ""))) {
+        CROSS_AUCTION_RESULT_FIELDS.forEach((field) => { delete updated[field]; });
+        updated.finalPrice = 0;
+        updated.settled = false;
+        updated.crossAuctionResultClearedAt = timestamp;
+        settlementCleared += 1;
+      }
+      return updated;
+    });
+    return {records:next,periodCorrected,settlementCleared,birthdayPending,affectedConsignors:[...affectedConsignors]};
   }
 
   function isBlankImportValue(value) {
@@ -340,17 +444,14 @@
 
   function deduplicateAuctionLots(records = []) {
     const next = [];
-    const indexByKey = new Map();
     const idMap = {};
     let removed = 0;
     records.forEach((record) => {
-      const key = settlementMatchKey(record);
-      if (!key || !indexByKey.has(key)) {
-        if (key) indexByKey.set(key, next.length);
+      const index = next.findIndex((existing) => sameAuctionLot(existing, record));
+      if (index < 0) {
         next.push({...record});
         return;
       }
-      const index = indexByKey.get(key);
       const survivor = next[index];
       next[index] = mergeAuctionRecordCopies(survivor, record);
       if (record.id && survivor.id && record.id !== survivor.id) idMap[record.id] = survivor.id;
@@ -565,5 +666,5 @@
     return {records:next,departed};
   }
 
-  return {isStorageRecord,isReturnRecord,trackerAuctionPeriod,auctionPeriod,auctionDateEnd,isAuctionResultPending,normalizeReturnDisposition,isHandledReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,mergeImportedRecord,applyManualPaymentResolution,mergeAuctionRecordCopies,deduplicateAuctionLots,restoreConsignorIdentities,restoreHandledReturnDispositions,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
+  return {isStorageRecord,isReturnRecord,auctionDateKey,trackerAuctionPeriod,correctKnown0806AuctionText,auctionPeriod,auctionDateEnd,isAuctionResultPending,normalizeReturnDisposition,isHandledReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,mergeImportedRecord,mergePlatformOrderRecords,repairKnown0806Import,applyManualPaymentResolution,mergeAuctionRecordCopies,deduplicateAuctionLots,restoreConsignorIdentities,restoreHandledReturnDispositions,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
 });

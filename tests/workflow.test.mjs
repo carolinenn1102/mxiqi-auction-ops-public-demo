@@ -9,7 +9,8 @@ test("extracts the auction period from the Mxiqi project title", () => {
 });
 
 test("normalizes the compact auction period used by the 0806 tracker", () => {
-  assert.equal(workflow.trackerAuctionPeriod("260806 周四，77期"), "第77期");
+  assert.equal(workflow.trackerAuctionPeriod("260806 周四，77期"), "第78期");
+  assert.equal(workflow.correctKnown0806AuctionText("260806 周四，77期"), "260806 周四，78期");
   assert.equal(workflow.trackerAuctionPeriod("第 77 期"), "第77期");
   assert.equal(workflow.trackerAuctionPeriod("260806 周四"), "");
 });
@@ -64,6 +65,52 @@ test("relisting preserves the previous return settlement and resets the new auct
 test("same Lot is unique only inside the same auction period", () => {
   assert.equal(workflow.sameAuctionLot({lot:48,projectName:"第75期"},{lot:48,auctionPeriodOverride:"75"}), true);
   assert.equal(workflow.sameAuctionLot({lot:48,projectName:"第75期"},{lot:48,auctionPeriodOverride:"第76期"}), false);
+  assert.equal(workflow.sameAuctionLot(
+    {lot:48,auctionPeriodOverride:"第76期",auctionAt:"2026-07-30"},
+    {lot:48,auctionPeriodOverride:"第76期",auctionAt:"2026-08-03"},
+  ), false);
+});
+
+test("repairs the known 0806 period collision and clears the leaked period-77 settlement", () => {
+  const result = workflow.repairKnown0806Import([{
+    id:"polluted",lot:8,itemName:"1917年英属埃及银币",sellerWechat:"野",sellerPhone:"13845470978",
+    auctionAt:"260806 周四，77期",auctionPeriodOverride:"第77期",platformItemKey:"auction-result:312210:8",
+    source:"mxiqi_connector",finalOutcome:"成交",finalPrice:369,paymentStatus:"已付款",buyerName:"错误买家",
+    birthdayMonth:8,commissionAmount:-7.38,settlementAmount:376.38,promotion:"生日 · -2%",settled:false,
+  }], "2026-08-06T16:00:00.000Z");
+  const repaired = result.records[0];
+  assert.equal(result.periodCorrected, 1);
+  assert.equal(result.settlementCleared, 1);
+  assert.equal(result.birthdayPending, 1);
+  assert.equal(repaired.auctionPeriodOverride, "第78期");
+  assert.equal(repaired.auctionAt, "260806 周四，78期");
+  assert.equal(repaired.finalPrice, 0);
+  assert.equal(repaired.finalOutcome, undefined);
+  assert.equal(repaired.paymentStatus, undefined);
+  assert.equal(repaired.buyerName, undefined);
+  assert.equal(repaired.birthdayMonth, 0);
+  assert.equal(repaired.birthdayPending, true);
+  assert.equal(repaired.sellerWechat, "野");
+});
+
+test("website order records backfill paid buyer details without losing the imported consignor", () => {
+  const result = workflow.mergePlatformOrderRecords([{
+    id:"local-8",lot:8,itemName:"1917年英属埃及银币",auctionAt:"260806 周四，78期",
+    auctionPeriodOverride:"第78期",sellerWechat:"野",sellerPhone:"13845470978",birthdayPending:true,
+  }], [{
+    lot:8,itemName:"1917年英属埃及银币",auctionAt:"2026-08-06",auctionPeriodOverride:"第78期",
+    platformItemKey:"order-8:8:0",mxiqiOrderId:"order-8",source:"mxiqi_connector",
+    finalOutcome:"成交",finalPrice:880,paymentStatus:"已付款",buyerName:"网页买家",buyerPhone:"13900000008",
+    recipientName:"收件人",recipientPhone:"13900000008",
+  }], "2026-08-06T16:00:00.000Z");
+  const merged = result.records[0];
+  assert.equal(result.matched, 1);
+  assert.equal(result.added, 0);
+  assert.equal(merged.id, "local-8");
+  assert.equal(merged.sellerWechat, "野");
+  assert.equal(merged.birthdayPending, true);
+  assert.equal(merged.buyerName, "网页买家");
+  assert.equal(merged.paymentStatus, "已付款");
 });
 
 test("blank import cells never overwrite existing non-blank business data", () => {
