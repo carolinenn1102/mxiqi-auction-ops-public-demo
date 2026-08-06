@@ -117,6 +117,14 @@
     return match ? `第${Number(match[1])}期` : "";
   }
 
+  function auctionLifecycle(value) {
+    const source = clean(value);
+    if (/预展中|预展|尚未开始|待开拍|将于[\s\S]{0,40}开始/.test(source)) return "preview";
+    if (/拍卖中|竞拍中|正在拍卖|进行中/.test(source)) return "live";
+    if (/已结束|拍卖已结束|已经结束/.test(source)) return "ended";
+    return "";
+  }
+
   function parseAuctionResultRows(rows = [], {period = "", projectName = "", entryKey = ""} = {}) {
     const normalizedPeriod = auctionPeriod(period) || clean(period);
     const unique = new Map();
@@ -190,12 +198,14 @@
     const projectName = clean(doc.querySelector("h1, h2, .auction-title, [class*='auction'][class*='title']")?.textContent)
       || clean(doc.title).replace(/[-_|].*$/, "");
     const period = auctionPeriod(options.period) || auctionPeriod(`${projectName}\n${pageText}`) || clean(options.period);
+    const lifecycle = options.lifecycle || auctionLifecycle(`${projectName}\n${pageText}`);
+    if (["preview", "live"].includes(lifecycle)) return {records:[],period,projectName,lifecycle};
     const currentPath = typeof location === "object" ? location.pathname : "";
     const entryKey = String(options.entryKey || currentPath || "").match(/(\d{4,})/)?.[1] || "";
     const catalogRows = Array.from(doc.querySelectorAll("table tr"))
       .map((row) => ({cells:Array.from(row.querySelectorAll("td")).map((cell) => cell.textContent),href:""}));
     const catalogRecords = parseAuctionCatalogRows(catalogRows,{period,projectName,entryKey});
-    if (catalogRecords.length) return {records:catalogRecords,period,projectName};
+    if (catalogRecords.length) return {records:catalogRecords,period,projectName,lifecycle};
     const elements = Array.from(doc.querySelectorAll('a[href*="auction.item.info"], a[href*="auction.item"], tr, li, article, [class*="auction-item"], [class*="lot-item"]'));
     const rows = [];
     const seen = new Set();
@@ -214,8 +224,8 @@
       seen.add(key);
       rows.push({text,title,href});
     });
-    return {records:parseAuctionResultRows(rows,{period,projectName,entryKey}),period,projectName};
+    return {records:parseAuctionResultRows(rows,{period,projectName,entryKey}),period,projectName,lifecycle};
   }
 
-  return {clean, money, phoneFrom, orderDate, auctionDate, auctionPeriod, normalizeOrderStatus, parseOrderCard, parseOrderDocument, parseAuctionResultRows, parseAuctionCatalogRows, parseAuctionResultDocument};
+  return {clean, money, phoneFrom, orderDate, auctionDate, auctionPeriod, auctionLifecycle, normalizeOrderStatus, parseOrderCard, parseOrderDocument, parseAuctionResultRows, parseAuctionCatalogRows, parseAuctionResultDocument};
 });

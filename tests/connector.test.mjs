@@ -84,7 +84,7 @@ test("connector supports the Mxiqi wait-pay scope and reports its version", () =
   assert.match(content, /"waitconfirm","waitpay"/);
   assert.match(content, /org\.order\.list\/\$\{safeScope\}/);
   assert.match(background, /chrome\.runtime\.getManifest\(\)\.version/);
-  assert.equal(manifest.version, "1.9.0");
+  assert.equal(manifest.version, "1.9.2");
   assert.match(background, /capabilities:\s*\["login", "syncOrders", "syncOrdersByNumbers", "syncAuctionDeals", "openCarrierPortal"\]/);
 });
 
@@ -97,6 +97,31 @@ test("auction settlement sync automatically locates the period catalog", () => {
   assert.match(content, /org\.auction\.dataReport/);
   assert.match(content, /org\\\.auction\\\.catalog/);
   assert.match(content, /findAuctionDataLink/);
+  assert.match(content, /waitForAuctionDataLink/);
+  assert.match(content, /const currentMatches = !isAuctionList && currentPeriod === normalizedPeriod/);
+  assert.match(background, /scrapeAuctionDealsFromLiveList/);
+  assert.match(background, /chrome\.tabs\.create\(\{url:"https:\/\/www\.mxiqi\.com\/org\.auction\.list",active:false\}\)/);
+  assert.match(background, /chrome\.tabs\.remove\(tab\.id\)/);
+});
+
+test("auction lifecycle protects preview and live bids from settlement parsing", () => {
+  assert.equal(parser.auctionLifecycle("预展中，将于2026-08-06 20:00开始"), "preview");
+  assert.equal(parser.auctionLifecycle("竞拍中"), "live");
+  assert.equal(parser.auctionLifecycle("第77期 已结束"), "ended");
+
+  const previewDocument = {
+    title:"第78期成交目录",
+    body:{textContent:"预展中，将于2026-08-06 20:00开始"},
+    querySelector:() => null,
+    querySelectorAll:() => [],
+  };
+  const parsed = parser.parseAuctionResultDocument(previewDocument, {period:"第78期",entryKey:"313050"});
+  assert.equal(parsed.lifecycle, "preview");
+  assert.deepEqual(parsed.records, []);
+
+  const content = fs.readFileSync(path.join(extensionRoot, "content.js"), "utf8");
+  assert.match(content, /为防止把预出价误判为成交，已停止同步/);
+  assert.match(content, /assertAuctionEnded\(normalizedPeriod, parsed\.lifecycle\)/);
 });
 
 test("connector parses auction deal rows and exposes period settlement sync", () => {

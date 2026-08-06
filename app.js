@@ -1529,6 +1529,7 @@
     renderSettlementSummary();
     renderReauctionSummary();
     renderPreauctionSummary();
+    renderCollectorPanel();
 
     const body = $("#records-body");
     if (!visible.length) {
@@ -2292,8 +2293,8 @@
       const connector = await MxiqiConnector.ping();
       const capabilities = Array.isArray(connector.capabilities) ? connector.capabilities : [];
       state.connection.connectorVersion = connector.version || "";
-      if (!versionAtLeast(connector.version, "1.9.0") || !capabilities.includes("syncAuctionDeals")) {
-        throw new Error("采集助手版本过旧，请重新下载 1.9.0 版并在扩展页面点击重新加载");
+      if (!versionAtLeast(connector.version, "1.9.2") || !capabilities.includes("syncAuctionDeals")) {
+        throw new Error("采集助手版本过旧，请重新下载 1.9.2 版并在扩展页面点击重新加载");
       }
       const orderScopes = ["waitpay", "waitconfirm", "waitexpress"];
       const orderResults = [];
@@ -3990,7 +3991,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = `./zhenzhenpu-logo.jpg?v=46`;
+      image.src = `./zhenzhenpu-logo.jpg?v=47`;
     });
     return checklistLogoPromise;
   }
@@ -4350,7 +4351,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=46", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=47", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
