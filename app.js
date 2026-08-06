@@ -421,6 +421,8 @@
         ...current,
         phone: current.phone || incomingPhone,
         birthdayMonth: Number(current.birthdayMonth || source.birthdayMonth || 0),
+        birthdayPending: !Number(current.birthdayMonth || source.birthdayMonth || 0)
+          && Boolean(current.birthdayPending || source.birthdayPending),
         lastContactedAt: latestCustomerDate(current.lastContactedAt, source.contactedAt),
         notes: String(current.notes || ""),
       };
@@ -456,6 +458,7 @@
         aliases:[...group.aliases],
         phone:group.phone,
         birthdayMonth:Number(profiles.find((profile) => Number(profile.birthdayMonth))?.birthdayMonth || group.records.find((record) => Number(record.birthdayMonth))?.birthdayMonth || 0),
+        birthdayPending:Boolean(profiles.some((profile) => profile.birthdayPending) || group.records.some((record) => record.birthdayPending)),
         lastContactedAt:latestCustomerDate(profiles.map((profile) => profile.lastContactedAt), group.records.map((record) => record.contactedAt)),
         notes:profiles.map((profile) => String(profile.notes || "").trim()).filter(Boolean).filter((value, index, all) => all.indexOf(value) === index).join("；"),
         recordCount:group.records.length,
@@ -508,12 +511,13 @@
       record.sellerWechat = wechat;
       record.sellerPhone = normalizeCustomerPhone(profile.phone) || record.sellerPhone || "";
       record.birthdayMonth = Number(profile.birthdayMonth || record.birthdayMonth || 0);
+      if (record.birthdayMonth) record.birthdayPending = false;
       if (!record.settled) recalculateRecord(record, isStorageRecord(record));
     });
   }
 
   function fillCustomerProfile(entry) {
-    const profile = entry || {wechat:"",phone:"",birthdayMonth:0,lastContactedAt:"",notes:"",recordCount:0,assetCount:0};
+    const profile = entry || {wechat:"",phone:"",birthdayMonth:0,birthdayPending:false,lastContactedAt:"",notes:"",recordCount:0,assetCount:0};
     customerForm.elements.originalWechat.value = profile.wechat;
     customerForm.elements.sellerWechat.value = profile.wechat;
     customerForm.elements.phone.value = profile.phone;
@@ -524,7 +528,7 @@
     $("#customer-avatar").textContent = profile.birthdayMonth ? "🎂" : (String(profile.wechat || "").trim().slice(0, 1) || "送");
     $("#customer-record-count").textContent = `${profile.recordCount} 件${profile.assetCount ? ` · 寄存 ${profile.assetCount}` : ""}`;
     $("#customer-last-contact").textContent = profile.lastContactedAt || "待补";
-    $("#customer-birthday-summary").textContent = profile.birthdayMonth ? `🎂 ${profile.birthdayMonth} 月` : "待补";
+    $("#customer-birthday-summary").textContent = profile.birthdayMonth ? `🎂 ${profile.birthdayMonth} 月` : profile.birthdayPending ? "生日月份待补" : "待补";
     $("#export-customer-image").disabled = !entry || !(Number(profile.recordCount || 0) + Number(profile.assetCount || 0));
   }
 
@@ -537,7 +541,7 @@
     if (!selectedKey && visible.length) selectedKey = visible[0].key;
     state.editingCustomer = selectedKey;
     $("#customer-directory-count").textContent = `${entries.length} 位送拍人 · 本机保存`;
-    $("#customer-list").innerHTML = visible.length ? visible.map((entry) => `<button type="button" class="customer-list-item ${entry.key === selectedKey ? "active" : ""}" data-customer-key="${esc(entry.key)}"><span><b>${entry.birthdayMonth ? "🎂 " : ""}${esc(entry.wechat)}</b><small>${esc(entry.phone || "手机号待补")} · ${entry.recordCount} 件拍品${entry.aliases.length > 1 ? ` · 合并 ${entry.aliases.length} 个昵称` : ""}</small></span><strong>${entry.birthdayMonth ? `${entry.birthdayMonth} 月` : "查看"}</strong></button>`).join("") : '<div class="audit-empty">没有找到送拍人</div>';
+    $("#customer-list").innerHTML = visible.length ? visible.map((entry) => `<button type="button" class="customer-list-item ${entry.key === selectedKey ? "active" : ""}" data-customer-key="${esc(entry.key)}"><span><b>${entry.birthdayMonth ? "🎂 " : ""}${esc(entry.wechat)}</b><small>${esc(entry.phone || "手机号待补")} · ${entry.recordCount} 件拍品${entry.birthdayPending && !entry.birthdayMonth ? " · 生日月份待补" : ""}${entry.aliases.length > 1 ? ` · 合并 ${entry.aliases.length} 个昵称` : ""}</small></span><strong>${entry.birthdayMonth ? `${entry.birthdayMonth} 月` : entry.birthdayPending ? "待补月份" : "查看"}</strong></button>`).join("") : '<div class="audit-empty">没有找到送拍人</div>';
     fillCustomerProfile(entries.find((entry) => entry.key === selectedKey));
   }
 
@@ -724,6 +728,7 @@
     return [
       !record.sellerWechat && "送拍人",
       record.sellerWechat && !record.sellerPhone && "送拍人手机号",
+      record.birthdayPending && !Number(record.birthdayMonth || 0) && "生日月份",
       !record.contactedAt && "联系时间",
       !record.trackingNumber && "快递单号",
       !record.itemName && "拍品名称",
@@ -746,6 +751,7 @@
   }
 
   function birthdayMonthFor(record) {
+    if (record.birthdayPending && !Number(record.birthdayMonth || 0)) return 0;
     const phone = normalizeCustomerPhone(record.sellerPhone || state.customers[record.sellerWechat]?.phone);
     const phoneProfile = phone ? Object.values(state.customers).find((profile) => normalizeCustomerPhone(profile?.phone) === phone) : null;
     return Number(record.birthdayMonth || phoneProfile?.birthdayMonth || state.customers[record.sellerWechat]?.birthdayMonth || 0);
@@ -2289,19 +2295,31 @@
       if (!versionAtLeast(connector.version, "1.9.0") || !capabilities.includes("syncAuctionDeals")) {
         throw new Error("采集助手版本过旧，请重新下载 1.9.0 版并在扩展页面点击重新加载");
       }
-      const pendingResult = await MxiqiConnector.syncOrders({scope:"waitpay",maxPages:20});
-      if (pendingResult.requiresLogin) throw new Error("麦稀奇登录已失效，请重新登录后检查连接");
+      const orderScopes = ["waitpay", "waitconfirm", "waitexpress"];
+      const orderResults = [];
+      for (const scope of orderScopes) {
+        const result = await MxiqiConnector.syncOrders({scope,maxPages:20});
+        if (result.requiresLogin) throw new Error("麦稀奇登录已失效，请重新登录后检查连接");
+        orderResults.push({scope,result});
+      }
       const dealsResult = await MxiqiConnector.syncAuctionDeals({period});
-      if (pendingResult.requiresLogin || dealsResult.requiresLogin) {
+      if (dealsResult.requiresLogin) {
         state.connection = {...clone(defaultConnection),mode:"connector",connectorInstalled:true,connectorVersion:connector.version || ""};
         throw new Error("麦稀奇登录已失效，请重新登录后检查连接");
       }
       removeDefaultDemoRecords();
       const timestamp = new Date().toISOString();
+      const platformOrders = orderResults.flatMap(({scope,result}) => (Array.isArray(result.records) ? result.records : []).map((record) => ({
+        ...record,
+        mxiqiSeenScopes:[...new Set([...(Array.isArray(record.mxiqiSeenScopes) ? record.mxiqiSeenScopes : []),scope])],
+      })));
+      const orderMerge = MxiqiWorkflow.mergePlatformOrderRecords(state.records, platformOrders, timestamp);
+      state.records = orderMerge.records;
+      const pendingOrders = orderResults.find(({scope}) => scope === "waitpay")?.result?.records || [];
       const merged = MxiqiWorkflow.applyAuctionSettlementResults(
         state.records,
         Array.isArray(dealsResult.records) ? dealsResult.records : [],
-        Array.isArray(pendingResult.records) ? pendingResult.records : [],
+        Array.isArray(pendingOrders) ? pendingOrders : [],
         period,
         timestamp,
       );
@@ -2325,8 +2343,9 @@
       state.collector.lastRunAt = timestamp;
       state.collector.runCount = Number(state.collector.runCount || 0) + 1;
       const repairedText = repaired.restored ? `，恢复送拍人 ${repaired.restored} 件` : "";
-      state.collector.lastResult = `${merged.period}成交目录同步完成：匹配 ${merged.matched} 件，新增 ${merged.added} 件，未付款拖回 ${merged.unpaid} 件${repairedText}`;
-      audit("同步本期成交记录", `${merged.period} · 匹配 ${merged.matched} · 新增 ${merged.added} · 未付款拖回 ${merged.unpaid}${repairedText}`);
+      const buyerText = `，网页订单回补 ${orderMerge.matched + orderMerge.added} 件`;
+      state.collector.lastResult = `${merged.period}成交目录同步完成：匹配 ${merged.matched} 件，新增 ${merged.added} 件${buyerText}，未付款拖回 ${merged.unpaid} 件${repairedText}`;
+      audit("同步本期成交记录", `${merged.period} · 匹配 ${merged.matched} · 新增 ${merged.added} · 网页订单回补 ${orderMerge.matched + orderMerge.added} · 未付款拖回 ${merged.unpaid}${repairedText}`);
       save();
       state.stage = "settlement";
       state.selected.clear();
@@ -3304,6 +3323,7 @@
       ...previous,
       phone,
       birthdayMonth,
+      birthdayPending:birthdayMonth ? false : Boolean(previous.birthdayPending),
       lastContactedAt:String(data.get("lastContactedAt") || ""),
       notes:String(data.get("notes") || "").trim(),
       updatedAt:new Date().toISOString(),
@@ -3313,6 +3333,7 @@
       record.sellerWechat = sellerWechat;
       record.sellerPhone = phone;
       record.birthdayMonth = birthdayMonth;
+      if (birthdayMonth) record.birthdayPending = false;
       if (!record.settled) recalculateRecord(record);
     });
     state.assets.forEach((asset) => {
@@ -3728,7 +3749,8 @@
         if (!lot && !projectName) continue;
         const outcome = textAt(row, found.map, "拍出价格/拖回", "拍出价格拖回");
         const price = numberAt(row, found.map, "拍出价格/拖回");
-        const auctionAt = textAt(row, found.map, "上拍时间（拍卖时间）", "上拍时间拍卖时间");
+        const rawAuctionAt = textAt(row, found.map, "上拍时间（拍卖时间）", "上拍时间拍卖时间");
+        const auctionAt = MxiqiWorkflow.correctKnown0806AuctionText(rawAuctionAt);
         const sellerRaw = textAt(row, found.map, "送拍人（微信名）", "送拍人微信名");
         const seller = MxiqiAssets.parseConsignorLabel(
           sellerRaw,
@@ -3749,6 +3771,7 @@
             sellerWechat:seller.wechat,
             sellerPhone:seller.phone,
             birthdayMonth:seller.birthdayMonth,
+            birthdayPending:seller.birthdayPending,
             contactedAt:textAt(row,found.map,"联系时间"),
             coinBoxId:textAt(row,found.map,"盒子币编号"),
             trackingNumber:textAt(row,found.map,"快递单号"),
@@ -3967,7 +3990,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = `./zhenzhenpu-logo.jpg?v=45`;
+      image.src = `./zhenzhenpu-logo.jpg?v=46`;
     });
     return checklistLogoPromise;
   }
@@ -4185,6 +4208,28 @@
 
   const startupSanitizedCount = sanitizeLoadedState();
 
+  const startup0806Repair = MxiqiWorkflow.repairKnown0806Import(state.records);
+  state.records = startup0806Repair.records;
+  if (startup0806Repair.birthdayPending) {
+    const affectedNames = new Set(startup0806Repair.affectedConsignors);
+    const affectedPhones = new Set(state.records
+      .filter((record) => record.birthdayPending && MxiqiWorkflow.auctionDateKey(record.auctionAt || record.platformAuctionAt) === "2026-08-06")
+      .map((record) => normalizeCustomerPhone(record.sellerPhone))
+      .filter(Boolean));
+    Object.entries(state.customers).forEach(([wechat, profile]) => {
+      const phone = normalizeCustomerPhone(profile?.phone);
+      if (!affectedNames.has(wechat) && !(phone && affectedPhones.has(phone))) return;
+      if (Number(profile?.birthdayMonth || 0) === 8) profile.birthdayMonth = 0;
+      profile.birthdayPending = !Number(profile?.birthdayMonth || 0);
+    });
+  }
+  if (startup0806Repair.periodCorrected || startup0806Repair.settlementCleared || startup0806Repair.birthdayPending) {
+    state.records
+      .filter((record) => MxiqiWorkflow.auctionDateKey(record.auctionAt || record.platformAuctionAt) === "2026-08-06")
+      .forEach((record) => recalculateRecord(record, true));
+    audit("自动修复 0806 数据", `期数更正 ${startup0806Repair.periodCorrected} 件 · 清除串入成交 ${startup0806Repair.settlementCleared} 件 · 生日月份待补 ${startup0806Repair.birthdayPending} 件`, {undoable:false});
+  }
+
   function repairEmbeddedConsignorLabels() {
     let repaired = 0;
     state.records.forEach((record) => {
@@ -4195,14 +4240,24 @@
       const nextName = parsed.wechat || oldName;
       if (nextName !== oldName) record.sellerWechat = nextName;
       if (!normalizeCustomerPhone(record.sellerPhone) && parsed.phone) record.sellerPhone = parsed.phone;
-      if (!Number(record.birthdayMonth || 0) && parsed.birthdayMonth) record.birthdayMonth = parsed.birthdayMonth;
+      if (parsed.birthdayPending) {
+        record.birthdayMonth = 0;
+        record.birthdayPending = true;
+      } else if (parsed.birthdayMonth) {
+        record.birthdayMonth = parsed.birthdayMonth;
+        record.birthdayPending = false;
+      }
       const oldProfile = state.customers[oldName] && typeof state.customers[oldName] === "object" ? state.customers[oldName] : {};
       const nextProfile = state.customers[nextName] && typeof state.customers[nextName] === "object" ? state.customers[nextName] : {};
+      const profileBirthdayMonth = parsed.birthdayPending
+        ? 0
+        : Number(parsed.birthdayMonth || nextProfile.birthdayMonth || oldProfile.birthdayMonth || 0);
       state.customers[nextName] = {
         ...oldProfile,
         ...nextProfile,
         phone:normalizeCustomerPhone(nextProfile.phone || oldProfile.phone || parsed.phone),
-        birthdayMonth:Number(nextProfile.birthdayMonth || oldProfile.birthdayMonth || parsed.birthdayMonth || 0),
+        birthdayMonth:profileBirthdayMonth,
+        birthdayPending:parsed.birthdayPending || (!profileBirthdayMonth && Boolean(nextProfile.birthdayPending || oldProfile.birthdayPending)),
         aliases:[...new Set([...(oldProfile.aliases || []), ...(nextProfile.aliases || []), oldName].filter(Boolean))],
       };
       if (nextName !== oldName) delete state.customers[oldName];
@@ -4211,7 +4266,7 @@
     return repaired;
   }
 
-  if (localStorage.getItem(MIGRATION_KEY) !== "16") {
+  if (localStorage.getItem(MIGRATION_KEY) !== "17") {
     state.settings = {...defaultSettings, ...state.settings};
     repairEmbeddedConsignorLabels();
     if (Number(state.settings.birthdayCommissionValue) === 5 && state.settings.birthdayLabel === "生日月优惠") {
@@ -4272,7 +4327,7 @@
     state.connection = {...defaultConnection, ...state.connection};
     if (Number(state.settings.sfThreshold) === 1000) state.settings.sfThreshold = 2000;
     if (!["disconnected","demo_connected","connected"].includes(state.connection.status)) state.connection = clone(defaultConnection);
-    localStorage.setItem(MIGRATION_KEY, "16");
+    localStorage.setItem(MIGRATION_KEY, "17");
     save();
   }
 
@@ -4295,7 +4350,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=45", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=46", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
@@ -4348,6 +4403,8 @@
   renderCollectorPanel();
   if (startupSanitizedCount || startupQuarantinedCount) {
     notify(`检测到异常导入数据，已自动隔离 ${startupSanitizedCount + startupQuarantinedCount} 条并恢复页面`, "error");
+  } else if (startup0806Repair.periodCorrected || startup0806Repair.settlementCleared || startup0806Repair.birthdayPending) {
+    notify(`已自动修复 0806 数据：改为第78期 ${startup0806Repair.periodCorrected} 件，清除串入成交 ${startup0806Repair.settlementCleared} 件，生日月份待补 ${startup0806Repair.birthdayPending} 件`);
   } else if (startupReturnRepair.restored) {
     notify(`已自动恢复 ${startupReturnRepair.restored} 件拍品的拖回处理状态`);
   } else if (startupConsignorRepair.restored) {

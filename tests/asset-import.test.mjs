@@ -14,13 +14,25 @@ await import("../matching-core.js");
 
 const { parseAssetWorkbook, rematchAssets, groupAssetsByBuyer, parseConsignorLabel, mergeAssets, suggestReauctionMatch } = globalThis.MxiqiAssets;
 
-test("extracts embedded phone and birthday metadata without polluting the consignor nickname", () => {
+test("a bare birthday marker is missing information and never infers the auction month", () => {
   const parsed = parseConsignorLabel("测试昵称，生日，13900000001", "", "260803 周一，77期");
   assert.deepEqual(parsed, {
     wechat:"测试昵称",
     phone:"13900000001",
     birthdayMarked:true,
-    birthdayMonth:8,
+    birthdayMonth:0,
+    birthdayPending:true,
+  });
+});
+
+test("only an explicit numeric month activates birthday metadata", () => {
+  const parsed = parseConsignorLabel("四维，12月，15885513177", "", "260806 周四，77期");
+  assert.deepEqual(parsed, {
+    wechat:"四维",
+    phone:"15885513177",
+    birthdayMarked:true,
+    birthdayMonth:12,
+    birthdayPending:false,
   });
 });
 
