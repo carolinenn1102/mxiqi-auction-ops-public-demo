@@ -45,6 +45,7 @@ try {
       finalOutcome:"拖回",
       finalPrice:0,
       returnDisposition:"拖回/再拍",
+      returnDispositionConfirmedAt:"2026-08-05T10:00:00.000Z",
       settled:false,
     }]));
   }, recordsKey);
@@ -82,6 +83,7 @@ try {
       finalOutcome:"拖回",
       finalPrice:0,
       returnDisposition:"拖回/再拍",
+      returnDispositionConfirmedAt:"2026-08-05T10:00:00.000Z",
       settled:false,
     }]));
   }, recordsKey);
@@ -110,13 +112,13 @@ try {
     localStorage.setItem("mxiqi-public-demo-schema", "17");
     localStorage.setItem(recordsKey, JSON.stringify([
       {id:"closed-77",lot:9,itemName:"第77期已结束拍品",auctionAt:"260803 周一，77期",auctionPeriodOverride:"第77期",finalOutcome:"待拍",finalPrice:0},
-      {id:"upcoming-78",lot:10,itemName:"第78期待拍拍品",auctionAt:"260806 周四，78期",auctionPeriodOverride:"第78期",finalOutcome:"待拍",finalPrice:0},
+      {id:"upcoming-99",lot:10,itemName:"第99期待拍拍品",auctionAt:"2026-12-31 20:00",auctionPeriodOverride:"第99期",finalOutcome:"待拍",finalPrice:0},
     ]));
   }, recordsKey);
   await page.reload({waitUntil:"networkidle"});
   const lifecycleRows = await page.evaluate(() => {
     const closedButton = document.querySelector('button[data-action="sync-result"][data-id="closed-77"]');
-    const futureButton = document.querySelector('button[data-action="edit"][data-id="upcoming-78"]');
+    const futureButton = document.querySelector('button[data-action="edit"][data-id="upcoming-99"]');
     return {closed:closedButton?.closest("tr")?.innerText || "",upcoming:futureButton?.closest("tr")?.innerText || ""};
   });
   assert.match(lifecycleRows.closed, /成交结果待同步/);

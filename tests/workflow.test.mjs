@@ -281,6 +281,7 @@ test("settlement sync preserves return dispositions already handled by the opera
     const records = [{
       id:`handled-${returnDisposition}`,lot:48,itemName:"已处理拍品",projectName:"第76期",
       finalOutcome:"拖回",finalPrice:49288,paymentStatus:"待付款",unpaidReturn:true,returnDisposition,
+      returnDispositionConfirmedAt:"2026-07-30T10:00:00.000Z",
     }];
     const deals = [{
       lot:48,itemName:"已处理拍品",auctionPeriodOverride:"第76期",
@@ -312,6 +313,31 @@ test("settlement sync only clears the automatic waiting marker after payment", (
   assert.equal(result.records[0].paymentStatus, "已付款");
 });
 
+test("unconfirmed return choices are never treated as an operator decision", () => {
+  const unconfirmed = {
+    id:"auto-return",lot:6,itemName:"拍品",projectName:"第78期",finalOutcome:"拖回",
+    finalPrice:1000,paymentStatus:"待付款",unpaidReturn:true,returnDisposition:"拖回/发回",
+  };
+  assert.equal(workflow.recordStatus(unconfirmed), "拖回/等待");
+  assert.equal(workflow.settlementBlocker(unconfirmed), "拖回待选择处理方式");
+  const reviewed = workflow.requireManualReturnReview([unconfirmed], "2026-08-07T09:00:00.000Z");
+  assert.equal(reviewed.reviewRequired, 1);
+  assert.equal(reviewed.records[0].returnDisposition, "拖回/等待");
+  assert.equal(reviewed.records[0].returnDispositionConfirmedAt, "");
+});
+
+test("settlement sync resets an unconfirmed send-back choice to manual review", () => {
+  const records = [{
+    id:"auto-return",lot:6,itemName:"拍品",projectName:"第78期",finalOutcome:"拖回",
+    finalPrice:1000,paymentStatus:"待付款",unpaidReturn:true,returnDisposition:"拖回/发回",
+  }];
+  const deals = [{lot:6,itemName:"拍品",auctionPeriodOverride:"第78期",finalPrice:1000,finalOutcome:"成交"}];
+  const pending = [{lot:6,itemName:"拍品",auctionPeriodOverride:"第78期",paymentStatus:"待付款"}];
+  const result = workflow.applyAuctionSettlementResults(records,deals,pending,"第78期","2026-08-07T09:00:00.000Z");
+  assert.equal(result.records[0].returnDisposition, "拖回/等待");
+  assert.equal(result.records[0].returnDispositionConfirmedAt, "");
+});
+
 test("handled return dispositions overwritten by an old sync can be restored from history", () => {
   const current = [{
     id:"lot-48",lot:48,itemName:"拍品",projectName:"第76期",source:"mxiqi_connector",
@@ -321,6 +347,7 @@ test("handled return dispositions overwritten by an old sync can be restored fro
   const history = [{records:[{
     id:"lot-48",lot:48,itemName:"拍品",projectName:"第76期",finalOutcome:"拖回",
     finalPrice:49288,paymentStatus:"待付款",unpaidReturn:true,returnDisposition:"拖回/再拍",
+    returnDispositionConfirmedAt:"2026-07-30T10:00:00.000Z",
   }]}];
   const result = workflow.restoreHandledReturnDispositions(current,history,"2026-08-01T00:00:00.000Z");
   assert.equal(result.restored, 1);
@@ -385,8 +412,8 @@ test("period settlement waits for unpaid and unresolved returns", () => {
 
 test("resolved returns and paid split orders can settle", () => {
   const records = [
-    {id:"sent",lot:1,itemName:"拖回发回",projectName:"第76期",finalOutcome:"拖回",finalPrice:500,paymentStatus:"待付款",unpaidReturn:true,returnDisposition:"拖回/发回"},
-    {id:"relist",lot:2,itemName:"拖回再拍",projectName:"第76期",finalOutcome:"拖回",finalPrice:600,paymentStatus:"待付款",unpaidReturn:true,returnDisposition:"拖回/再拍"},
+    {id:"sent",lot:1,itemName:"拖回发回",projectName:"第76期",finalOutcome:"拖回",finalPrice:500,paymentStatus:"待付款",unpaidReturn:true,returnDisposition:"拖回/发回",returnDispositionConfirmedAt:"2026-07-30T10:00:00.000Z"},
+    {id:"relist",lot:2,itemName:"拖回再拍",projectName:"第76期",finalOutcome:"拖回",finalPrice:600,paymentStatus:"待付款",unpaidReturn:true,returnDisposition:"拖回/再拍",returnDispositionConfirmedAt:"2026-07-30T10:00:00.000Z"},
     {id:"stored",lot:3,itemName:"拖回寄存",projectName:"第76期",finalOutcome:"拖回",finalPrice:700,paymentStatus:"待付款",unpaidReturn:true,returnDisposition:"寄存"},
     {id:"split",lot:4,itemName:"已付款拆单",projectName:"第76期",finalOutcome:"成交",finalPrice:800,paymentStatus:"已付款",returnDisposition:"拆单"},
   ];
@@ -408,7 +435,7 @@ test("payment state is exposed before the final outcome and becomes overdue afte
 });
 
 test("return disposition takes priority over payment state", () => {
-  const record = {finalOutcome:"成交",finalPrice:860,paymentStatus:"待付款",paymentDueAt:"2026-07-20T20:00:00+08:00",returnDisposition:"拖回/再拍"};
+  const record = {finalOutcome:"成交",finalPrice:860,paymentStatus:"待付款",paymentDueAt:"2026-07-20T20:00:00+08:00",returnDisposition:"拖回/再拍",returnDispositionConfirmedAt:"2026-07-21T09:00:00.000Z"};
   assert.equal(workflow.recordStatus(record, new Date("2026-07-29T21:00:00+08:00")), "拖回/再拍");
 });
 

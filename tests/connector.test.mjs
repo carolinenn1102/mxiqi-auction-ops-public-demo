@@ -203,6 +203,22 @@ test("birthday reconciliation marks consignors and local directory keeps contact
   assert.match(styles, /\.customer-directory-layout/);
 });
 
+test("consignor names open their customer profile from the work tables", () => {
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  const styles = fs.readFileSync(path.join(root, "styles.css"), "utf8");
+  assert.match(app, /data-customer-open=/);
+  assert.match(app, /openCustomerDirectory\(customerOpen\.dataset\.customerOpen\)/);
+  assert.match(styles, /\.consignor-link/);
+});
+
+test("collector refresh prioritizes the selected period settlement catalog", () => {
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  assert.match(app, /`同步\$\{pendingPeriod\}成交结果`/);
+  assert.match(app, /if \(pendingPeriod && state\.connection\.status === "connected"\) void runSettlementSync\(\)/);
+  assert.match(html, /优先读取该期完整成交目录/);
+});
+
 test("settlement actions are gated until period unpaid and return work is complete", () => {
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
