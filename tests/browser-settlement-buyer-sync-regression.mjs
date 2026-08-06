@@ -29,7 +29,7 @@ try {
       body:`
         globalThis.__settlementSyncScopes = [];
         globalThis.MxiqiConnector = Object.freeze({
-          ping:async () => ({ok:true,version:"1.9.0",capabilities:["syncOrders","syncAuctionDeals"]}),
+          ping:async () => ({ok:true,version:"1.9.2",capabilities:["syncOrders","syncAuctionDeals"]}),
           syncOrders:async ({scope}) => {
             globalThis.__settlementSyncScopes.push(scope);
             if (scope !== "waitconfirm") return {requiresLogin:false,records:[],pages:1,totalPages:1};
@@ -51,7 +51,7 @@ try {
   await page.addInitScript(({recordsKey,connectionKey}) => {
     localStorage.clear();
     localStorage.setItem("mxiqi-public-demo-schema", "17");
-    localStorage.setItem(connectionKey, JSON.stringify({status:"connected",mode:"connector",connectorInstalled:true,connectorVersion:"1.9.0"}));
+    localStorage.setItem(connectionKey, JSON.stringify({status:"connected",mode:"connector",connectorInstalled:true,connectorVersion:"1.9.2"}));
     localStorage.setItem(recordsKey, JSON.stringify([{
       id:"local-78-lot-8",lot:8,itemName:"1917年英属埃及5 PIASTRES银币",sellerWechat:"野",sellerPhone:"13845470978",
       auctionAt:"260806 周四，78期",auctionPeriodOverride:"第78期",lotLabel:"麦稀奇 / Lot 8",received:"是",
@@ -60,8 +60,7 @@ try {
   }, {recordsKey,connectionKey});
   await page.goto(siteUrl, {waitUntil:"networkidle"});
   await page.selectOption("#filter-auction", "第78期");
-  await page.click("#open-collector");
-  await page.click('#collector-dialog [data-close-dialog]');
+  assert.equal(await page.locator("#sync-settlement-orders").isEnabled(), true, "period selection should immediately enable settlement sync");
   await page.click('button[data-stage="settlement"]');
   await page.click("#sync-settlement-orders");
   await page.waitForFunction(() => document.querySelector("#toast")?.textContent?.includes("网页订单回补"), null, {timeout:20000});

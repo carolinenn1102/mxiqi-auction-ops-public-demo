@@ -83,6 +83,29 @@
     throw new Error(specific || errors.find((messageText) => /成交目录/.test(messageText)) || errors.at(-1) || "没有找到可读取的麦稀奇成交目录");
   }
 
+  async function scrapeAuctionDealsFromLiveList(message) {
+    let tab = await chrome.tabs.create({url:"https://www.mxiqi.com/org.auction.list",active:false});
+    try {
+      tab = await waitForTab(tab.id);
+      let lastError = "实时专场页面尚未加载完成";
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const result = await chrome.tabs.sendMessage(tab.id, message);
+          if (result?.ok !== false) return result;
+          lastError = result?.error || lastError;
+          if (/尚未结束|预展中|拍卖进行中/.test(lastError)) throw new Error(lastError);
+        } catch (error) {
+          lastError = error?.message || lastError;
+          if (/尚未结束|预展中|拍卖进行中/.test(lastError)) throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      }
+      throw new Error(lastError);
+    } finally {
+      if (tab?.id) await chrome.tabs.remove(tab.id).catch(() => {});
+    }
+  }
+
   async function waitForLoginResult(tabId, timeoutMs = 35_000) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
@@ -164,7 +187,14 @@
       return {ok: true, ...result};
     }
     if (message?.type === "syncAuctionDeals") {
-      const result = await sendToAllMxiqiTabs({type:"scrapeAuctionDeals",period:message.period}, {create:true,active:false});
+      const request = {type:"scrapeAuctionDeals",period:message.period};
+      let result;
+      try {
+        result = await sendToAllMxiqiTabs(request, {create:true,active:false});
+      } catch (error) {
+        if (/尚未结束|预展中|拍卖进行中/.test(error?.message || "")) throw error;
+        result = await scrapeAuctionDealsFromLiveList(request);
+      }
       return {ok:true,...result};
     }
     throw new Error("不支持的连接器命令");

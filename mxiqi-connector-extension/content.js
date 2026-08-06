@@ -135,33 +135,80 @@
       .map((anchor) => {
         const href = anchor.getAttribute("href") || "";
         const container = anchor.closest("li.auction, li, article, section, tr, .card, [class*='auction']") || anchor.parentElement;
-        const containerText = MxiqiPageParser.clean(container?.textContent || "");
-        if (normalizedPeriod && !containerText.includes(normalizedPeriod)) return null;
-        const exactPeriod = normalizedPeriod && MxiqiPageParser.auctionPeriod(containerText) === normalizedPeriod;
-        return {href:new URL(href, location.origin).href,score:exactPeriod ? 20 : 10,containerText};
-      })
-      .filter(Boolean)
-      .sort((left, right) => right.score - left.score);
-    return candidates[0] || null;
+          const containerText = MxiqiPageParser.clean(container?.textContent || "");
+          if (normalizedPeriod && !containerText.includes(normalizedPeriod)) return null;
+          const exactPeriod = normalizedPeriod && MxiqiPageParser.auctionPeriod(containerText) === normalizedPeriod;
+          return {
+            href:new URL(href, location.origin).href,
+            score:exactPeriod ? 20 : 10,
+            containerText,
+            lifecycle:MxiqiPageParser.auctionLifecycle(containerText),
+          };
+        })
+        .filter(Boolean)
+        .sort((left, right) => right.score - left.score);
+      return candidates[0] || null;
+  }
+
+  function lifecycleLabel(lifecycle) {
+    if (lifecycle === "preview") return "预展中";
+    if (lifecycle === "live") return "拍卖进行中";
+    if (lifecycle === "ended") return "已结束";
+    return "状态未知";
+  }
+
+  function assertAuctionEnded(period, lifecycle) {
+    if (!["preview", "live"].includes(lifecycle)) return;
+    throw new Error(`${period}尚未结束（当前为${lifecycleLabel(lifecycle)}），为防止把预出价误判为成交，已停止同步`);
+  }
+
+  async function waitForAuctionDataLink(period, timeoutMs = 10_000) {
+    const deadline = Date.now() + timeoutMs;
+    let candidate = findAuctionDataLink(document, period);
+    while (!candidate && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      candidate = findAuctionDataLink(document, period);
+    }
+    return candidate;
   }
 
   async function resolveAuctionCatalog(period) {
-    if (/\/org\.auction\.catalog\/\d+/.test(location.pathname)) {
-      return {doc:document,finalUrl:location.href,requiresLogin:false};
-    }
-    const currentCatalog = findAuctionCatalogLink(document);
-    if (currentCatalog) return fetchDocument(currentCatalog.href);
+    const normalizedPeriod = MxiqiPageParser.auctionPeriod(period) || String(period || "").trim();
+    const currentText = MxiqiPageParser.clean(`${document.title}\n${document.body?.textContent || ""}`);
+    const currentPeriod = MxiqiPageParser.auctionPeriod(currentText);
+    const currentLifecycle = MxiqiPageParser.auctionLifecycle(currentText);
+    const isAuctionList = /\/org\.auction\.list/.test(location.pathname);
+    const currentMatches = !isAuctionList && currentPeriod === normalizedPeriod;
 
-    const auctionList = await fetchDocument("/org.auction.list");
-    if (auctionList.requiresLogin) return auctionList;
-    const dataLink = findAuctionDataLink(auctionList.doc, period);
-    if (!dataLink) throw new Error(`没有在“实时专场”找到${period}，请确认期数是否正确`);
+    if (currentMatches) {
+      assertAuctionEnded(normalizedPeriod, currentLifecycle);
+      if (/\/org\.auction\.catalog\/\d+/.test(location.pathname)) {
+        return {doc:document,finalUrl:location.href,requiresLogin:false,lifecycle:currentLifecycle};
+      }
+      const currentCatalog = findAuctionCatalogLink(document);
+      if (currentCatalog) {
+        const result = await fetchDocument(currentCatalog.href);
+        return {...result,lifecycle:currentLifecycle};
+      }
+    }
+
+    let dataLink = isAuctionList
+      ? await waitForAuctionDataLink(normalizedPeriod)
+      : null;
+    if (!dataLink) {
+      const auctionList = await fetchDocument("/org.auction.list");
+      if (auctionList.requiresLogin) return auctionList;
+      dataLink = findAuctionDataLink(auctionList.doc, normalizedPeriod);
+    }
+    if (!dataLink) throw new Error(`没有在“实时专场”找到${normalizedPeriod}，正在尝试实时列表页`);
+    assertAuctionEnded(normalizedPeriod, dataLink.lifecycle);
 
     const report = await fetchDocument(dataLink.href);
     if (report.requiresLogin) return report;
     const catalogLink = findAuctionCatalogLink(report.doc);
-    if (!catalogLink) throw new Error(`已找到${period}拍场，但页面没有“成交目录”，请确认该场拍卖已经结束`);
-    return fetchDocument(catalogLink.href);
+    if (!catalogLink) throw new Error(`已找到${normalizedPeriod}拍场，但页面没有“成交目录”，请确认该场拍卖已经结束`);
+    const catalog = await fetchDocument(catalogLink.href);
+    return {...catalog,lifecycle:dataLink.lifecycle};
   }
 
   async function scrapeAuctionDealsAutomatic({period = ""} = {}) {
@@ -169,7 +216,8 @@
     if (!normalizedPeriod) throw new Error("请先在工作台选择拍卖期数");
     const result = await resolveAuctionCatalog(normalizedPeriod);
     if (result.requiresLogin) return {requiresLogin:true,records:[]};
-    const parsed = MxiqiPageParser.parseAuctionResultDocument(result.doc,{period:normalizedPeriod,entryKey:result.finalUrl});
+    const parsed = MxiqiPageParser.parseAuctionResultDocument(result.doc,{period:normalizedPeriod,entryKey:result.finalUrl,lifecycle:result.lifecycle});
+    assertAuctionEnded(normalizedPeriod, parsed.lifecycle);
     if (!parsed.records.length) throw new Error(`${normalizedPeriod}成交目录已找到，但没有读取到 Lot 与成交价`);
     return {requiresLogin:false,records:parsed.records,period:parsed.period || normalizedPeriod,projectName:parsed.projectName || "",sourceUrl:result.finalUrl};
   }
