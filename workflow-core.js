@@ -87,6 +87,13 @@
     return ["拖回/发回", "拖回/再拍", "寄存"].includes(normalizeReturnDisposition(value));
   }
 
+  function isReturnDispositionConfirmed(record = {}) {
+    const disposition = normalizeReturnDisposition(record.returnDisposition);
+    if (disposition === "寄存") return true;
+    return ["拖回/发回", "拖回/再拍"].includes(disposition)
+      && Boolean(String(record.returnDispositionConfirmedAt || "").trim());
+  }
+
   function trackerOutcome(value = "", finalPrice = 0) {
     const source = String(value).trim();
     const returnDisposition = normalizeReturnDisposition(source);
@@ -125,6 +132,8 @@
       priorReturnSettlement,
       finalOutcome:"待拍",
       returnDisposition:"",
+      returnDispositionConfirmedAt:"",
+      returnDispositionReviewRequiredAt:"",
       finalPrice:0,
       paymentStatus:"",
       paymentDueAt:"",
@@ -178,7 +187,7 @@
       || record.finalOutcome === "拖回"
       || /^拖回\//.test(String(record.returnDisposition || ""));
     if (returnLike) {
-      if (["拖回/发回", "拖回/再拍", "寄存"].includes(disposition)) return "";
+      if (disposition === "寄存" || isReturnDispositionConfirmed(record)) return "";
       return disposition === "拖回/等待" ? "拖回/等待" : "拖回待选择处理方式";
     }
     if (record.paymentStatus === "待付款" && Number(record.finalPrice) > 0) {
@@ -223,6 +232,7 @@
 
   function recordStatus(record = {}, now = Date.now()) {
     if (record.returnDisposition === "拆单") return record.finalOutcome === "成交" ? "拆单/成交" : "拆单";
+    if (["拖回/发回", "拖回/再拍"].includes(record.returnDisposition) && !isReturnDispositionConfirmed(record)) return "拖回/等待";
     if (["拖回/发回", "拖回/再拍", "拖回/等待", "寄存"].includes(record.returnDisposition)) return record.returnDisposition;
     if (record.relisted && record.finalOutcome === "待拍") return "上拍";
     if (isPaymentOverdue(record, now)) return "超时未付款";
@@ -502,7 +512,7 @@
       if (!Array.isArray(snapshotRecords)) return;
       snapshotRecords.forEach((record) => {
         const disposition = normalizeReturnDisposition(record.returnDisposition);
-        if (!isHandledReturnDisposition(disposition)) return;
+        if (!isHandledReturnDisposition(disposition) || !isReturnDispositionConfirmed(record)) return;
         const historical = {...record,returnDisposition:disposition};
         if (record.id && !handledById.has(String(record.id))) handledById.set(String(record.id), historical);
         const key = settlementMatchKey(record);
@@ -521,12 +531,32 @@
       return {
         ...record,
         returnDisposition:disposition,
+        returnDispositionConfirmedAt:historical.returnDispositionConfirmedAt,
         finalOutcome:disposition === "寄存" ? "待拍" : "拖回",
         unpaidReturn:false,
         returnDispositionRestoredAt:timestamp,
       };
     });
     return {records:next,restored};
+  }
+
+  function requireManualReturnReview(records = [], timestamp = new Date().toISOString()) {
+    let reviewRequired = 0;
+    const next = records.map((record) => {
+      const disposition = normalizeReturnDisposition(record.returnDisposition);
+      if (record.settled || !["拖回/发回", "拖回/再拍"].includes(disposition) || isReturnDispositionConfirmed(record)) return {...record};
+      reviewRequired += 1;
+      return {
+        ...record,
+        finalOutcome:"拖回",
+        returnDisposition:"拖回/等待",
+        returnDispositionConfirmedAt:"",
+        returnDispositionRestoredAt:"",
+        returnDispositionReviewRequiredAt:timestamp,
+        unpaidReturn:Boolean(record.unpaidReturn || record.finalOutcome === "拖回" || record.paymentStatus === "待付款"),
+      };
+    });
+    return {records:next,reviewRequired};
   }
 
   function applyAuctionSettlementResults(records = [], deals = [], pendingOrders = [], period = "", timestamp = new Date().toISOString()) {
@@ -557,7 +587,7 @@
         && !normalizeReturnDisposition(existing.returnDisposition);
       const pending = isPending({...existing,...incoming}) && !manualPaidNormal;
       const localDisposition = normalizeReturnDisposition(existing.returnDisposition);
-      const keepHandledDisposition = isHandledReturnDisposition(localDisposition);
+      const keepHandledDisposition = isHandledReturnDisposition(localDisposition) && isReturnDispositionConfirmed(existing);
       const finalPrice = Math.max(0, Number(incoming.finalPrice ?? existing.finalPrice) || 0);
       const platformOutcome = incoming.finalOutcome || (finalPrice > 0 ? "成交" : "流拍");
       const updated = {
@@ -572,11 +602,11 @@
         updated.paymentStatus = "待付款";
         updated.unpaidReturn = localDisposition !== "寄存";
         updated.unpaidReturnDetectedAt = existing.unpaidReturnDetectedAt || timestamp;
-        updated.returnDisposition = keepHandledDisposition
-          ? localDisposition
-          : /^拖回\//.test(localDisposition)
-            ? localDisposition
-            : "拖回/等待";
+        updated.returnDisposition = keepHandledDisposition ? localDisposition : "拖回/等待";
+        if (!keepHandledDisposition) {
+          updated.returnDispositionConfirmedAt = "";
+          updated.returnDispositionReviewRequiredAt = existing.returnDispositionReviewRequiredAt || timestamp;
+        }
         updated.settled = Boolean(existing.settled);
         unpaid += 1;
       } else if (platformOutcome === "成交" && finalPrice > 0) {
@@ -589,6 +619,10 @@
         updated.returnDisposition = keepHandledDisposition
           ? localDisposition
           : localDisposition === "拖回/等待" ? "" : normalizeReturnDisposition(updated.returnDisposition);
+        if (!keepHandledDisposition) {
+          updated.returnDispositionConfirmedAt = "";
+          updated.returnDispositionReviewRequiredAt = "";
+        }
       } else {
         updated.finalOutcome = keepHandledDisposition
           ? localDisposition === "寄存" ? "待拍" : "拖回"
@@ -599,6 +633,10 @@
         updated.returnDisposition = keepHandledDisposition
           ? localDisposition
           : localDisposition === "拖回/等待" ? "" : normalizeReturnDisposition(updated.returnDisposition);
+        if (!keepHandledDisposition) {
+          updated.returnDispositionConfirmedAt = "";
+          updated.returnDispositionReviewRequiredAt = "";
+        }
       }
       if (existing.paymentStatusManual && existing.paymentStatus) {
         updated.paymentStatus = existing.paymentStatus;
@@ -666,5 +704,5 @@
     return {records:next,departed};
   }
 
-  return {isStorageRecord,isReturnRecord,auctionDateKey,trackerAuctionPeriod,correctKnown0806AuctionText,auctionPeriod,auctionDateEnd,isAuctionResultPending,normalizeReturnDisposition,isHandledReturnDisposition,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,mergeImportedRecord,mergePlatformOrderRecords,repairKnown0806Import,applyManualPaymentResolution,mergeAuctionRecordCopies,deduplicateAuctionLots,restoreConsignorIdentities,restoreHandledReturnDispositions,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
+  return {isStorageRecord,isReturnRecord,auctionDateKey,trackerAuctionPeriod,correctKnown0806AuctionText,auctionPeriod,auctionDateEnd,isAuctionResultPending,normalizeReturnDisposition,isHandledReturnDisposition,isReturnDispositionConfirmed,trackerOutcome,relistRecord,settlementGross,isSettlementEligible,settlementBlocker,settlementReadiness,shippingBucket,isPaymentOverdue,recordStatus,platformRecordKey,sameAuctionLot,settlementMatchKey,hasConsignorName,mergePreservingConsignor,mergeImportedRecord,mergePlatformOrderRecords,repairKnown0806Import,applyManualPaymentResolution,mergeAuctionRecordCopies,deduplicateAuctionLots,restoreConsignorIdentities,restoreHandledReturnDispositions,requireManualReturnReview,applyAuctionSettlementResults,recordBelongsToScope,reconcileAuthoritativeScope};
 });

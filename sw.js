@@ -1,19 +1,19 @@
-const CACHE_NAME = "mxiqi-ops-demo-v47";
+const CACHE_NAME = "mxiqi-ops-demo-v48";
 const APP_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=47",
-  "./app.js?v=47",
-  "./matching-core.js?v=47",
-  "./package-core.js?v=47",
-  "./workflow-core.js?v=47",
-  "./commission-core.js?v=47",
-  "./logistics-core.js?v=47",
-  "./connector-bridge.js?v=47",
-  "./logistics-gateway.js?v=47",
+  "./styles.css?v=48",
+  "./app.js?v=48",
+  "./matching-core.js?v=48",
+  "./package-core.js?v=48",
+  "./workflow-core.js?v=48",
+  "./commission-core.js?v=48",
+  "./logistics-core.js?v=48",
+  "./connector-bridge.js?v=48",
+  "./logistics-gateway.js?v=48",
   "./zhenzhenpu-logo.jpg",
   "./manifest.webmanifest",
-  "./vendor/exceljs.min.js?v=47",
+  "./vendor/exceljs.min.js?v=48",
 ];
 
 self.addEventListener("install", (event) => {

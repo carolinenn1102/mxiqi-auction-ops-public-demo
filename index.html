@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="theme-color" content="#102735">
   <title>送拍运营工作台 · 公开体验版</title>
-  <link rel="stylesheet" href="styles.css?v=47">
+  <link rel="stylesheet" href="styles.css?v=48">
   <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
@@ -288,7 +288,7 @@
 
   <dialog id="collector-dialog" class="dialog wide-dialog">
     <form method="dialog"><header><div><p class="eyebrow">按需刷新</p><h2>麦稀奇数据采集控制</h2></div><button class="icon-close" type="button" data-close-dialog aria-label="关闭">×</button></header><div class="dialog-body">
-      <div class="collector-notice"><b>支持真实订单同步与演示模式</b><p>真实连接时由本地采集助手读取麦稀奇订单；演示连接仍只检查本机示例数据。</p><button class="text-button" type="button" id="collector-open-connection">查看登录状态 →</button></div>
+      <div class="collector-notice"><b>支持真实订单与成交结果同步</b><p>当前筛选期仍有待同步拍品时，“立即刷新”会优先读取该期完整成交目录；其他情况按下面选择的订单范围刷新。</p><button class="text-button" type="button" id="collector-open-connection">查看登录状态 →</button></div>
       <section class="collector-runtime-card">
         <div class="collector-state"><span class="collector-light" id="collector-light"></span><div><small>当前状态</small><b id="collector-runtime-status">已停止，不会自动请求</b></div></div>
         <div class="collector-runtime-grid"><div><small>上次刷新</small><b id="collector-last-run">尚未刷新</b></div><div><small>下次刷新</small><b id="collector-next-run">—</b></div><div><small>本机累计</small><b id="collector-run-count">0 次</b></div></div>
@@ -383,14 +383,14 @@
 
   <datalist id="auction-period-options"></datalist>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="vendor/exceljs.min.js?v=47"></script>
-  <script src="matching-core.js?v=47"></script>
-  <script src="package-core.js?v=47"></script>
-  <script src="workflow-core.js?v=47"></script>
-  <script src="commission-core.js?v=47"></script>
-  <script src="logistics-core.js?v=47"></script>
-  <script src="connector-bridge.js?v=47"></script>
-  <script src="logistics-gateway.js?v=47"></script>
-  <script src="app.js?v=47"></script>
+  <script src="vendor/exceljs.min.js?v=48"></script>
+  <script src="matching-core.js?v=48"></script>
+  <script src="package-core.js?v=48"></script>
+  <script src="workflow-core.js?v=48"></script>
+  <script src="commission-core.js?v=48"></script>
+  <script src="logistics-core.js?v=48"></script>
+  <script src="connector-bridge.js?v=48"></script>
+  <script src="logistics-gateway.js?v=48"></script>
+  <script src="app.js?v=48"></script>
 </body>
 </html>
