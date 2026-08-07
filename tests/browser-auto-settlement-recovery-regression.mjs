@@ -87,7 +87,7 @@ try {
   }), recordsKey);
 
   assert.deepEqual(result.periods, ["第78期"], "fresh page load should automatically sync only ended pending periods");
-  assert.deepEqual(result.scopes, ["waitpay","waitconfirm","waitexpress"]);
+  assert.deepEqual(result.scopes, ["waitpay","waitconfirm","waitexpress","recent"]);
   const settled = result.records.find((record) => record.id === "local-78-lot-19");
   const future = result.records.find((record) => record.id === "future-79-lot-1");
   assert.equal(settled.finalOutcome, "成交");

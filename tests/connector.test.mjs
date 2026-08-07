@@ -227,6 +227,9 @@ test("connected browsers automatically recover pending settlement periods", () =
   assert.match(app, /if \(key === "auction"\) scheduleAutomaticSettlementRecovery/);
   assert.match(app, /void checkRealConnection\(\{quiet:true\}\)/);
   assert.match(app, /runSettlementSync\(\{period,automatic:true\}\)/);
+  assert.match(app, /\["waitpay", "waitconfirm", "waitexpress", "recent"\]/);
+  assert.match(app, /function needsSettlementBuyerBackfill/);
+  assert.match(app, /filter\(needsSettlementRecovery\)/);
 });
 
 test("settlement actions are gated until period unpaid and return work is complete", () => {
