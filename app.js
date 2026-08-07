@@ -2332,8 +2332,10 @@
     for (const period of periods) {
       if (state.connection.status !== "connected") break;
       collectorRuntime.autoSettlementAttempts.add(period);
+      const resultPendingBefore = state.records.filter((record) => auctionPeriod(record) === period && isAuctionResultPending(record)).length;
+      const buyerMissingBefore = state.records.filter((record) => auctionPeriod(record) === period && needsSettlementBuyerBackfill(record)).length;
       const recoveryBefore = state.records.filter((record) => auctionPeriod(record) === period && needsSettlementRecovery(record)).length;
-      const synced = await runSettlementSync({period,automatic:true});
+      const synced = await runSettlementSync({period,automatic:true,buyersOnly:!resultPendingBefore && buyerMissingBefore > 0});
       if (!synced) break;
       const pendingAfter = state.records.filter((record) => auctionPeriod(record) === period && isAuctionResultPending(record)).length;
       const buyerMissingAfter = state.records.filter((record) => auctionPeriod(record) === period && needsSettlementBuyerBackfill(record)).length;
@@ -2349,7 +2351,7 @@
     return completed.length > 0;
   }
 
-  async function runSettlementSync({period = state.filters.auction, automatic = false} = {}) {
+  async function runSettlementSync({period = state.filters.auction, automatic = false, buyersOnly = false} = {}) {
     if (!period) {
       notify("请先选择要结算的拍卖期数，再同步本期成交记录", "error");
       return false;
@@ -2376,10 +2378,13 @@
         if (result.requiresLogin) throw new Error("麦稀奇登录已失效，请重新登录后检查连接");
         orderResults.push({scope,result});
       }
-      const dealsResult = await MxiqiConnector.syncAuctionDeals({period});
-      if (dealsResult.requiresLogin) {
-        state.connection = {...clone(defaultConnection),mode:"connector",connectorInstalled:true,connectorVersion:connector.version || ""};
-        throw new Error("麦稀奇登录已失效，请重新登录后检查连接");
+      let dealsResult = null;
+      if (!buyersOnly) {
+        dealsResult = await MxiqiConnector.syncAuctionDeals({period});
+        if (dealsResult.requiresLogin) {
+          state.connection = {...clone(defaultConnection),mode:"connector",connectorInstalled:true,connectorVersion:connector.version || ""};
+          throw new Error("麦稀奇登录已失效，请重新登录后检查连接");
+        }
       }
       removeDefaultDemoRecords();
       const timestamp = new Date().toISOString();
@@ -2403,14 +2408,17 @@
       const platformOrders = [...platformOrdersByKey.values()];
       const orderMerge = MxiqiWorkflow.mergePlatformOrderRecords(state.records, platformOrders, timestamp);
       state.records = orderMerge.records;
-      const pendingOrders = orderResults.find(({scope}) => scope === "waitpay")?.result?.records || [];
-      const merged = MxiqiWorkflow.applyAuctionSettlementResults(
-        state.records,
-        Array.isArray(dealsResult.records) ? dealsResult.records : [],
-        Array.isArray(pendingOrders) ? pendingOrders : [],
-        period,
-        timestamp,
-      );
+      let merged = {records:state.records,period,matched:0,added:0,unpaid:0};
+      if (!buyersOnly) {
+        const pendingOrders = orderResults.find(({scope}) => scope === "waitpay")?.result?.records || [];
+        merged = MxiqiWorkflow.applyAuctionSettlementResults(
+          state.records,
+          Array.isArray(dealsResult?.records) ? dealsResult.records : [],
+          Array.isArray(pendingOrders) ? pendingOrders : [],
+          period,
+          timestamp,
+        );
+      }
       state.records = merged.records.map((record) => ({
         id:record.id || uid(),
         received:record.received || "待确认",
@@ -2432,8 +2440,12 @@
       state.collector.runCount = Number(state.collector.runCount || 0) + 1;
       const repairedText = repaired.restored ? `，恢复送拍人 ${repaired.restored} 件` : "";
       const buyerText = `，网页订单回补 ${orderMerge.matched + orderMerge.added} 件`;
-      state.collector.lastResult = `${merged.period}成交目录同步完成：匹配 ${merged.matched} 件，新增 ${merged.added} 件${buyerText}，未付款拖回 ${merged.unpaid} 件${repairedText}`;
-      audit("同步本期成交记录", `${merged.period} · 匹配 ${merged.matched} · 新增 ${merged.added} · 网页订单回补 ${orderMerge.matched + orderMerge.added} · 未付款拖回 ${merged.unpaid}${repairedText}`);
+      state.collector.lastResult = buyersOnly
+        ? `${merged.period}买家资料同步完成：网页订单回补 ${orderMerge.matched + orderMerge.added} 件${repairedText}`
+        : `${merged.period}成交目录同步完成：匹配 ${merged.matched} 件，新增 ${merged.added} 件${buyerText}，未付款拖回 ${merged.unpaid} 件${repairedText}`;
+      audit(buyersOnly ? "回补本期买家资料" : "同步本期成交记录", buyersOnly
+        ? `${merged.period} · 网页订单回补 ${orderMerge.matched + orderMerge.added}${repairedText}`
+        : `${merged.period} · 匹配 ${merged.matched} · 新增 ${merged.added} · 网页订单回补 ${orderMerge.matched + orderMerge.added} · 未付款拖回 ${merged.unpaid}${repairedText}`);
       save();
       if (!automatic) {
         state.stage = "settlement";
@@ -4459,7 +4471,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=50", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=51", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";

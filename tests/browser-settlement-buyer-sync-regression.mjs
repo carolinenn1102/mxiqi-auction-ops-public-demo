@@ -28,6 +28,7 @@ try {
       contentType:"application/javascript; charset=utf-8",
       body:`
         globalThis.__settlementSyncScopes = [];
+        globalThis.__settlementDealsCalled = 0;
         globalThis.MxiqiConnector = Object.freeze({
           ping:async () => ({ok:true,loggedIn:true,version:"1.9.2",capabilities:["syncOrders","syncAuctionDeals"]}),
           syncOrders:async ({scope}) => {
@@ -45,11 +46,10 @@ try {
             if (scope === "recent") return {requiresLogin:false,pages:3,totalPages:105,records:allOrders};
             return {requiresLogin:false,records:[],pages:1,totalPages:1};
           },
-          syncAuctionDeals:async () => ({requiresLogin:false,records:Array.from({length:31}, (_,index) => {
-            const lot = index + 1;
-            return {lot,itemName:"第77期测试拍品 " + lot,auctionPeriodOverride:"第77期",
-              platformItemKey:"auction-result:period77:" + lot,source:"mxiqi_connector",finalOutcome:"成交",finalPrice:100 + lot,paymentStatus:"已付款"};
-          })})
+          syncAuctionDeals:async () => {
+            globalThis.__settlementDealsCalled += 1;
+            throw new Error("buyer-only recovery must not read the auction catalog");
+          }
         });
       `,
     });
@@ -74,9 +74,11 @@ try {
   const result = await page.evaluate((recordsKey) => ({
     records:JSON.parse(localStorage.getItem(recordsKey) || "[]"),
     scopes:globalThis.__settlementSyncScopes,
+    dealsCalled:globalThis.__settlementDealsCalled,
     collector:JSON.parse(localStorage.getItem("mxiqi-public-demo-collector-v1") || "{}"),
   }), recordsKey);
   assert.deepEqual(result.scopes, ["waitpay","waitconfirm","waitexpress","recent"]);
+  assert.equal(result.dealsCalled, 0);
   assert.equal(result.records.length, 31);
   assert.ok(result.records.every((record) => record.sellerWechat === `送拍人${record.lot}`));
   assert.ok(result.records.every((record) => record.birthdayPending === true));
@@ -85,7 +87,7 @@ try {
   assert.ok(result.records.every((record) => record.buyerName === `网页买家${record.lot}`));
   assert.ok(result.records.every((record) => record.buyerPhone === `1390000${String(record.lot).padStart(4,"0")}`));
   assert.ok(result.records.every((record) => record.recipientName === `网页收件人${record.lot}`));
-  assert.match(result.collector.lastResult || "", /网页订单回补 31 件/);
+  assert.match(result.collector.lastResult || "", /买家资料同步完成：网页订单回补 31 件/);
   assert.deepEqual(pageErrors, []);
 
   process.stdout.write(JSON.stringify({ok:true,orderScopes:result.scopes,buyersBackfilled:result.records.length,paymentBackfilled:true}));
