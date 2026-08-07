@@ -41,7 +41,7 @@ try {
 
   await page.click("#open-preauction-check");
   await page.click("#export-preauction-image");
-  await page.waitForTimeout(200);
+  await page.waitForFunction(() => globalThis.__checklistText.includes("2026-08-09"));
   const result = await page.evaluate(() => ({
     records:JSON.parse(localStorage.getItem("mxiqi-public-demo-records-v1") || "[]"),
     checklistText:globalThis.__checklistText,
