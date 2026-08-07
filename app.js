@@ -2285,9 +2285,18 @@
     }
   }
 
+  function needsSettlementBuyerBackfill(record = {}) {
+    return record.finalOutcome === "成交"
+      && (!String(record.buyerName || "").trim() || !String(record.buyerPhone || "").trim());
+  }
+
+  function needsSettlementRecovery(record = {}) {
+    return isAuctionResultPending(record) || needsSettlementBuyerBackfill(record);
+  }
+
   function pendingSettlementPeriods(preferredPeriod = "") {
     const periods = [...new Set(state.records
-      .filter(isAuctionResultPending)
+      .filter(needsSettlementRecovery)
       .map(auctionPeriod)
       .filter(Boolean))]
       .sort((a, b) => Number(String(b).match(/\d+/)?.[0] || 0) - Number(String(a).match(/\d+/)?.[0] || 0));
@@ -2323,18 +2332,20 @@
     for (const period of periods) {
       if (state.connection.status !== "connected") break;
       collectorRuntime.autoSettlementAttempts.add(period);
-      const pendingBefore = state.records.filter((record) => auctionPeriod(record) === period && isAuctionResultPending(record)).length;
+      const recoveryBefore = state.records.filter((record) => auctionPeriod(record) === period && needsSettlementRecovery(record)).length;
       const synced = await runSettlementSync({period,automatic:true});
       if (!synced) break;
       const pendingAfter = state.records.filter((record) => auctionPeriod(record) === period && isAuctionResultPending(record)).length;
-      if (pendingAfter) {
-        notify(`${period}自动同步后仍有 ${pendingAfter} 件未匹配，请打开采集控制手动重试`, "error");
+      const buyerMissingAfter = state.records.filter((record) => auctionPeriod(record) === period && needsSettlementBuyerBackfill(record)).length;
+      if (pendingAfter || buyerMissingAfter) {
+        const issues = [pendingAfter ? `${pendingAfter} 件成交结果未匹配` : "", buyerMissingAfter ? `${buyerMissingAfter} 件买家未回填` : ""].filter(Boolean).join("、");
+        notify(`${period}自动同步后仍有${issues}，请打开采集控制手动重试`, "error");
         break;
       }
       collectorRuntime.autoSettlementAttempts.delete(period);
-      if (pendingBefore) completed.push(period);
+      if (recoveryBefore) completed.push(period);
     }
-    if (completed.length) notify(`已自动补同步 ${completed.join("、")} 成交结果`, "success");
+    if (completed.length) notify(`已自动补同步 ${completed.join("、")} 成交结果及买家资料`, "success");
     return completed.length > 0;
   }
 
@@ -2358,7 +2369,7 @@
       if (!versionAtLeast(connector.version, "1.9.2") || !capabilities.includes("syncAuctionDeals")) {
         throw new Error("采集助手版本过旧，请重新下载 1.9.2 版并在扩展页面点击重新加载");
       }
-      const orderScopes = ["waitpay", "waitconfirm", "waitexpress"];
+      const orderScopes = ["waitpay", "waitconfirm", "waitexpress", "recent"];
       const orderResults = [];
       for (const scope of orderScopes) {
         const result = await MxiqiConnector.syncOrders({scope,maxPages:20});
@@ -2372,10 +2383,24 @@
       }
       removeDefaultDemoRecords();
       const timestamp = new Date().toISOString();
-      const platformOrders = orderResults.flatMap(({scope,result}) => (Array.isArray(result.records) ? result.records : []).map((record) => ({
-        ...record,
-        mxiqiSeenScopes:[...new Set([...(Array.isArray(record.mxiqiSeenScopes) ? record.mxiqiSeenScopes : []),scope])],
-      })));
+      const platformOrdersByKey = new Map();
+      orderResults.forEach(({scope,result}) => {
+        (Array.isArray(result.records) ? result.records : []).forEach((record) => {
+          const key = MxiqiWorkflow.platformRecordKey(record)
+            || `${auctionPeriod(record)}:${Number(record.lot) || 0}:${String(record.itemName || "").trim()}`;
+          const current = platformOrdersByKey.get(key) || {};
+          platformOrdersByKey.set(key, {
+            ...current,
+            ...record,
+            mxiqiSeenScopes:[...new Set([
+              ...(Array.isArray(current.mxiqiSeenScopes) ? current.mxiqiSeenScopes : []),
+              ...(Array.isArray(record.mxiqiSeenScopes) ? record.mxiqiSeenScopes : []),
+              scope,
+            ])],
+          });
+        });
+      });
+      const platformOrders = [...platformOrdersByKey.values()];
       const orderMerge = MxiqiWorkflow.mergePlatformOrderRecords(state.records, platformOrders, timestamp);
       state.records = orderMerge.records;
       const pendingOrders = orderResults.find(({scope}) => scope === "waitpay")?.result?.records || [];
@@ -4434,7 +4459,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=49", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=50", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
