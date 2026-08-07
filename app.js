@@ -1610,9 +1610,30 @@
     editForm.elements.commissionOverrideNote.disabled = !manual;
   }
 
+  function clearEditFormError() {
+    const message = $("#edit-form-error");
+    message.hidden = true;
+    message.textContent = "";
+    [...editForm.elements].forEach((element) => element.removeAttribute?.("aria-invalid"));
+  }
+
+  function showEditFormError(text, fieldName = "") {
+    const message = $("#edit-form-error");
+    message.textContent = text;
+    message.hidden = false;
+    const field = fieldName ? editForm.elements[fieldName] : null;
+    if (field) {
+      field.setAttribute("aria-invalid", "true");
+      field.scrollIntoView({block:"center",behavior:"smooth"});
+      field.focus({preventScroll:true});
+    }
+    notify(text, "error");
+  }
+
   function openEditor(id = "") {
     state.editingId = id;
     editForm.reset();
+    clearEditFormError();
     const record = state.records.find((item) => item.id === id) || {lot:Math.max(0, ...state.records.map((item) => Number(item.lot) || 0)) + 1,received:"待确认",settled:false};
     $("#edit-title").textContent = id ? `Lot ${record.lot}` : "新建拍品";
     [...editForm.elements].forEach((element) => {
@@ -3307,34 +3328,51 @@
 
   $("#new-record").addEventListener("click", () => openEditor());
   ["sellerWechat","itemName","birthdayMonth","auctionAt","finalPrice","commissionOverrideValue","settlementAdjustment"].forEach((name) => editForm.elements[name].addEventListener("input", previewCommission));
+  editForm.addEventListener("input", clearEditFormError);
+  editForm.addEventListener("invalid", (event) => {
+    event.preventDefault();
+    const label = event.target.closest?.(".field")?.querySelector?.("span")?.textContent?.replace("（必填）", "") || "必填字段";
+    showEditFormError(`请检查“${label}”后再保存`, event.target.name);
+  }, true);
   editForm.elements.commissionOverrideType.addEventListener("change", () => {
     updateCommissionOverrideControls();
     previewCommission();
   });
   editForm.addEventListener("submit", (event) => {
     event.preventDefault();
+    clearEditFormError();
+    try {
     const data = new FormData(editForm);
     const existing = state.records.find((item) => item.id === state.editingId) || {};
     const birthdayMonth = Number(data.get("birthdayMonth") || 0);
     const sellerWechat = String(data.get("sellerWechat") || "").trim();
     const sellerPhoneInput = String(data.get("sellerPhone") || "").trim();
-    const sellerPhone = MxiqiAssets.normalizePhone(sellerPhoneInput);
+    const normalizedSellerPhone = MxiqiAssets.normalizePhone(sellerPhoneInput);
+    const previousSellerPhoneInput = String(existing.sellerPhone || state.customers[existing.sellerWechat]?.phone || "").trim();
+    const sellerPhoneUnchanged = Boolean(sellerPhoneInput && sellerPhoneInput === previousSellerPhoneInput);
+    const sellerPhone = normalizedSellerPhone || (sellerPhoneUnchanged ? sellerPhoneInput : "");
     const buyerPhoneInput = String(data.get("buyerPhone") || "").trim();
-    const buyerPhone = MxiqiAssets.normalizePhone(buyerPhoneInput);
+    const normalizedBuyerPhone = MxiqiAssets.normalizePhone(buyerPhoneInput);
+    const previousBuyerPhoneInput = String(existing.buyerPhone || "").trim();
+    const buyerPhoneUnchanged = Boolean(buyerPhoneInput && buyerPhoneInput === previousBuyerPhoneInput);
+    const buyerPhone = normalizedBuyerPhone || (buyerPhoneUnchanged ? buyerPhoneInput : "");
     const recipientRaw = String(data.get("recipientRaw") || "").trim();
     const parsedRecipient = recipientRaw ? splitRecipientAddress(recipientRaw) : {};
     const recipientPhoneInput = String(data.get("recipientPhone") || "").trim();
-    const recipientPhone = MxiqiAssets.normalizePhone(recipientPhoneInput) || parsedRecipient.recipientPhone || "";
-    if (sellerPhoneInput && !sellerPhone) {
-      notify("送拍人手机号应为 11 位中国大陆手机号", "error");
+    const normalizedRecipientPhone = MxiqiAssets.normalizePhone(recipientPhoneInput);
+    const previousRecipientPhoneInput = String(existing.recipientPhone || "").trim();
+    const recipientPhoneUnchanged = Boolean(recipientPhoneInput && recipientPhoneInput === previousRecipientPhoneInput);
+    const recipientPhone = normalizedRecipientPhone || parsedRecipient.recipientPhone || (recipientPhoneUnchanged ? recipientPhoneInput : "");
+    if (sellerPhoneInput && !normalizedSellerPhone && !sellerPhoneUnchanged) {
+      showEditFormError("送拍人手机号应为 11 位中国大陆手机号", "sellerPhone");
       return;
     }
-    if (buyerPhoneInput && !buyerPhone) {
-      notify("买家登录手机号应为 11 位中国大陆手机号", "error");
+    if (buyerPhoneInput && !normalizedBuyerPhone && !buyerPhoneUnchanged) {
+      showEditFormError("买家登录手机号应为 11 位中国大陆手机号；导入的旧遮罩号码保持不变时仍可保存", "buyerPhone");
       return;
     }
-    if (recipientPhoneInput && !recipientPhone) {
-      notify("收件手机号应为 11 位中国大陆手机号", "error");
+    if (recipientPhoneInput && !normalizedRecipientPhone && !parsedRecipient.recipientPhone && !recipientPhoneUnchanged) {
+      showEditFormError("收件手机号应为 11 位中国大陆手机号；导入的旧遮罩号码保持不变时仍可保存", "recipientPhone");
       return;
     }
     if (sellerWechat) state.customers[sellerWechat] = {
@@ -3399,7 +3437,7 @@
     record = MxiqiWorkflow.applyManualPaymentResolution(record, existing);
     ensurePaymentTracking(record);
     if (!Number.isInteger(record.lot) || record.lot <= 0 || !record.itemName) {
-      notify("请填写有效 Lot 和拍品名称", "error");
+      showEditFormError("请填写有效 Lot 和拍品名称", !Number.isInteger(record.lot) || record.lot <= 0 ? "lot" : "itemName");
       return;
     }
     let duplicateCopies = state.records.filter((item) => item.id !== record.id && MxiqiWorkflow.sameAuctionLot(item, record));
@@ -3417,7 +3455,10 @@
       const candidateRecords = state.records
         .filter((item) => !duplicateIds.has(item.id))
         .map((item) => item.id === record.id ? record : item);
-      if (!requireSettlementReady(auctionPeriod(record), candidateRecords)) return;
+      if (!requireSettlementReady(auctionPeriod(record), candidateRecords)) {
+        showEditFormError("暂时不能结账：请先完成本期待付款同步和拖回处理", "settled");
+        return;
+      }
     }
     recalculateRecord(record, true);
     if (record.settled) record.settledAt = existing.settledAt || new Date().toISOString();
@@ -3439,6 +3480,10 @@
     notify(recoveredDuplicateEdit
       ? `Lot ${record.lot} 已合并更新，佣金已自动计算`
       : `Lot ${record.lot} 已保存，佣金已自动计算`);
+    } catch (error) {
+      console.error("保存拍品失败", error);
+      showEditFormError(`保存失败：${error?.message || "请刷新页面后重试"}`);
+    }
   });
 
   $("#open-assets").addEventListener("click", openAssets);
@@ -4533,7 +4578,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=53", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=54", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
