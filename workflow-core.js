@@ -597,15 +597,20 @@
         sourceUpdatedAt:timestamp,
       };
       if (pending) {
-        updated.finalOutcome = localDisposition === "寄存" ? "待拍" : "拖回";
         updated.finalPrice = finalPrice;
         updated.paymentStatus = "待付款";
-        updated.unpaidReturn = localDisposition !== "寄存";
-        updated.unpaidReturnDetectedAt = existing.unpaidReturnDetectedAt || timestamp;
-        updated.returnDisposition = keepHandledDisposition ? localDisposition : "拖回/等待";
-        if (!keepHandledDisposition) {
+        if (keepHandledDisposition) {
+          updated.finalOutcome = localDisposition === "寄存" ? "待拍" : "拖回";
+          updated.unpaidReturn = localDisposition !== "寄存";
+          updated.unpaidReturnDetectedAt = existing.unpaidReturnDetectedAt || timestamp;
+          updated.returnDisposition = localDisposition;
+        } else {
+          updated.finalOutcome = finalPrice > 0 ? "成交" : platformOutcome;
+          updated.unpaidReturn = false;
+          updated.unpaidReturnDetectedAt = "";
+          updated.returnDisposition = "";
           updated.returnDispositionConfirmedAt = "";
-          updated.returnDispositionReviewRequiredAt = existing.returnDispositionReviewRequiredAt || timestamp;
+          updated.returnDispositionReviewRequiredAt = "";
         }
         updated.settled = Boolean(existing.settled);
         unpaid += 1;
@@ -653,6 +658,7 @@
       return updated;
     }
 
+    const processedDealIndexes = new Set();
     for (const incoming of deals) {
       const lot = Number(incoming.lot);
       if (!Number.isInteger(lot) || lot <= 0 || !incoming.itemName) continue;
@@ -660,15 +666,17 @@
       const index = next.findIndex((record) => sameAuctionLot(record, incomingWithPeriod));
       if (index >= 0) {
         next[index] = applyResult(next[index], incomingWithPeriod);
+        processedDealIndexes.add(index);
         matched += 1;
       } else {
         next.push(applyResult({}, incomingWithPeriod));
+        processedDealIndexes.add(next.length - 1);
         added += 1;
       }
     }
 
     next.forEach((record, index) => {
-      if (auctionPeriod(record) !== selectedPeriod || !isPending(record) || record.unpaidReturn) return;
+      if (processedDealIndexes.has(index) || auctionPeriod(record) !== selectedPeriod || !isPending(record) || record.unpaidReturn) return;
       next[index] = applyResult(record, record);
       matched += 1;
     });

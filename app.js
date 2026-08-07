@@ -1500,7 +1500,7 @@
       <td><b>${esc(periods)}</b><small>${esc(dates)}</small></td>
       <td><b class="money">${currency.format(gross)}</b></td>
       <td>${settlementBadgeSummary(records)}</td>
-      <td><b>${currency.format(commission)}</b></td>
+      <td><b>${formatSettlementAdjustment(commission)}</b></td>
       <td><b class="money">${currency.format(payable)}</b></td>
       <td class="${allSettled ? "settlement-queue-complete" : ""}"><span class="settlement-queue-progress">${settledCount}/${records.length}</span><small>${allSettled ? "全部已结账" : `${records.length - settledCount} 件待结账`}</small></td>
       <td><div class="row-actions"><button data-settlement-toggle="${esc(group.key)}">${expanded ? "收起" : "展开"}</button><button data-settlement-settle="${esc(group.key)}" ${allSettled || !gateReady ? "disabled" : ""}>整组结账</button></div></td>
@@ -3731,7 +3731,7 @@
     }
   });
 
-  $("#open-connection").addEventListener("click", openConnection);
+  $("#open-platform-tools").addEventListener("click", openConnection);
   $("#connection-status-button").addEventListener("click", openConnection);
   $("#collector-open-connection").addEventListener("click", () => {
     $("#collector-dialog").close("connection");
@@ -3774,7 +3774,10 @@
     notify("已退出连接，采集功能重新锁定", "info");
   });
 
-  $("#open-collector").addEventListener("click", openCollector);
+  $("#connection-open-collector").addEventListener("click", () => {
+    $("#connection-dialog").close("collector");
+    openCollector();
+  });
   $("#sync-unpaid-orders").addEventListener("click", async () => {
     collectorRuntime.lastActivityAt = Date.now();
     const synced = await runCollector("payment");
@@ -4494,7 +4497,7 @@
     return repaired;
   }
 
-  if (localStorage.getItem(MIGRATION_KEY) !== "18") {
+  if (localStorage.getItem(MIGRATION_KEY) !== "19") {
     state.settings = {...defaultSettings, ...state.settings};
     repairEmbeddedConsignorLabels();
     if (Number(state.settings.birthdayCommissionValue) === 5 && state.settings.birthdayLabel === "生日月优惠") {
@@ -4536,6 +4539,17 @@
     if (sampleAddressProblem && !sampleAddressProblem.recipientRaw) Object.assign(sampleAddressProblem, {
       paymentStatus:"已付款",recipientRaw:"小王 13800000005 南山科技园科苑路",addressStatus:"needs_correction",shippingCarrier:"cainiao",mxiqiShippingStatus:"",
     });
+    let normalizedPendingFlow = 0;
+    state.records.forEach((record) => {
+      if (record.returnDisposition !== "拖回/等待" || record.paymentStatus !== "待付款" || record.returnDispositionConfirmedAt) return;
+      record.returnDisposition = "";
+      record.returnDispositionConfirmedAt = "";
+      record.returnDispositionReviewRequiredAt = "";
+      record.unpaidReturn = false;
+      record.unpaidReturnDetectedAt = "";
+      if (Number(record.finalPrice) > 0) record.finalOutcome = "成交";
+      normalizedPendingFlow += 1;
+    });
     state.records.forEach((record) => ensurePaymentTracking(record));
     state.records.forEach((record) => {
       record.shippingCarrier ||= record.carrier || carrierFor(record);
@@ -4555,7 +4569,8 @@
     state.connection = {...defaultConnection, ...state.connection};
     if (Number(state.settings.sfThreshold) === 1000) state.settings.sfThreshold = 2000;
     if (!["disconnected","demo_connected","connected"].includes(state.connection.status)) state.connection = clone(defaultConnection);
-    localStorage.setItem(MIGRATION_KEY, "18");
+    localStorage.setItem(MIGRATION_KEY, "19");
+    if (normalizedPendingFlow) audit("待付款恢复正常流程", `${normalizedPendingFlow} 件拍品等待人工选择特殊处理`, {undoable:false});
     save();
   }
 
@@ -4578,7 +4593,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=54", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=55", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
