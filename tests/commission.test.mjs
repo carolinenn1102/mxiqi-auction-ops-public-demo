@@ -11,6 +11,8 @@ const settings = {
   birthdayCommissionType: "percent",
   birthdayCommissionValue: 5,
   birthdayLabel: "生日月优惠",
+  birthdayThreshold: 2000,
+  birthdayKeywords: "NGC, PCGS",
   boxRebateThreshold: 1000,
   boxRebateKeywords: "NGC, PCGS",
   boxRebateValue: 1,
@@ -24,11 +26,26 @@ test("charges the configurable fixed fee below the low-price threshold", () => {
   assert.equal(plan.label, "低价固定佣金");
 });
 
-test("birthday-month commission takes priority over the low-price rule", () => {
-  const plan = commission.calculate({gross:70,birthdayMonth:7,auctionMonth:7,settings});
-  assert.equal(plan.amount, 3.5);
-  assert.equal(plan.isBirthday, true);
-  assert.equal(plan.isLowPrice, false);
+test("birthday month alone does not activate the birthday discount below the threshold", () => {
+  const plan = commission.calculate({gross:70,birthdayMonth:7,auctionMonth:7,title:"NGC 银币",settings});
+  assert.equal(plan.amount, 5);
+  assert.equal(plan.isBirthdayMonth, true);
+  assert.equal(plan.isBirthday, false);
+  assert.equal(plan.isLowPrice, true);
+});
+
+test("birthday discount requires both the price threshold and an NGC or PCGS keyword", () => {
+  const belowThreshold = commission.calculate({gross:1999,birthdayMonth:7,auctionMonth:7,title:"NGC 银币",settings});
+  const missingKeyword = commission.calculate({gross:2500,birthdayMonth:7,auctionMonth:7,title:"生肖纪念章",settings});
+  const eligibleNgc = commission.calculate({gross:2000,birthdayMonth:7,auctionMonth:7,title:"NGC-MS62 银币",settings});
+  const eligiblePcgs = commission.calculate({gross:2500,birthdayMonth:7,auctionMonth:7,title:"pcgs au58 银币",settings});
+  assert.equal(belowThreshold.isBirthday, false);
+  assert.equal(missingKeyword.isBirthday, false);
+  assert.equal(missingKeyword.amount, 200);
+  assert.equal(eligibleNgc.isBirthday, true);
+  assert.equal(eligibleNgc.amount, 100);
+  assert.equal(eligiblePcgs.isBirthday, true);
+  assert.equal(eligiblePcgs.amount, 125);
 });
 
 test("recognizes configurable box keywords", () => {

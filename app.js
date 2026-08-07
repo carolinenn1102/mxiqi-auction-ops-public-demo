@@ -23,6 +23,8 @@
     birthdayCommissionType: "percent",
     birthdayCommissionValue: -2,
     birthdayLabel: "生日",
+    birthdayThreshold: 2000,
+    birthdayKeywords: "NGC,PCGS",
     boxRebateThreshold: 1000,
     boxRebateKeywords: "NGC,PCGS",
     boxRebateValue: 1,
@@ -1446,7 +1448,7 @@
   }
 
   function settlementBadgeSummary(records) {
-    const birthdayCount = records.filter((record) => birthdayMonthFor(record) && birthdayMonthFor(record) === auctionMonth(record)).length;
+    const birthdayCount = records.filter((record) => commissionPlan(record).isBirthday).length;
     const boxCount = records.filter(hasAppliedBoxRebate).length;
     const returnCount = records.filter(isReturnRecord).length;
     const unpaidReturnCount = records.filter((record) => record.unpaidReturn).length;
@@ -2024,11 +2026,13 @@
     const data = new FormData(settingsForm);
     const draftSettings = Object.fromEntries(data.entries());
     $("#default-rule-preview").textContent = `示例：成交价 ¥1,000 时，${formatRule(data.get("defaultCommissionType"), Number(data.get("defaultCommissionValue") || 0))}。`;
-    $("#low-price-rule-preview").textContent = `普通成交价低于 ${currency.format(Number(data.get("lowPriceThreshold") || 0))} 时，每件收取 ${currency.format(Number(data.get("lowPriceFee") || 0))}；生日月规则优先。`;
+    $("#low-price-rule-preview").textContent = `普通成交价低于 ${currency.format(Number(data.get("lowPriceThreshold") || 0))} 时，每件收取 ${currency.format(Number(data.get("lowPriceFee") || 0))}；符合全部生日优惠条件时生日规则优先。`;
     const birthdayValue = Number(data.get("birthdayCommissionValue") || 0);
+    const birthdayThreshold = Math.max(0, Number(data.get("birthdayThreshold") || 0));
+    const birthdayKeywords = String(data.get("birthdayKeywords") || "").trim();
     $("#birthday-rule-preview").textContent = birthdayValue < 0
-      ? `生日月份内按 ${birthdayValue}% 返佣；示例：成交 ¥2,500，应结 ${currency.format(2500 - 2500 * birthdayValue / 100)}。`
-      : `生日月份内，${formatRule(data.get("birthdayCommissionType"), birthdayValue)}，整月自动应用。`;
+      ? `仅限生日月、成交价达到 ${currency.format(birthdayThreshold)} 且标题含 ${birthdayKeywords || "指定关键词"} 时，按 ${birthdayValue}% 返佣；缺少任一条件都不使用生日优惠。`
+      : `仅限生日月、成交价达到 ${currency.format(birthdayThreshold)} 且标题含 ${birthdayKeywords || "指定关键词"} 时，${formatRule(data.get("birthdayCommissionType"), birthdayValue)}。`;
     const tiers = MxiqiCommission.rebateTiers(draftSettings);
     $("#box-rebate-rule-preview").textContent = tiers.length
       ? `标题命中关键词后按最高适用档返佣：${tiers.map((tier) => `满 ${currency.format(tier.threshold)} 返 ${tier.value}%`).join("；")}。填 0 的档位停用，生日优惠优先。`
@@ -3774,6 +3778,8 @@
       birthdayCommissionType: String(data.get("birthdayCommissionType")),
       birthdayCommissionValue: Math.max(-100, Math.min(100, Number(data.get("birthdayCommissionValue") || 0))),
       birthdayLabel: String(data.get("birthdayLabel") || "生日").trim(),
+      birthdayThreshold: Math.max(0, Number(data.get("birthdayThreshold") || 0)),
+      birthdayKeywords: String(data.get("birthdayKeywords") || "NGC,PCGS").trim(),
       boxRebateThreshold: Math.max(0, Number(data.get("boxRebateThreshold") || 0)),
       boxRebateKeywords: String(data.get("boxRebateKeywords") || "NGC,PCGS").trim(),
         boxRebateValue: Math.max(-100, Math.min(100, Number(data.get("boxRebateValue") || 0))),
@@ -3804,7 +3810,7 @@
     logisticsRuntime.checked = false;
     state.records.filter((record) => !record.settled || isStorageRecord(record)).forEach((record) => recalculateRecord(record, isStorageRecord(record)));
     const tiers = MxiqiCommission.rebateTiers(state.settings);
-    audit("更新佣金规则", `默认 ${formatRule(state.settings.defaultCommissionType, state.settings.defaultCommissionValue)}；低价 ${currency.format(state.settings.lowPriceFee)}；生日 ${formatRule(state.settings.birthdayCommissionType, state.settings.birthdayCommissionValue)}；NP优惠 ${tiers.length ? tiers.map((tier) => `${currency.format(tier.threshold)}/${tier.value}%`).join("、") : "未启用"}`);
+    audit("更新佣金规则", `默认 ${formatRule(state.settings.defaultCommissionType, state.settings.defaultCommissionValue)}；低价 ${currency.format(state.settings.lowPriceFee)}；生日 满 ${currency.format(state.settings.birthdayThreshold)} 且含 ${state.settings.birthdayKeywords} 时 ${formatRule(state.settings.birthdayCommissionType, state.settings.birthdayCommissionValue)}；NP优惠 ${tiers.length ? tiers.map((tier) => `${currency.format(tier.threshold)}/${tier.value}%`).join("、") : "未启用"}`);
     save();
     settingsDialog.close();
     render();
@@ -4066,7 +4072,7 @@
           ? `未付款拖回扣 ${currency.format(state.settings.returnHandlingFee || 0)}`
           : isReturnRecord(record) ? `拖回扣 ${currency.format(state.settings.returnHandlingFee || 0)}` : "";
         const flags = [
-          birthdayMonthFor(record) === auctionMonth(record) ? "生日" : "",
+          commissionPlan(record).isBirthday ? "生日" : "",
           hasAppliedBoxRebate(record) ? `NP优惠 ${Math.abs(Number(commissionPlan(record).value || 0))}%` : "",
           returnFeeLabel,
         ].filter(Boolean).join("、");
@@ -4324,7 +4330,7 @@
       context.fillRect(36, y, width - 72, rowHeight);
       context.fillStyle = "#213944";
       context.font = '17px "Microsoft YaHei", sans-serif';
-      const birthdayDiscount = birthdayMonthFor(record) > 0 && birthdayMonthFor(record) === auctionMonth(record);
+      const birthdayDiscount = commissionPlan(record).isBirthday;
       const promotion = birthdayDiscount
         ? "生日"
         : hasAppliedBoxRebate(record)
@@ -4443,7 +4449,7 @@
     return repaired;
   }
 
-  if (localStorage.getItem(MIGRATION_KEY) !== "17") {
+  if (localStorage.getItem(MIGRATION_KEY) !== "18") {
     state.settings = {...defaultSettings, ...state.settings};
     repairEmbeddedConsignorLabels();
     if (Number(state.settings.birthdayCommissionValue) === 5 && state.settings.birthdayLabel === "生日月优惠") {
@@ -4504,7 +4510,7 @@
     state.connection = {...defaultConnection, ...state.connection};
     if (Number(state.settings.sfThreshold) === 1000) state.settings.sfThreshold = 2000;
     if (!["disconnected","demo_connected","connected"].includes(state.connection.status)) state.connection = clone(defaultConnection);
-    localStorage.setItem(MIGRATION_KEY, "17");
+    localStorage.setItem(MIGRATION_KEY, "18");
     save();
   }
 
@@ -4527,7 +4533,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=52", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=53", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";

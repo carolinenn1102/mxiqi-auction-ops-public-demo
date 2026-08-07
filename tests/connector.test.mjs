@@ -198,7 +198,7 @@ test("birthday reconciliation marks consignors and local directory keeps contact
   assert.match(app, /function syncCustomerDirectory\(\)/);
   assert.match(app, /state\.records\.forEach\(merge\)/);
   assert.match(app, /state\.assets\.forEach\(merge\)/);
-  assert.match(app, /birthdayDiscount \? "🎂 " : ""/);
+  assert.match(app, /const birthdayDiscount = commissionPlan\(record\)\.isBirthday/);
   assert.match(app, /birthdayDiscount[\s\S]*\? "生日"[\s\S]*\? "NP优惠"/);
   assert.match(styles, /\.customer-directory-layout/);
 });
