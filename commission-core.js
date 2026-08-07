@@ -66,7 +66,7 @@
           : settings.defaultCommissionValue) || 0;
     const label = isBirthday ? settings.birthdayLabel || "生日" : isBoxRebate ? "NP优惠" : isLowPrice ? "低价固定佣金" : "普通佣金";
     const amount = money(type === "fixed" ? value : price * value / 100);
-    return {amount:Math.min(amount, price),label,isBirthday,isBirthdayMonth:birthday.isBirthdayMonth,birthdayEligibility:birthday,isLowPrice,isBoxRebate,isBoxRebateEligible,boxRebateTier,isReturn:false,type,value};
+    return {amount:type === "fixed" ? amount : Math.min(amount, price),label,isBirthday,isBirthdayMonth:birthday.isBirthdayMonth,birthdayEligibility:birthday,isLowPrice,isBoxRebate,isBoxRebateEligible,boxRebateTier,isReturn:false,type,value};
   }
 
   function hasBoxRebate({gross = 0, title = "", settings = {}} = {}) {

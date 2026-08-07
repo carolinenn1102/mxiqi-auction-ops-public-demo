@@ -26,6 +26,12 @@ test("charges the configurable fixed fee below the low-price threshold", () => {
   assert.equal(plan.label, "低价固定佣金");
 });
 
+test("fixed low-price fee can make the seller settlement negative", () => {
+  const plan = commission.calculate({gross:4,birthdayMonth:0,auctionMonth:7,settings});
+  assert.equal(plan.amount, 5);
+  assert.equal(4 - plan.amount, -1);
+});
+
 test("birthday month alone does not activate the birthday discount below the threshold", () => {
   const plan = commission.calculate({gross:70,birthdayMonth:7,auctionMonth:7,title:"NGC 银币",settings});
   assert.equal(plan.amount, 5);
