@@ -279,7 +279,14 @@
     state.records = normalized.records;
     state.audit = Array.isArray(state.audit) ? state.audit.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)) : [];
     state.assets = Array.isArray(state.assets) ? state.assets.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)) : [];
-    state.history = Array.isArray(state.history) ? state.history.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)) : [];
+    state.history = Array.isArray(state.history) ? state.history.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)).map((entry) => {
+      const normalized = {...entry};
+      // Older releases stored a complete JSON copy as the fingerprint as well as
+      // the undo snapshot itself. On a busy account that could fill localStorage
+      // and make unrelated buttons appear to do nothing when their save threw.
+      if (typeof normalized.afterFingerprint === "string" && normalized.afterFingerprint.length > 256) delete normalized.afterFingerprint;
+      return normalized;
+    }) : [];
     state.settings = state.settings && typeof state.settings === "object" && !Array.isArray(state.settings) ? {...defaultSettings, ...state.settings} : clone(defaultSettings);
     state.customers = sanitizeCustomerDirectory(state.customers);
     state.collector = state.collector && typeof state.collector === "object" && !Array.isArray(state.collector) ? {...defaultCollector, ...state.collector} : clone(defaultCollector);
@@ -289,6 +296,7 @@
   }
 
   const HISTORY_LIMIT = 8;
+  const HISTORY_STORAGE_CHAR_LIMIT = 700000;
   let suppressHistoryCapture = false;
 
   function businessSnapshot() {
@@ -305,7 +313,25 @@
   }
 
   function snapshotFingerprint(snapshot) {
-    return JSON.stringify(snapshot);
+    const source = JSON.stringify(snapshot);
+    let hash = 2166136261;
+    for (let index = 0; index < source.length; index += 1) {
+      hash ^= source.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `v2:${source.length}:${(hash >>> 0).toString(36)}`;
+  }
+
+  function historyForStorage() {
+    const prepared = state.history.slice(0, HISTORY_LIMIT).map((entry) => {
+      const normalized = {...entry};
+      if (!normalized.pending) delete normalized.afterFingerprint;
+      else if (typeof normalized.afterFingerprint === "string" && normalized.afterFingerprint.length > 256) delete normalized.afterFingerprint;
+      return normalized;
+    });
+    while (prepared.length && JSON.stringify(prepared).length > HISTORY_STORAGE_CHAR_LIMIT) prepared.pop();
+    state.history = prepared;
+    return prepared;
   }
 
   function captureHistorySnapshot() {
@@ -325,14 +351,27 @@
 
   function persistState() {
     syncCustomerDirectory();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.records));
-    localStorage.setItem(AUDIT_KEY, JSON.stringify(state.audit.slice(0, 200)));
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
-    localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(state.customers));
-    localStorage.setItem(COLLECTOR_KEY, JSON.stringify(state.collector));
-    localStorage.setItem(CONNECTION_KEY, JSON.stringify(state.connection));
-    localStorage.setItem(ASSETS_KEY, JSON.stringify(state.assets));
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(state.history.slice(0, HISTORY_LIMIT)));
+    const writeBusinessState = (auditLimit = 200) => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.records));
+      localStorage.setItem(AUDIT_KEY, JSON.stringify(state.audit.slice(0, auditLimit)));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+      localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(state.customers));
+      localStorage.setItem(COLLECTOR_KEY, JSON.stringify(state.collector));
+      localStorage.setItem(CONNECTION_KEY, JSON.stringify(state.connection));
+      localStorage.setItem(ASSETS_KEY, JSON.stringify(state.assets));
+    };
+    const history = historyForStorage();
+    try {
+      // Shrink legacy history before writing the live business data so an old,
+      // oversized undo log cannot block menus, settlement, or shipping actions.
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      writeBusinessState();
+    } catch (error) {
+      if (!/quota|exceed/i.test(`${error?.name || ""} ${error?.message || ""}`)) throw error;
+      state.history = [];
+      localStorage.setItem(HISTORY_KEY, "[]");
+      writeBusinessState(50);
+    }
   }
 
   function save({skipHistoryCapture = false} = {}) {
@@ -576,11 +615,15 @@
   }
 
   function openCustomerDirectory(selectedKey = "") {
-    state.customerQuery = "";
-    $("#customer-search").value = "";
-    renderCustomerDirectory(selectedKey);
-    persistState();
-    customerDialog.showModal();
+    try {
+      state.customerQuery = "";
+      $("#customer-search").value = "";
+      renderCustomerDirectory(selectedKey);
+      if (!customerDialog.open) customerDialog.showModal();
+    } catch (error) {
+      console.error("打开送拍人档案失败", error);
+      notify(`送拍人档案打开失败：${error?.message || "请刷新页面后重试"}`, "error");
+    }
   }
 
   async function exportCustomerImage() {
@@ -819,7 +862,7 @@
       const value = Number(record.commissionOverrideValue || 0);
       const amount = roundMoney(overrideType === "fixed" ? value : gross * value / 100);
       const detail = overrideType === "fixed" ? currency.format(value) : `${value}%`;
-      return {...automaticPlan,amount:Math.min(amount, gross),label:`手工佣金 · ${detail}`,type:overrideType,value,isManual:true,isBirthday:false,isBoxRebate:false,automaticPlan};
+      return {...automaticPlan,amount:overrideType === "fixed" ? amount : Math.min(amount, gross),label:`手工佣金 · ${detail}`,type:overrideType,value,isManual:true,isBirthday:false,isBoxRebate:false,automaticPlan};
     }
     return {...automaticPlan,isManual:false,label:`${automaticPlan.label} · ${automaticPlan.type === "fixed" ? currency.format(automaticPlan.value) : `${automaticPlan.value}%`}`};
   }
@@ -951,6 +994,14 @@
       && record.paymentStatus === "已付款"
       && record.returnDisposition !== "寄存"
       && !isReturnRecord(record);
+  }
+
+  function shippingBlockedMessage(record) {
+    if (record.returnDisposition === "寄存") return "该拍品已转寄存，不进入买家发货流程";
+    if (isReturnRecord(record)) return "该拍品属于拖回处理，不进入买家发货流程";
+    if (record.finalOutcome !== "成交" || Number(record.finalPrice) <= 0) return "该拍品尚未成交，暂不能发货";
+    if (record.paymentStatus !== "已付款") return "买家尚未付款，付款后才能发货";
+    return "当前拍品尚未满足发货条件，请先检查成交和付款状态";
   }
 
   function shippingStage(record) {
@@ -1362,7 +1413,7 @@
       <td><span class="carrier ${carrier}">${carrierLabel(carrier)}</span><small>${logisticsLabel(record.logisticsStatus)} · ${esc(shippingStageLabel(record))}</small></td>
       <td>${deliveryCode ? `<code>${esc(deliveryCode)}</code>` : '<span class="muted">—</span>'}<small>${esc(deliveryHint)}</small></td>
       <td>${record.settled ? '<span class="chip success">已结账</span>' : '<span class="chip neutral">未结账</span>'}<small>${esc(settlementDetail)}</small><small>${esc(record.promotion || "")}</small>${promotionBadges(record)}</td>
-      <td><div class="row-actions">${resultPending ? `<button data-action="sync-result" data-id="${esc(record.id)}">同步成交</button>` : ""}<button data-action="edit" data-id="${esc(record.id)}">编辑</button><button data-action="pickup" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>取件</button><button data-action="manual" data-id="${esc(record.id)}">录码</button><button data-action="shipping" data-id="${esc(record.id)}" ${!isShippingCandidate(record) ? "disabled" : ""}>发货</button><button data-action="toggle-settle" data-id="${esc(record.id)}" ${!isSettlementEligible(record) ? "disabled" : ""}>${record.settled ? "撤销" : "结账"}</button></div></td>
+      <td><div class="row-actions">${resultPending ? `<button data-action="sync-result" data-id="${esc(record.id)}">同步成交</button>` : ""}<button data-action="edit" data-id="${esc(record.id)}">编辑</button><button data-action="pickup" data-id="${esc(record.id)}" ${Number(record.finalPrice) <= 0 ? "disabled" : ""}>取件</button><button data-action="manual" data-id="${esc(record.id)}">录码</button><button data-action="shipping" data-id="${esc(record.id)}" title="${esc(isShippingCandidate(record) ? "打开买家发货复核" : shippingBlockedMessage(record))}">发货</button><button data-action="toggle-settle" data-id="${esc(record.id)}" ${!isSettlementEligible(record) ? "disabled" : ""}>${record.settled ? "撤销" : "结账"}</button></div></td>
     </tr>`;
   }
 
@@ -1409,7 +1460,7 @@
       <td><span class="carrier ${carrier}">${carrierValues.length === 1 ? carrierLabel(carrier) : "混合"}</span><small>${esc(stageValues.length === 1 ? stageValues[0] : `${stageValues.length} 种发货状态`)}</small></td>
       <td>${deliveryCode ? `<code>${esc(deliveryCode)}</code>` : '<span class="muted">—</span>'}<small>${deliveryCode ? "整包共用单号" : "等待整包下单"}</small></td>
       <td>${settledCount === records.length ? '<span class="chip success">整包已结账</span>' : `<span class="chip neutral">${settledCount}/${records.length} 已结账</span>`}<small>${currency.format(totalSettlement)} · ${totalCommission < 0 ? "返佣" : "佣金"} ${formatSettlementAdjustment(totalCommission)}</small></td>
-      <td><div class="row-actions package-actions"><button data-package-toggle="${esc(group.key)}">${expanded ? "收起" : "展开"}</button><button data-package-shipping="${esc(group.key)}" ${canShipPackage ? "" : "disabled"}>整包发货</button></div></td>
+      <td><div class="row-actions package-actions"><button data-package-toggle="${esc(group.key)}">${expanded ? "收起" : "展开"}</button><button data-package-shipping="${esc(group.key)}" title="${esc(canShipPackage ? "打开整包发货复核" : shippingBlockedMessage(records.find((record) => !isShippingCandidate(record)) || records[0]))}">整包发货</button></div></td>
     </tr>${childRows}`;
   }
 
@@ -1492,10 +1543,11 @@
     const lots = records.map((record) => record.lot).join("、");
     const periods = [...new Set(records.map(auctionPeriod).filter(Boolean))].join("、") || "期数待补";
     const dates = [...new Set(records.map((record) => datePart(record.auctionAt || record.platformOrderDate)).filter(Boolean))].join("、") || "时间待补";
+    const missingSeller = group.key === "__missing__" || !MxiqiWorkflow.hasConsignorName(group.seller);
     const children = expanded ? records.map(renderSettlementItemRow).join("") : "";
     return `<tr class="settlement-group-row ${allSelected ? "selected-row" : ""}">
       <td class="select-column"><input type="checkbox" data-settlement-select="${esc(group.key)}" ${allSelected ? "checked" : ""}></td>
-      <td class="settlement-seller"><button class="consignor-link" type="button" data-customer-open="${esc(group.key)}"><b>${esc(group.seller)}</b><small>${esc(group.phone || "送拍人手机号待补")}</small></button></td>
+      <td class="settlement-seller">${missingSeller ? `${sellerAssignmentSelect(`data-settlement-seller-assign="${esc(group.key)}"`)}<small>为这 ${records.length} 件拍品匹配送拍人</small>` : `<button class="consignor-link" type="button" data-customer-open="${esc(group.key)}"><b>${esc(group.seller)}</b><small>${esc(group.phone || "送拍人手机号待补")}</small></button>`}</td>
       <td class="settlement-lots"><b>${records.length} 件 · Lot ${esc(lots)}</b><small>${esc(records.map((record) => record.itemName).join("；"))}</small></td>
       <td><b>${esc(periods)}</b><small>${esc(dates)}</small></td>
       <td><b class="money">${currency.format(gross)}</b></td>
@@ -1503,7 +1555,7 @@
       <td><b>${formatSettlementAdjustment(commission)}</b></td>
       <td><b class="money">${currency.format(payable)}</b></td>
       <td class="${allSettled ? "settlement-queue-complete" : ""}"><span class="settlement-queue-progress">${settledCount}/${records.length}</span><small>${allSettled ? "全部已结账" : `${records.length - settledCount} 件待结账`}</small></td>
-      <td><div class="row-actions"><button data-settlement-toggle="${esc(group.key)}">${expanded ? "收起" : "展开"}</button><button data-settlement-settle="${esc(group.key)}" ${allSettled || !gateReady ? "disabled" : ""}>整组结账</button></div></td>
+      <td><div class="row-actions"><button data-settlement-toggle="${esc(group.key)}">${expanded ? "收起" : "展开"}</button><button data-settlement-settle="${esc(group.key)}" ${allSettled ? "disabled" : ""} title="${esc(gateReady ? "确认该送拍人当前范围内的全部拍品结账" : settlementGateMessage(settlementGate()))}">整组结账</button></div></td>
     </tr>${children}`;
   }
 
@@ -2678,10 +2730,15 @@
   }
 
   function openAssets() {
-    rematchAssetsAndApply();
-    save();
-    renderAssetPanel();
-    assetDialog.showModal();
+    try {
+      rematchAssetsAndApply();
+      renderAssetPanel();
+      if (!assetDialog.open) assetDialog.showModal();
+      save();
+    } catch (error) {
+      console.error("打开寄存与库存失败", error);
+      notify(`寄存与库存打开失败：${error?.message || "请刷新页面后重试"}`, "error");
+    }
   }
 
   async function importAssetFiles(files) {
@@ -2900,12 +2957,15 @@
   $("#records-body").addEventListener("change", (event) => {
     const sellerRecordId = event.target.dataset.sellerAssignRecord;
     const sellerPackageKey = event.target.dataset.packageSellerAssign;
-    if (sellerRecordId || sellerPackageKey) {
+    const sellerSettlementKey = event.target.dataset.settlementSellerAssign;
+    if (sellerRecordId || sellerPackageKey || sellerSettlementKey) {
       const customerKey = event.target.value;
       if (!customerKey) return;
       const records = sellerRecordId
         ? state.records.filter((record) => record.id === sellerRecordId)
-        : recordsForPackageKey(sellerPackageKey);
+        : sellerPackageKey
+          ? recordsForPackageKey(sellerPackageKey)
+          : settlementGroups(visibleRecords()).find((item) => item.key === sellerSettlementKey)?.records || [];
       const entry = customerDirectoryEntries().find((item) => item.key === customerKey);
       if (!records.length || !entry) return;
       assignCustomerToRecords(records, customerKey);
@@ -2954,19 +3014,28 @@
     const settlementSettle = event.target.closest("[data-settlement-settle]");
     if (settlementSettle) {
       if (!requireSettlementReady()) return;
-      const group = settlementGroups(visibleRecords()).find((item) => item.key === settlementSettle.dataset.settlementSettle);
-      let count = 0;
-      group?.records.filter((record) => !record.settled).forEach((record) => {
-        recalculateRecord(record, true);
-        record.settled = true;
-        record.settledAt = new Date().toISOString();
-        record.settlementNote = record.settlementNote || "网页按送拍人整组结账";
-        count += 1;
-      });
-      audit("按送拍人整组结账", `${group?.seller || "待补送拍人"} · ${count} 件拍品`);
-      save();
-      render();
-      notify(`已为 ${group?.seller || "该送拍人"} 结账 ${count} 件拍品`);
+      settlementSettle.disabled = true;
+      settlementSettle.textContent = "结账中…";
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      try {
+        const group = settlementGroups(visibleRecords()).find((item) => item.key === settlementSettle.dataset.settlementSettle);
+        let count = 0;
+        group?.records.filter((record) => !record.settled).forEach((record) => {
+          recalculateRecord(record, true);
+          record.settled = true;
+          record.settledAt = new Date().toISOString();
+          record.settlementNote = record.settlementNote || "网页按送拍人整组结账";
+          count += 1;
+        });
+        audit("按送拍人整组结账", `${group?.seller || "待补送拍人"} · ${count} 件拍品`);
+        render();
+        notify(`已为 ${group?.seller || "该送拍人"} 结账 ${count} 件拍品`);
+      } catch (error) {
+        console.error("整组结账失败", error);
+        settlementSettle.disabled = false;
+        settlementSettle.textContent = "整组结账";
+        notify(`整组结账失败：${error?.message || "请刷新页面后重试"}`, "error");
+      }
       return;
     }
     const packageToggle = event.target.closest("[data-package-toggle]");
@@ -2978,6 +3047,12 @@
     }
     const packageShipping = event.target.closest("[data-package-shipping]");
     if (packageShipping) {
+      const records = recordsForPackageKey(packageShipping.dataset.packageShipping);
+      const blocked = records.find((record) => !isShippingCandidate(record));
+      if (blocked) {
+        notify(`整包暂不能发货：Lot ${blocked.lot} ${shippingBlockedMessage(blocked)}`, "error");
+        return;
+      }
       openShippingPackage(packageShipping.dataset.packageShipping);
       return;
     }
@@ -3002,7 +3077,10 @@
       return;
     }
     if (button.dataset.action === "edit") openEditor(record.id);
-    if (button.dataset.action === "shipping") openShipping(record.id);
+    if (button.dataset.action === "shipping") {
+      if (!isShippingCandidate(record)) notify(shippingBlockedMessage(record), "error");
+      else openShipping(record.id);
+    }
     if (button.dataset.action === "pickup") {
       requestPickup(record);
       save();
@@ -4289,23 +4367,28 @@
     context.fillStyle = "#7b898f";
     context.font = '14px "Microsoft YaHei", sans-serif';
     context.fillText(`生成时间：${new Date().toLocaleString("zh-CN")} · 送拍运营工作台`, 48, canvas.height - 22);
-    canvas.toBlob((blob) => {
-      if (!blob) return notify(options.failureMessage, "error");
+    return new Promise((resolve) => canvas.toBlob((blob) => {
+      if (!blob) {
+        notify(options.failureMessage, "error");
+        resolve(false);
+        return;
+      }
       const period = options.period.replace(/[^\w\u4e00-\u9fa5-]/g, "");
       downloadBlob(blob, `${options.filePrefix}_${period}_${new Date().toISOString().slice(0,10)}.png`, "image/png");
       audit(options.auditLabel, `${sorted.length} 件拍品`);
       notify(options.successMessage);
-    }, "image/png");
+      resolve(true);
+    }, "image/png"));
   }
 
-  function exportPreauctionImage() {
+  async function exportPreauctionImage() {
     const records = visibleRecords().filter(isPreauctionRecord);
     if (!records.length) {
       notify("当前筛选下没有可导出的拍前核对记录", "error");
-      return;
+      return false;
     }
     const period = checklistPeriod(records);
-    exportChecklistImage(records, {
+    return exportChecklistImage(records, {
       title:"拍前核对完整清单",
       period,
       seller:consignorDisplayName(state.filters.seller),
@@ -4593,7 +4676,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=55", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=56", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
