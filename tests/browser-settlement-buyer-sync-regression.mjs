@@ -42,8 +42,13 @@ try {
                 recipientRaw:"网页收件人" + lot + " 1390000" + String(lot).padStart(4,"0") + " 上海市测试路" + lot + "号",recipientName:"网页收件人" + lot,recipientPhone:"1390000" + String(lot).padStart(4,"0")
               };
             });
+            const unrelatedHistory = Array.from({length:440}, (_,index) => ({
+              lot:1000 + index,itemName:"第76期历史订单 " + index,auctionAt:"2026-07-27",auctionPeriodOverride:"第76期",
+              platformItemKey:"history:" + index,mxiqiOrderId:"history-order-" + index,source:"mxiqi_connector",
+              finalOutcome:"成交",finalPrice:500 + index,paymentStatus:"已付款",buyerName:"历史买家" + index,buyerPhone:"1370000" + String(index).padStart(4,"0")
+            }));
             if (scope === "waitconfirm") return {requiresLogin:false,pages:1,totalPages:1,records:allOrders.slice(0,7)};
-            if (scope === "recent") return {requiresLogin:false,pages:3,totalPages:105,records:allOrders};
+            if (scope === "recent") return {requiresLogin:false,pages:20,totalPages:105,records:[...allOrders,...unrelatedHistory]};
             return {requiresLogin:false,records:[],pages:1,totalPages:1};
           },
           syncAuctionDeals:async () => {

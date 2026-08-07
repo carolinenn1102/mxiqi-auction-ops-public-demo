@@ -522,6 +522,28 @@
     });
   }
 
+  function sellerAssignmentSelect(attributes = "") {
+    const options = customerDirectoryEntries()
+      .map((entry) => `<option value="${esc(entry.key)}">${esc(entry.wechat)}${entry.phone ? ` · ${esc(entry.phone)}` : ""}</option>`)
+      .join("");
+    return `<select class="seller-inline-select" ${attributes} aria-label="选择送拍人"><option value="">待补送拍人 · 点击选择</option>${options}</select>`;
+  }
+
+  function repairUnscopedBuyerBackfillImport() {
+    const entry = state.history.find((item) => item?.action === "回补本期买家资料" && Array.isArray(item?.before?.records));
+    const beforeRecords = entry?.before?.records || [];
+    const extraCount = state.records.length - beforeRecords.length;
+    if (!entry || extraCount < 50) return {removed:0,matched:0};
+    saveRecoveryCopy("repair-unscoped-buyer-backfill", {records:state.records,assets:state.assets});
+    const matchingOrders = state.records.filter((incoming) => beforeRecords.some((existing) => MxiqiWorkflow.sameAuctionLot(existing, incoming)));
+    const merged = MxiqiWorkflow.mergePlatformOrderRecords(clone(beforeRecords), matchingOrders, new Date().toISOString());
+    state.records = merged.records;
+    state.assets = Array.isArray(entry.before.assets) ? clone(entry.before.assets) : state.assets;
+    syncStoredAssetsFromRecords();
+    state.assets = MxiqiAssets.rematchAssets(state.assets, state.records);
+    return {removed:extraCount,matched:merged.matched};
+  }
+
   function fillCustomerProfile(entry) {
     const profile = entry || {wechat:"",phone:"",birthdayMonth:0,birthdayPending:false,lastContactedAt:"",notes:"",recordCount:0,assetCount:0};
     customerForm.elements.originalWechat.value = profile.wechat;
@@ -1324,12 +1346,13 @@
       ? `${record.mxiqiShippingStatus === "filled" ? "麦稀奇已回填" : "出库单号待回填"} · ${addressStatusLabel(record.addressStatus)}`
       : record.pickupCode ? "模拟取件码，不可寄件" : shippingStageLabel(record);
     const consignor = consignorDirectoryEntry(record);
+    const hasConsignor = MxiqiWorkflow.hasConsignorName(record.sellerWechat);
     const resultPending = isAuctionResultPending(record);
     return `<tr class="${state.selected.has(record.id) ? "selected-row" : ""}${child ? " package-child-row" : ""}">
       <td class="select-column"><input type="checkbox" data-select="${esc(record.id)}" ${state.selected.has(record.id) ? "checked" : ""}></td>
       <td class="role-cell"><span class="role-label">买家 / 发货对象</span><b class="${buyerName ? "" : "muted"}">${esc(buyerName || (resultPending ? "成交结果待同步" : Number(record.finalPrice) > 0 ? "待同步买家" : "尚未成交"))}</b><small>${esc(buyerPhone || (resultPending ? "同步后显示买家" : Number(record.finalPrice) > 0 ? "买家手机号待同步" : "—"))}</small>${recipientDetail ? `<small>${esc(recipientDetail)}</small>` : ""}</td>
       <td><div class="lot-cell ${child ? "package-child-lot" : ""}"><span>${record.lot}</span><div><b>${esc(record.itemName)}</b><small>${esc(record.projectName || record.primaryCategory || "未设置项目")}</small></div></div></td>
-      <td class="role-cell"><span class="role-label">送拍人 / 结算对象</span>${consignor.key ? `<button class="consignor-link" type="button" data-customer-open="${esc(consignor.key)}"><b>${esc(consignor.wechat || "待补")}</b><small>${esc(consignor.phone || record.sellerPhone || "送拍人手机号待补")}</small></button>` : `<b class="muted">${esc(consignor.wechat || "待补")}</b><small>${esc(consignor.phone || record.sellerPhone || "送拍人手机号待补")}</small>`}<small>${esc(record.trackingNumber || "未填寄入快递单号")}</small></td>
+      <td class="role-cell"><span class="role-label">送拍人 / 结算对象</span>${hasConsignor ? `<button class="consignor-link" type="button" data-customer-open="${esc(consignor.key)}"><b>${esc(consignor.wechat || "待补")}</b><small>${esc(consignor.phone || record.sellerPhone || "送拍人手机号待补")}</small></button>` : `${sellerAssignmentSelect(`data-seller-assign-record="${esc(record.id)}"`)}<small>从已保存档案中选择</small>`}<small>${esc(record.trackingNumber || "未填寄入快递单号")}</small></td>
       ${renderStatusCell(record)}
       <td><b>${esc(auctionPeriod(record))}</b><small>${esc(record.projectName || record.auctionHouse || "项目待补")} · ${esc(record.auctionAt || "待设置时间")}</small></td>
       <td><b class="money">${Number(record.finalPrice) > 0 ? currency.format(record.finalPrice) : resultPending ? "待同步" : "待拍"}</b>${promotionBadges(record)}</td>
@@ -1355,7 +1378,11 @@
     const buyerName = MxiqiPackages.sameValue(records, "buyerName") || MxiqiPackages.sameValue(records, "recipientName");
     const buyerPhone = MxiqiPackages.sameValue(records, "buyerPhone") || MxiqiPackages.sameValue(records, "recipientPhone");
     const sellerMap = new Map();
-    records.forEach((record) => { const entry = consignorDirectoryEntry(record); if (entry.key) sellerMap.set(entry.key, entry); });
+    records.forEach((record) => {
+      if (!MxiqiWorkflow.hasConsignorName(record.sellerWechat)) return;
+      const entry = consignorDirectoryEntry(record);
+      if (entry.key) sellerMap.set(entry.key, entry);
+    });
     const sellers = [...sellerMap.values()];
     const sellerSummary = sellers.length === 1 ? sellers[0].wechat : sellers.length ? `${sellers.length} 位送拍人` : "送拍人待匹配";
     const carrierValues = [...new Set(records.map((record) => record.carrier || carrierFor(record)))];
@@ -1372,7 +1399,7 @@
       <td class="select-column"><input type="checkbox" data-package-select="${esc(group.key)}" ${allSelected ? "checked" : ""} ${selectable.length ? "" : "disabled"}></td>
       <td class="role-cell"><span class="role-label">买家 / 发货对象</span><b class="${buyerName ? "" : "muted"}">${esc(buyerName || "买家待同步")}</b><small>${esc(buyerPhone || "买家手机号待同步")}</small></td>
       <td><div class="package-heading"><button class="package-toggle" type="button" data-package-toggle="${esc(group.key)}" aria-expanded="${expanded}">${expanded ? "−" : "+"}</button><div><b>合并包裹 · ${records.length} 件</b><small>Lot ${esc(lots)}</small></div></div></td>
-      <td class="role-cell"><span class="role-label">送拍人 / 结算对象</span>${sellers.length === 1 ? `<button class="consignor-link" type="button" data-customer-open="${esc(sellers[0].key)}"><b>${esc(sellerSummary)}</b><small>${esc(sellers[0].phone || "送拍人手机号待补")}</small></button>` : `<b class="${sellers.length ? "" : "muted"}">${esc(sellerSummary)}</b><small>展开后按拍品查看</small>`}</td>
+      <td class="role-cell"><span class="role-label">送拍人 / 结算对象</span>${sellers.length === 1 ? `<button class="consignor-link" type="button" data-customer-open="${esc(sellers[0].key)}"><b>${esc(sellerSummary)}</b><small>${esc(sellers[0].phone || "送拍人手机号待补")}</small></button>` : sellers.length ? `<b>${esc(sellerSummary)}</b><small>展开后按拍品查看</small>` : `${sellerAssignmentSelect(`data-package-seller-assign="${esc(group.key)}"`)}<small>为本包裹全部 ${records.length} 件设置</small>`}</td>
       <td class="status-cell"><span class="chip ${statusValues.length === 1 ? statusChipClass(statusValues[0]) : "neutral"}">${esc(statusValues.length === 1 ? statusValues[0] : `${statusValues.length} 种状态`)}</span><small>${esc(paymentValues.length ? `付款：${paymentValues.join("、")}` : "付款状态未同步")}</small></td>
       <td><b>${esc(project)}</b><small>${orderId ? `订单 ${esc(orderId)}` : "同一出库运单"}</small></td>
       <td><b class="money">${currency.format(total)}</b><small>合计 ${records.length} 件 · 均价 ${currency.format(total / records.length)}</small></td>
@@ -1414,7 +1441,8 @@
 
   function renderPreauctionRow(record) {
     const consignor = consignorDirectoryEntry(record);
-    return `<tr class="preauction-row"><td>${consignor.key ? `<button class="consignor-link" type="button" data-customer-open="${esc(consignor.key)}"><b>${esc(consignor.wechat || "待补送拍人")}</b><small>${esc(consignor.phone || "手机号待补")}</small></button>` : `<b>${esc(consignor.wechat || "待补送拍人")}</b><small>${esc(consignor.phone || "手机号待补")}</small>`}</td><td><span class="preauction-lot">${esc(record.lot)}</span></td><td><button class="preauction-item-button" type="button" data-action="edit" data-id="${esc(record.id)}">${esc(record.itemName)}</button></td><td><b>${esc(auctionPeriod(record))}</b></td></tr>`;
+    const hasConsignor = MxiqiWorkflow.hasConsignorName(record.sellerWechat);
+    return `<tr class="preauction-row"><td>${hasConsignor ? `<button class="consignor-link" type="button" data-customer-open="${esc(consignor.key)}"><b>${esc(consignor.wechat || "待补送拍人")}</b><small>${esc(consignor.phone || "手机号待补")}</small></button>` : `${sellerAssignmentSelect(`data-seller-assign-record="${esc(record.id)}"`)}<small>从已保存档案中选择</small>`}</td><td><span class="preauction-lot">${esc(record.lot)}</span></td><td><button class="preauction-item-button" type="button" data-action="edit" data-id="${esc(record.id)}">${esc(record.itemName)}</button></td><td><b>${esc(auctionPeriod(record))}</b></td></tr>`;
   }
 
   function settlementBadgeSummary(records) {
@@ -2406,7 +2434,10 @@
         });
       });
       const platformOrders = [...platformOrdersByKey.values()];
-      const orderMerge = MxiqiWorkflow.mergePlatformOrderRecords(state.records, platformOrders, timestamp);
+      const scopedPlatformOrders = buyersOnly
+        ? platformOrders.filter((incoming) => state.records.some((existing) => auctionPeriod(existing) === period && MxiqiWorkflow.sameAuctionLot(existing, incoming)))
+        : platformOrders;
+      const orderMerge = MxiqiWorkflow.mergePlatformOrderRecords(state.records, scopedPlatformOrders, timestamp);
       state.records = orderMerge.records;
       let merged = {records:state.records,period,matched:0,added:0,unpaid:0};
       if (!buyersOnly) {
@@ -2842,6 +2873,25 @@
     render();
   });
   $("#records-body").addEventListener("change", (event) => {
+    const sellerRecordId = event.target.dataset.sellerAssignRecord;
+    const sellerPackageKey = event.target.dataset.packageSellerAssign;
+    if (sellerRecordId || sellerPackageKey) {
+      const customerKey = event.target.value;
+      if (!customerKey) return;
+      const records = sellerRecordId
+        ? state.records.filter((record) => record.id === sellerRecordId)
+        : recordsForPackageKey(sellerPackageKey);
+      const entry = customerDirectoryEntries().find((item) => item.key === customerKey);
+      if (!records.length || !entry) return;
+      assignCustomerToRecords(records, customerKey);
+      syncStoredAssetsFromRecords();
+      rematchAssetsAndApply();
+      audit("关联送拍人", `${entry.wechat} · ${records.length} 件拍品`);
+      state.selected.clear();
+      render();
+      notify(`已把 ${records.length} 件拍品关联给 ${entry.wechat}`);
+      return;
+    }
     const packageKey = event.target.dataset.packageSelect;
     if (packageKey) {
       recordsForPackageKey(packageKey).forEach((record) => {
@@ -4160,9 +4210,10 @@
     const columns = [
       {label:"送拍人",x:48,width:240},
       {label:"Lot",x:288,width:110},
-      {label:"拍品名称",x:398,width:760},
-      {label:"拍卖期数",x:1158,width:190},
-      {label:"送拍人手机号",x:1348,width:304},
+      {label:"拍品名称",x:398,width:650},
+      {label:"拍卖期数",x:1048,width:160},
+      {label:"拍卖日期",x:1208,width:210},
+      {label:"送拍人手机号",x:1418,width:234},
     ];
     context.fillStyle = "#e8e5dd";
     context.fillRect(36, headerHeight, width - 72, rowHeight);
@@ -4177,7 +4228,8 @@
       context.fillStyle = "#213944";
       context.font = '17px "Microsoft YaHei", sans-serif';
       const identity = consignorDirectoryEntry(record);
-      const values = [truncate(identity.wechat || "待补送拍人",12),record.lot,truncate(record.itemName,40),auctionPeriod(record),identity.phone || record.sellerPhone || "手机号待补"];
+      const auctionDate = MxiqiWorkflow.auctionDateKey(record.auctionAt || record.platformOrderDate) || datePart(record.auctionAt || record.platformOrderDate) || "日期待补";
+      const values = [truncate(identity.wechat || "待补送拍人",12),record.lot,truncate(record.itemName,34),auctionPeriod(record),auctionDate,identity.phone || record.sellerPhone || "手机号待补"];
       values.forEach((value, columnIndex) => context.fillText(String(value), columns[columnIndex].x + 10, y + 37));
     });
     context.fillStyle = "#7b898f";
@@ -4328,6 +4380,10 @@
   $("#export-preauction-image").addEventListener("click", exportPreauctionImage);
 
   const startupSanitizedCount = sanitizeLoadedState();
+  const startupBuyerScopeRepair = repairUnscopedBuyerBackfillImport();
+  if (startupBuyerScopeRepair.removed) {
+    audit("自动清理误导入订单", `移除 ${startupBuyerScopeRepair.removed} 条非当前工作台订单，保留并回补 ${startupBuyerScopeRepair.matched} 件原有拍品`, {undoable:false});
+  }
 
   const startup0806Repair = MxiqiWorkflow.repairKnown0806Import(state.records);
   state.records = startup0806Repair.records;
@@ -4471,7 +4527,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=51", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=52", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
@@ -4524,6 +4580,8 @@
   renderCollectorPanel();
   if (startupSanitizedCount || startupQuarantinedCount) {
     notify(`检测到异常导入数据，已自动隔离 ${startupSanitizedCount + startupQuarantinedCount} 条并恢复页面`, "error");
+  } else if (startupBuyerScopeRepair.removed) {
+    notify(`已自动清理 ${startupBuyerScopeRepair.removed} 条误导入订单，工作台已恢复为原有拍品`);
   } else if (startup0806Repair.periodCorrected || startup0806Repair.settlementCleared || startup0806Repair.birthdayPending) {
     notify(`已自动修复 0806 数据：改为第78期 ${startup0806Repair.periodCorrected} 件，清除串入成交 ${startup0806Repair.settlementCleared} 件，生日月份待补 ${startup0806Repair.birthdayPending} 件`);
   } else if (startupReturnReview.reviewRequired) {
