@@ -261,7 +261,7 @@ test("hidden local and connector copies of the same auction Lot are merged", () 
   assert.equal(merged.mxiqiOrderId, "order-57");
 });
 
-test("period settlement matching handles unpaid first and keeps the fixed return marker", () => {
+test("period settlement matching keeps unpaid items in normal flow until the operator chooses", () => {
   const records = [
     {id:"p75",lot:48,itemName:"同名拍品",projectName:"第75期",sellerWechat:"甲"},
     {id:"p76",lot:48,itemName:"同名拍品",projectName:"第76期",sellerWechat:"乙"},
@@ -270,9 +270,11 @@ test("period settlement matching handles unpaid first and keeps the fixed return
   const pending = [{lot:48,itemName:"同名拍品",projectName:"第75期",paymentStatus:"待付款"}];
   const result = workflow.applyAuctionSettlementResults(records,deals,pending,"第75期","2026-07-29T12:00:00.000Z");
   assert.equal(result.unpaid, 1);
-  assert.equal(result.records.find((item) => item.id === "p75").unpaidReturn, true);
-  assert.equal(result.records.find((item) => item.id === "p75").returnDisposition, "拖回/等待");
-  assert.equal(workflow.settlementGross(result.records.find((item) => item.id === "p75")), 0);
+  assert.equal(result.records.find((item) => item.id === "p75").unpaidReturn, false);
+  assert.equal(result.records.find((item) => item.id === "p75").returnDisposition, "");
+  assert.equal(result.records.find((item) => item.id === "p75").finalOutcome, "成交");
+  assert.equal(workflow.recordStatus(result.records.find((item) => item.id === "p75")), "待付款");
+  assert.equal(workflow.settlementGross(result.records.find((item) => item.id === "p75")), 49288);
   assert.equal(result.records.find((item) => item.id === "p76").unpaidReturn, undefined);
 });
 
@@ -326,7 +328,7 @@ test("unconfirmed return choices are never treated as an operator decision", () 
   assert.equal(reviewed.records[0].returnDispositionConfirmedAt, "");
 });
 
-test("settlement sync resets an unconfirmed send-back choice to manual review", () => {
+test("settlement sync resets an unconfirmed send-back choice to normal flow", () => {
   const records = [{
     id:"auto-return",lot:6,itemName:"拍品",projectName:"第78期",finalOutcome:"拖回",
     finalPrice:1000,paymentStatus:"待付款",unpaidReturn:true,returnDisposition:"拖回/发回",
@@ -334,7 +336,9 @@ test("settlement sync resets an unconfirmed send-back choice to manual review", 
   const deals = [{lot:6,itemName:"拍品",auctionPeriodOverride:"第78期",finalPrice:1000,finalOutcome:"成交"}];
   const pending = [{lot:6,itemName:"拍品",auctionPeriodOverride:"第78期",paymentStatus:"待付款"}];
   const result = workflow.applyAuctionSettlementResults(records,deals,pending,"第78期","2026-08-07T09:00:00.000Z");
-  assert.equal(result.records[0].returnDisposition, "拖回/等待");
+  assert.equal(result.records[0].returnDisposition, "");
+  assert.equal(result.records[0].finalOutcome, "成交");
+  assert.equal(result.records[0].unpaidReturn, false);
   assert.equal(result.records[0].returnDispositionConfirmedAt, "");
 });
 
