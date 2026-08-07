@@ -219,6 +219,16 @@ test("collector refresh prioritizes the selected period settlement catalog", () 
   assert.match(html, /优先读取该期完整成交目录/);
 });
 
+test("connected browsers automatically recover pending settlement periods", () => {
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  assert.match(app, /function scheduleAutomaticSettlementRecovery/);
+  assert.match(app, /function runAutomaticSettlementRecovery/);
+  assert.match(app, /if \(result\.loggedIn\) scheduleAutomaticSettlementRecovery\(\)/);
+  assert.match(app, /if \(key === "auction"\) scheduleAutomaticSettlementRecovery/);
+  assert.match(app, /void checkRealConnection\(\{quiet:true\}\)/);
+  assert.match(app, /runSettlementSync\(\{period,automatic:true\}\)/);
+});
+
 test("settlement actions are gated until period unpaid and return work is complete", () => {
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");

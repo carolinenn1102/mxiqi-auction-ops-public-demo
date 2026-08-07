@@ -143,7 +143,14 @@
   const customerForm = $("#customer-form");
   let pendingBackupFile = null;
   const logisticsRuntime = {checked:false,checking:false,installed:false,version:"",capabilities:[],providers:{},source:"gateway",lastError:""};
-  const collectorRuntime = {running:false,busy:false,nextRunAt:0,lastActivityAt:Date.now()};
+  const collectorRuntime = {
+    running:false,
+    busy:false,
+    nextRunAt:0,
+    lastActivityAt:Date.now(),
+    autoSettlementTimer:0,
+    autoSettlementAttempts:new Set(),
+  };
 
   function loadArray(key, fallback) {
     try {
@@ -2074,6 +2081,7 @@
       save();
       renderConnectionPanel();
       renderCollectorPanel();
+      if (result.loggedIn) scheduleAutomaticSettlementRecovery();
       if (!quiet) notify(result.loggedIn ? "麦稀奇真实登录已连接，可以开始同步" : "采集助手已安装，请先在麦稀奇官网登录", result.loggedIn ? "success" : "info");
       return result.loggedIn;
     } catch (error) {
@@ -2151,6 +2159,7 @@
       state.selected.clear();
       save();
       render();
+      scheduleAutomaticSettlementRecovery();
       connectionDialog.close("synced");
       notify("登录成功，麦稀奇真实待发货数据已显示在项目表格中", "success");
       return true;
@@ -2276,8 +2285,60 @@
     }
   }
 
-  async function runSettlementSync() {
-    const period = state.filters.auction;
+  function pendingSettlementPeriods(preferredPeriod = "") {
+    const periods = [...new Set(state.records
+      .filter(isAuctionResultPending)
+      .map(auctionPeriod)
+      .filter(Boolean))]
+      .sort((a, b) => Number(String(b).match(/\d+/)?.[0] || 0) - Number(String(a).match(/\d+/)?.[0] || 0));
+    if (preferredPeriod && periods.includes(preferredPeriod)) {
+      return [preferredPeriod, ...periods.filter((period) => period !== preferredPeriod)];
+    }
+    return periods;
+  }
+
+  function scheduleAutomaticSettlementRecovery({delay = 400, preferredPeriod = state.filters.auction} = {}) {
+    if (state.connection.status !== "connected") return false;
+    const pending = pendingSettlementPeriods(preferredPeriod)
+      .filter((period) => !collectorRuntime.autoSettlementAttempts.has(period));
+    if (!pending.length) return false;
+    if (collectorRuntime.autoSettlementTimer) window.clearTimeout(collectorRuntime.autoSettlementTimer);
+    collectorRuntime.autoSettlementTimer = window.setTimeout(() => {
+      collectorRuntime.autoSettlementTimer = 0;
+      void runAutomaticSettlementRecovery(preferredPeriod);
+    }, delay);
+    return true;
+  }
+
+  async function runAutomaticSettlementRecovery(preferredPeriod = state.filters.auction) {
+    if (state.connection.status !== "connected") return false;
+    if (collectorRuntime.busy) {
+      scheduleAutomaticSettlementRecovery({delay:800,preferredPeriod});
+      return false;
+    }
+    const periods = pendingSettlementPeriods(preferredPeriod)
+      .filter((period) => !collectorRuntime.autoSettlementAttempts.has(period));
+    if (!periods.length) return false;
+    const completed = [];
+    for (const period of periods) {
+      if (state.connection.status !== "connected") break;
+      collectorRuntime.autoSettlementAttempts.add(period);
+      const pendingBefore = state.records.filter((record) => auctionPeriod(record) === period && isAuctionResultPending(record)).length;
+      const synced = await runSettlementSync({period,automatic:true});
+      if (!synced) break;
+      const pendingAfter = state.records.filter((record) => auctionPeriod(record) === period && isAuctionResultPending(record)).length;
+      if (pendingAfter) {
+        notify(`${period}自动同步后仍有 ${pendingAfter} 件未匹配，请打开采集控制手动重试`, "error");
+        break;
+      }
+      collectorRuntime.autoSettlementAttempts.delete(period);
+      if (pendingBefore) completed.push(period);
+    }
+    if (completed.length) notify(`已自动补同步 ${completed.join("、")} 成交结果`, "success");
+    return completed.length > 0;
+  }
+
+  async function runSettlementSync({period = state.filters.auction, automatic = false} = {}) {
     if (!period) {
       notify("请先选择要结算的拍卖期数，再同步本期成交记录", "error");
       return false;
@@ -2349,10 +2410,12 @@
       state.collector.lastResult = `${merged.period}成交目录同步完成：匹配 ${merged.matched} 件，新增 ${merged.added} 件${buyerText}，未付款拖回 ${merged.unpaid} 件${repairedText}`;
       audit("同步本期成交记录", `${merged.period} · 匹配 ${merged.matched} · 新增 ${merged.added} · 网页订单回补 ${orderMerge.matched + orderMerge.added} · 未付款拖回 ${merged.unpaid}${repairedText}`);
       save();
-      state.stage = "settlement";
-      state.selected.clear();
+      if (!automatic) {
+        state.stage = "settlement";
+        state.selected.clear();
+      }
       render();
-      notify(state.collector.lastResult, "success");
+      if (!automatic) notify(state.collector.lastResult, "success");
       return true;
     } catch (error) {
       state.collector.lastResult = `结算同步失败：${error.message || "未知错误"}`;
@@ -2689,7 +2752,12 @@
   $$('[data-close-dialog]').forEach((button) => button.addEventListener("click", () => button.closest("dialog")?.close("cancel")));
   $("#search").addEventListener("input", (event) => { state.query = event.target.value; render(); });
   [["#filter-seller","seller"],["#filter-auction","auction"],["#filter-status","status"],["#filter-shipping","shipping"]].forEach(([selector, key]) => {
-    $(selector).addEventListener("change", (event) => { state.filters[key] = event.target.value; state.selected.clear(); render(); });
+    $(selector).addEventListener("change", (event) => {
+      state.filters[key] = event.target.value;
+      state.selected.clear();
+      render();
+      if (key === "auction") scheduleAutomaticSettlementRecovery({preferredPeriod:state.filters.auction});
+    });
   });
   $("#clear-filters").addEventListener("click", () => {
     state.filters = {seller:"",auction:"",status:"",shipping:""};
@@ -4006,7 +4074,7 @@
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
-      image.src = `./zhenzhenpu-logo.jpg?v=48`;
+      image.src = `./zhenzhenpu-logo.jpg?v=49`;
     });
     return checklistLogoPromise;
   }
@@ -4366,7 +4434,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=48", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=49", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
@@ -4425,5 +4493,8 @@
     notify(`已将 ${startupReturnReview.reviewRequired} 件拖回拍品改为等待人工确认`);
   } else if (startupConsignorRepair.restored) {
     notify(`已自动恢复 ${startupConsignorRepair.restored} 件拍品的送拍人资料`);
+  }
+  if (state.connection.status === "connected" || state.connection.connectorInstalled) {
+    void checkRealConnection({quiet:true});
   }
 })();

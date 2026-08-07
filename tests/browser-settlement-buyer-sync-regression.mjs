@@ -29,7 +29,7 @@ try {
       body:`
         globalThis.__settlementSyncScopes = [];
         globalThis.MxiqiConnector = Object.freeze({
-          ping:async () => ({ok:true,version:"1.9.2",capabilities:["syncOrders","syncAuctionDeals"]}),
+          ping:async () => ({ok:true,loggedIn:true,version:"1.9.2",capabilities:["syncOrders","syncAuctionDeals"]}),
           syncOrders:async ({scope}) => {
             globalThis.__settlementSyncScopes.push(scope);
             if (scope !== "waitconfirm") return {requiresLogin:false,records:[],pages:1,totalPages:1};
@@ -60,10 +60,10 @@ try {
   }, {recordsKey,connectionKey});
   await page.goto(siteUrl, {waitUntil:"networkidle"});
   await page.selectOption("#filter-auction", "第78期");
-  assert.equal(await page.locator("#sync-settlement-orders").isEnabled(), true, "period selection should immediately enable settlement sync");
-  await page.click('button[data-stage="settlement"]');
-  await page.click("#sync-settlement-orders");
-  await page.waitForFunction(() => document.querySelector("#toast")?.textContent?.includes("网页订单回补"), null, {timeout:20000});
+  await page.waitForFunction((recordsKey) => {
+    const records = JSON.parse(localStorage.getItem(recordsKey) || "[]");
+    return records.find((record) => record.id === "local-78-lot-8")?.buyerName === "网页买家";
+  }, recordsKey, {timeout:20000});
 
   const result = await page.evaluate((recordsKey) => ({
     records:JSON.parse(localStorage.getItem(recordsKey) || "[]"),
