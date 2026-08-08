@@ -4730,7 +4730,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=57", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=58", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
