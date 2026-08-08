@@ -120,6 +120,27 @@
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const currency = new Intl.NumberFormat("zh-CN", {style:"currency",currency:"CNY",maximumFractionDigits:2});
+  function settlementOrderValue(record) {
+    const explicit = Number(record?.settlementOrder || 0);
+    if (Number.isFinite(explicit) && explicit > 0) return explicit;
+    const timestamp = Date.parse(record?.settledAt || "");
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+
+  let latestSettlementOrder = Math.max(0, ...state.records.map(settlementOrderValue));
+
+  function createSettlementMarker() {
+    const restoredOrder = Math.max(0, ...state.records.map(settlementOrderValue));
+    latestSettlementOrder = Math.max(Date.now(), latestSettlementOrder + 1, restoredOrder + 1);
+    return {settledAt:new Date(latestSettlementOrder).toISOString(),settlementOrder:latestSettlementOrder};
+  }
+
+  function settlementGroupOrder(records) {
+    if (!records.length || records.some((record) => !record.settled)) return 0;
+    const values = records.map(settlementOrderValue).filter((value) => value > 0);
+    return values.length ? Math.max(...values) : 0;
+  }
+
   function settlementAdjustmentSummaryLabel(amount) {
     return Number(amount || 0) < 0 ? "返佣合计" : "佣金合计";
   }
@@ -876,6 +897,7 @@
       record.promotion = "";
       record.settled = false;
       record.settledAt = "";
+      record.settlementOrder = 0;
       return record;
     }
     if (record.settled && !force) return record;
@@ -1235,8 +1257,9 @@
       const identity = missingSeller ? {key:"__missing__",wechat:"待补送拍人",phone:""} : consignorIdentity(record);
       const profile = directory.get(identity.key);
       const seller = profile?.wechat || identity.wechat;
-      const current = grouped.get(identity.key) || {key:identity.key,seller,phone:profile?.phone || identity.phone || record.sellerPhone || "",count:0,gross:0,payable:0,pending:0};
+      const current = grouped.get(identity.key) || {key:identity.key,seller,phone:profile?.phone || identity.phone || record.sellerPhone || "",count:0,gross:0,payable:0,pending:0,records:[]};
       if (!current.phone && record.sellerPhone) current.phone = record.sellerPhone;
+      current.records.push(record);
       current.count += 1;
       current.gross += settlementGross(record);
       current.payable += Number(record.settlementAmount || 0);
@@ -1245,7 +1268,18 @@
     });
     const entries = [...grouped.values()]
       .filter((item) => state.settlementView !== "unsettled" || item.pending > 0)
-      .sort((a, b) => Number(b.pending > 0) - Number(a.pending > 0) || b.pending - a.pending || b.payable - a.payable);
+      .map((item) => ({...item,settlementOrder:settlementGroupOrder(item.records)}))
+      .sort((a, b) => {
+        const aCompleted = a.pending === 0;
+        const bCompleted = b.pending === 0;
+        if (aCompleted && bCompleted) {
+          if (a.settlementOrder && b.settlementOrder && a.settlementOrder !== b.settlementOrder) return a.settlementOrder - b.settlementOrder;
+          if (a.settlementOrder !== b.settlementOrder) return Number(Boolean(b.settlementOrder)) - Number(Boolean(a.settlementOrder));
+          return a.seller.localeCompare(b.seller, "zh-CN");
+        }
+        if (aCompleted !== bCompleted) return aCompleted ? -1 : 1;
+        return b.pending - a.pending || b.payable - a.payable || a.seller.localeCompare(b.seller, "zh-CN");
+      });
     $("#seller-summary-list").innerHTML = entries.length ? entries.map((item) => `<button class="seller-summary-item ${item.pending ? "has-unsettled" : ""} ${state.settlementScope.seller === item.key ? "active" : ""}" data-seller-summary="${esc(item.key === "__missing__" ? "" : item.key)}"><span><b>${esc(item.seller)}</b><small>${esc(item.phone || "手机号待补")} · ${item.count} 件 · ${item.pending} 件待结账 · 成交 ${currency.format(item.gross)}</small></span><strong>${item.pending ? `${item.pending} 件未结` : "已结清"}<small>${currency.format(item.payable)}</small></strong></button>`).join("") : '<div class="audit-empty">当前范围内没有未结账送拍人</div>';
   }
 
@@ -3020,10 +3054,12 @@
       try {
         const group = settlementGroups(visibleRecords()).find((item) => item.key === settlementSettle.dataset.settlementSettle);
         let count = 0;
+        const marker = createSettlementMarker();
         group?.records.filter((record) => !record.settled).forEach((record) => {
           recalculateRecord(record, true);
           record.settled = true;
-          record.settledAt = new Date().toISOString();
+          record.settledAt = marker.settledAt;
+          record.settlementOrder = marker.settlementOrder;
           record.settlementNote = record.settlementNote || "网页按送拍人整组结账";
           count += 1;
         });
@@ -3104,12 +3140,15 @@
       if (record.settled) {
         record.settled = false;
         record.settledAt = "";
+        record.settlementOrder = 0;
         audit("撤销结账", `Lot ${record.lot}`);
       } else {
         if (!requireSettlementReady()) return;
         recalculateRecord(record, true);
+        const marker = createSettlementMarker();
         record.settled = true;
-        record.settledAt = new Date().toISOString();
+        record.settledAt = marker.settledAt;
+        record.settlementOrder = marker.settlementOrder;
         record.settlementNote = record.settlementNote || "网页确认结账";
         audit("确认结账", `Lot ${record.lot} · ${currency.format(record.settlementAmount)}`);
       }
@@ -3155,10 +3194,13 @@
   $("#batch-settle").addEventListener("click", () => {
     if (!requireSettlementReady()) return;
     let count = 0;
-    state.records.filter((item) => state.selected.has(item.id) && isSettlementEligible(item) && !item.settled).forEach((item) => {
+    const candidates = state.records.filter((item) => state.selected.has(item.id) && isSettlementEligible(item) && !item.settled);
+    const marker = candidates.length ? createSettlementMarker() : null;
+    candidates.forEach((item) => {
       recalculateRecord(item, true);
       item.settled = true;
-      item.settledAt = new Date().toISOString();
+      item.settledAt = marker.settledAt;
+      item.settlementOrder = marker.settlementOrder;
       item.settlementNote = item.settlementNote || "网页批量确认结账";
       count += 1;
     });
@@ -3539,7 +3581,14 @@
       }
     }
     recalculateRecord(record, true);
-    if (record.settled) record.settledAt = existing.settledAt || new Date().toISOString();
+    if (record.settled) {
+      const marker = existing.settled ? null : createSettlementMarker();
+      record.settledAt = existing.settledAt || marker?.settledAt || record.settledAt || "";
+      record.settlementOrder = Number(existing.settlementOrder || 0) || marker?.settlementOrder || settlementOrderValue(record);
+    } else {
+      record.settledAt = "";
+      record.settlementOrder = 0;
+    }
     if (duplicateIds.size) {
       state.records = state.records.filter((item) => !duplicateIds.has(item.id));
       remapRecordReferences(Object.fromEntries([...duplicateIds].map((id) => [id, record.id])));
@@ -4676,7 +4725,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=56", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=57", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
