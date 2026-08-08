@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import http from "node:http";
-import {createSfOrder, findSfOrder, searchSfOrder, sfConfiguration} from "./sf-adapter.mjs";
+import {cancelSfOrder, createSfOrder, createSfWaybillPdf, findSfOrder, searchSfOrder, sfConfiguration} from "./sf-adapter.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_ROOT = path.resolve(process.env.PUBLIC_ROOT || path.join(HERE, ".."));
@@ -90,7 +90,7 @@ function corsHeaders(request) {
   return origin ? {
     "access-control-allow-origin":origin,
     "access-control-allow-headers":"content-type,x-logistics-operator-key,x-idempotency-key",
-    "access-control-allow-methods":"GET,POST,OPTIONS",
+    "access-control-allow-methods":"GET,POST,DELETE,OPTIONS",
     vary:"Origin",
   } : {};
 }
@@ -229,6 +229,50 @@ async function handleSearch(request, response, orderId) {
   }
 }
 
+async function handleCancel(request, response, orderId) {
+  const headers = corsHeaders(request);
+  if (exceedsRateLimit(request)) {
+    return json(response, 429, {ok:false,error:"操作过于频繁，请稍后重试"}, {...headers,"retry-after":"60"});
+  }
+  if (!safeEqual(request.headers["x-logistics-operator-key"], process.env.LOGISTICS_OPERATOR_KEY)) {
+    return json(response, 401, {ok:false,error:"物流操作授权码无效"}, headers);
+  }
+  const provider = providerStatus().sf;
+  if (!provider.configured) return json(response, 503, {ok:false,error:provider.reason}, headers);
+  try {
+    const result = await cancelSfOrder(orderId);
+    return json(response, 200, {ok:true,carrier:"sf",...result}, headers);
+  } catch (error) {
+    return json(response, 502, {ok:false,error:text(error.message) || "顺丰订单取消失败"}, headers);
+  }
+}
+
+async function handleCreateLabel(request, response) {
+  const headers = corsHeaders(request);
+  if (exceedsRateLimit(request)) {
+    return json(response, 429, {ok:false,error:"操作过于频繁，请稍后重试"}, {...headers,"retry-after":"60"});
+  }
+  if (!safeEqual(request.headers["x-logistics-operator-key"], process.env.LOGISTICS_OPERATOR_KEY)) {
+    return json(response, 401, {ok:false,error:"物流操作授权码无效"}, headers);
+  }
+  const provider = providerStatus().sf;
+  if (!provider.configured) return json(response, 503, {ok:false,error:provider.reason}, headers);
+  let payload;
+  try {
+    payload = await readJson(request);
+  } catch (error) {
+    return json(response, 400, {ok:false,error:error.message}, headers);
+  }
+  const waybill = text(payload.waybill);
+  if (!waybill) return json(response, 400, {ok:false,error:"缺少顺丰运单号"}, headers);
+  try {
+    const result = await createSfWaybillPdf(waybill);
+    return json(response, 200, {ok:true,carrier:"sf",...result}, headers);
+  } catch (error) {
+    return json(response, 502, {ok:false,error:text(error.message) || "顺丰面单生成失败"}, headers);
+  }
+}
+
 const CONTENT_TYPES = {
   ".html":"text/html; charset=utf-8",
   ".js":"text/javascript; charset=utf-8",
@@ -294,16 +338,22 @@ export function createServer() {
         ok:true,
         online:true,
         version:"1.1.0",
-        capabilities:["createLogisticsOrder","queryLogisticsOrder"],
+        capabilities:["createLogisticsOrder","queryLogisticsOrder","cancelLogisticsOrder","createWaybillPdf"],
         providers:providerStatus(),
       }, corsHeaders(request));
     }
     if (url.pathname === "/api/logistics/orders" && request.method === "POST") {
       return handleCreate(request, response);
     }
+    if (url.pathname === "/api/logistics/labels" && request.method === "POST") {
+      return handleCreateLabel(request, response);
+    }
     const orderSearch = url.pathname.match(/^\/api\/logistics\/orders\/([^/]+)$/);
     if (orderSearch && request.method === "GET") {
       return handleSearch(request, response, decodeURIComponent(orderSearch[1]));
+    }
+    if (orderSearch && request.method === "DELETE") {
+      return handleCancel(request, response, decodeURIComponent(orderSearch[1]));
     }
     if (url.pathname.startsWith("/api/")) return json(response, 404, {ok:false,error:"接口不存在"}, corsHeaders(request));
     return serveStatic(request, response, url.pathname);

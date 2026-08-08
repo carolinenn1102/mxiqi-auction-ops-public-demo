@@ -36,6 +36,8 @@ test("health reports provider readiness without exposing credentials", async () 
   const payload = await response.json();
   assert.equal(payload.online, true);
   assert.ok(payload.capabilities.includes("queryLogisticsOrder"));
+  assert.ok(payload.capabilities.includes("cancelLogisticsOrder"));
+  assert.ok(payload.capabilities.includes("createWaybillPdf"));
   assert.equal(payload.providers.cainiao.configured, false);
   assert.equal(payload.providers.sf.environment, "sandbox");
   assert.equal("operatorKey" in payload, false);
@@ -44,6 +46,20 @@ test("health reports provider readiness without exposing credentials", async () 
 
 test("order query also requires operator authorization", async () => {
   const response = await fetch(`${baseUrl}/api/logistics/orders/ORDER-001`);
+  assert.equal(response.status, 401);
+});
+
+test("order cancellation also requires operator authorization", async () => {
+  const response = await fetch(`${baseUrl}/api/logistics/orders/ORDER-001`, {method:"DELETE"});
+  assert.equal(response.status, 401);
+});
+
+test("waybill PDF generation also requires operator authorization", async () => {
+  const response = await fetch(`${baseUrl}/api/logistics/labels`, {
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({waybill:"SF1234567890123"}),
+  });
   assert.equal(response.status, 401);
 });
 
