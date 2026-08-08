@@ -244,6 +244,63 @@ export async function searchSfOrder(orderId, {env = process.env, fetchImpl = fet
   return normalizeSfReceipt(parseSfEnvelope(payload, "订单查询"));
 }
 
+function parseSfPrintEnvelope(payload) {
+  if (!payload || payload.apiResultCode !== "A1000") {
+    throw new Error(`顺丰面单接口拒绝请求：${text(payload?.apiErrorMsg || payload?.apiResultCode || "未知错误")}`);
+  }
+  let result;
+  try {
+    result = typeof payload.apiResultData === "string" ? JSON.parse(payload.apiResultData) : payload.apiResultData;
+  } catch {
+    throw new Error("顺丰面单接口返回了无法识别的数据");
+  }
+  if (!result?.success) throw new Error(`顺丰面单生成失败：${text(result?.errorMsg || result?.message || "未知错误")}`);
+  const files = Array.isArray(result?.obj?.files) ? result.obj.files : [];
+  if (!files.some((file) => text(file?.url))) throw new Error("顺丰面单生成成功，但未返回 PDF 文件地址");
+  return {
+    requestId:text(result.requestId),
+    templateCode:text(result?.obj?.templateCode),
+    files:files.map((file) => ({
+      waybill:text(file?.waybillNo),
+      url:text(file?.url),
+      token:text(file?.token),
+      pageNo:Number(file?.pageNo || 0),
+      pageCount:Number(file?.pageCount || 0),
+    })),
+  };
+}
+
+export async function cancelSfOrder(orderId, {env = process.env, fetchImpl = fetch, now = new Date()} = {}) {
+  const configuration = configuredSf(env);
+  const reference = text(orderId).slice(0, 64);
+  if (!reference) throw new Error("缺少顺丰客户订单号");
+  const payload = await callSf("EXP_RECE_UPDATE_ORDER", {
+    dealType:2,
+    language:"zh-CN",
+    orderId:reference,
+    totalWeight:1,
+    waybillNoInfoList:[],
+  }, configuration, {fetchImpl, now});
+  return {
+    ...normalizeSfReceipt(parseSfEnvelope(payload, "取消订单")),
+    cancelled:true,
+  };
+}
+
+export async function createSfWaybillPdf(waybill, {env = process.env, fetchImpl = fetch, now = new Date()} = {}) {
+  const configuration = configuredSf(env);
+  const number = text(waybill).slice(0, 32);
+  if (!number) throw new Error("缺少顺丰运单号");
+  const payload = await callSf("COM_RECE_CLOUD_PRINT_WAYBILLS", {
+    templateCode:`fm_210_standard_${configuration.clientCode}`,
+    version:"2.0",
+    fileType:"pdf",
+    sync:true,
+    documents:[{masterWaybillNo:number}],
+  }, configuration, {fetchImpl, now});
+  return parseSfPrintEnvelope(payload);
+}
+
 export async function findSfOrder(orderId, options = {}) {
   try {
     return await searchSfOrder(orderId, options);

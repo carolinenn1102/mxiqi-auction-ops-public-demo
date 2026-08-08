@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildSfOrder,
+  cancelSfOrder,
   createSfDigest,
   createSfOrder,
+  createSfWaybillPdf,
   findSfOrder,
   nextPickupTime,
   searchSfOrder,
@@ -117,6 +119,73 @@ test("queries an existing order by the official customer order number", async ()
   assert.deepEqual(JSON.parse(captured.form.get("msgData")), {orderId:"ORDER-001",searchType:"1",language:"zh_CN"});
   assert.equal(receipt.waybill, "SF1234567890123");
   assert.equal(receipt.providerStatus, "2");
+});
+
+test("cancels an existing order through the official update service", async () => {
+  let captured;
+  const receipt = await cancelSfOrder("ORDER-001", {
+    env:completeEnv,
+    now:new Date("2026-08-01T00:00:00.000Z"),
+    fetchImpl:async (url, options) => {
+      captured = {url,form:new URLSearchParams(options.body)};
+      return {
+        ok:true,
+        status:200,
+        text:async () => JSON.stringify({
+          apiResultCode:"A1000",
+          apiResultData:JSON.stringify({
+            success:true,errorCode:"S0000",
+            msgData:{orderId:"ORDER-001",resStatus:2,waybillNoInfoList:[{waybillNo:"SF1234567890123"}]},
+          }),
+        }),
+      };
+    },
+  });
+  assert.equal(captured.url, completeEnv.SF_API_BASE);
+  assert.equal(captured.form.get("serviceCode"), "EXP_RECE_UPDATE_ORDER");
+  assert.deepEqual(JSON.parse(captured.form.get("msgData")), {
+    dealType:2,
+    language:"zh-CN",
+    orderId:"ORDER-001",
+    totalWeight:1,
+    waybillNoInfoList:[],
+  });
+  assert.equal(receipt.waybill, "SF1234567890123");
+  assert.equal(receipt.cancelled, true);
+});
+
+test("creates a PDF waybill through the official cloud print service", async () => {
+  let captured;
+  const result = await createSfWaybillPdf("SF1234567890123", {
+    env:completeEnv,
+    now:new Date("2026-08-01T00:00:00.000Z"),
+    fetchImpl:async (url, options) => {
+      captured = {url,form:new URLSearchParams(options.body)};
+      return {
+        ok:true,
+        status:200,
+        text:async () => JSON.stringify({
+          apiResultCode:"A1000",
+          apiResultData:JSON.stringify({
+            success:true,
+            requestId:"PRINT-001",
+            obj:{templateCode:"fm_210_standard_client-code",files:[{waybillNo:"SF1234567890123",url:"https://sf.example.test/label.pdf",token:"token"}]},
+          }),
+        }),
+      };
+    },
+  });
+  assert.equal(captured.url, completeEnv.SF_API_BASE);
+  assert.equal(captured.form.get("serviceCode"), "COM_RECE_CLOUD_PRINT_WAYBILLS");
+  assert.deepEqual(JSON.parse(captured.form.get("msgData")), {
+    templateCode:"fm_210_standard_client-code",
+    version:"2.0",
+    fileType:"pdf",
+    sync:true,
+    documents:[{masterWaybillNo:"SF1234567890123"}],
+  });
+  assert.equal(result.requestId, "PRINT-001");
+  assert.equal(result.files[0].url, "https://sf.example.test/label.pdf");
 });
 
 test("treats an explicit no-order query response as safe to create", async () => {

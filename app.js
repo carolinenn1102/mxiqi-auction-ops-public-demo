@@ -453,7 +453,10 @@
     const directProfile = state.customers[wechat] || {};
     const phone = normalizeCustomerPhone(source.sellerPhone || source.phone || directProfile.phone);
     const phoneProfile = customerProfileByPhone(phone);
-    const name = phoneProfile?.wechat || wechat || "待补送拍人";
+    // A newly imported non-blank name is the current display name. The phone
+    // still joins historical aliases, but an older profile must not rename the
+    // latest table row back to its previous alias.
+    const name = wechat || phoneProfile?.wechat || "待补送拍人";
     return {key:phone ? `phone:${phone}` : `wechat:${name}`,wechat:name,phone};
   }
 
@@ -518,9 +521,11 @@
     state.assets.forEach((asset) => ensure(asset).assets.push(asset));
     return [...groups.values()].filter((group) => group.aliases.size).map((group) => {
       const profiles = group.profiles.sort((a, b) => String(b.updatedAt || b.lastContactedAt || "").localeCompare(String(a.updatedAt || a.lastContactedAt || "")));
-      const latestRecord = [...group.records].sort((a, b) => String(b.contactedAt || "").localeCompare(String(a.contactedAt || "")))[0];
+      const latestRecord = [...group.records]
+        .filter((record) => MxiqiWorkflow.hasConsignorName(record.sellerWechat))
+        .sort((a, b) => String(b.importedAt || b.contactedAt || "").localeCompare(String(a.importedAt || a.contactedAt || "")))[0];
       const primary = profiles[0];
-      const wechat = String(primary?.wechat || latestRecord?.sellerWechat || [...group.aliases][0]);
+      const wechat = String(latestRecord?.sellerWechat || primary?.wechat || [...group.aliases][0]);
       return {
         key:group.key,
         wechat,

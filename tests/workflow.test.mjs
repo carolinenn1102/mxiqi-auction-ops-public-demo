@@ -146,6 +146,28 @@ test("blank import cells never overwrite existing non-blank business data", () =
   assert.equal(merged.sellerPhone, "13900000001");
 });
 
+test("a later non-blank import replaces the previous consignor name for the same auction lot", () => {
+  const merged = workflow.mergeImportedRecord({
+    id:"existing-consignor-alias",
+    lot:6,
+    itemName:"2015年羊年生肖小银章",
+    projectName:"第79期",
+    sellerWechat:"四维 12月",
+    sellerPhone:"15885513177",
+    importedAt:"2026-08-08T10:00:00.000Z",
+  }, {
+    lot:6,
+    itemName:"2015年羊年生肖小银章",
+    projectName:"第79期",
+    sellerWechat:"最新表送拍人名称",
+    sellerPhone:"15885513177",
+    importedAt:"2026-08-09T10:00:00.000Z",
+  });
+  assert.equal(merged.sellerWechat, "最新表送拍人名称");
+  assert.equal(merged.sellerPhone, "15885513177");
+  assert.equal(merged.importedAt, "2026-08-09T10:00:00.000Z");
+});
+
 test("manual paid normal flow clears a cancelled unpaid-return blocker", () => {
   const existing = {
     id:"cancelled",
