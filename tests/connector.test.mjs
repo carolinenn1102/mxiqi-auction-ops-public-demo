@@ -9,6 +9,17 @@ const root = path.resolve(import.meta.dirname, "..");
 const extensionRoot = path.join(root, "mxiqi-connector-extension");
 const parser = require(path.join(extensionRoot, "mxiqi-parser.js"));
 
+test("commission logic uses the current cache-busted asset in the page and service worker", () => {
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
+  const htmlVersion = html.match(/commission-core\.js\?v=(\d+)/)?.[1];
+  const workerVersion = serviceWorker.match(/commission-core\.js\?v=(\d+)/)?.[1];
+
+  assert.equal(htmlVersion, "59");
+  assert.equal(workerVersion, htmlVersion);
+  assert.match(serviceWorker, /CACHE_NAME = "mxiqi-ops-demo-v59"/);
+});
+
 test("normalizes platform order states", () => {
   assert.deepEqual(parser.normalizeOrderStatus("待发货"), {
     paymentStatus: "已付款",
