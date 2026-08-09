@@ -306,7 +306,7 @@ export async function findSfOrder(orderId, options = {}) {
     return await searchSfOrder(orderId, options);
   } catch (error) {
     const message = text(error?.message);
-    const isMissingOrder = /(?:未下单|未找到|不存在|无此订单|查询不到|没有查询到)/.test(message);
+    const isMissingOrder = /(?:未下单|未找到|找不到|不存在|无此订单|查询不到|没有查询到)/.test(message);
     if (isMissingOrder) return null;
     throw error;
   }

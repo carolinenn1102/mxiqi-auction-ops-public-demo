@@ -208,6 +208,26 @@ test("treats an explicit no-order query response as safe to create", async () =>
   assert.equal(receipt, null);
 });
 
+test("accepts the production no-order wording as a safe first-order lookup", async () => {
+  const receipt = await findSfOrder("ORDER-NOT-YET-CREATED", {
+    env:completeEnv,
+    now:new Date("2026-08-01T00:00:00.000Z"),
+    fetchImpl:async () => ({
+      ok:true,
+      status:200,
+      text:async () => JSON.stringify({
+        apiResultCode:"A1000",
+        apiResultData:JSON.stringify({
+          success:false,
+          errorCode:"E0001",
+          errorMsg:"找不到该订单",
+        }),
+      }),
+    }),
+  });
+  assert.equal(receipt, null);
+});
+
 test("does not turn an authorization error into a duplicate order", async () => {
   await assert.rejects(
     () => findSfOrder("ORDER-001", {
