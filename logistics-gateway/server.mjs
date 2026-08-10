@@ -4,6 +4,7 @@ import path from "node:path";
 import {fileURLToPath} from "node:url";
 import http from "node:http";
 import {cancelSfOrder, createSfOrder, createSfWaybillPdf, findSfOrder, searchSfOrder, sfConfiguration} from "./sf-adapter.mjs";
+import {createOrderStore} from "./order-store.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_ROOT = path.resolve(process.env.PUBLIC_ROOT || path.join(HERE, ".."));
@@ -15,9 +16,14 @@ const activeOrders = new Map();
 const requestWindows = new Map();
 const RATE_WINDOW_MS = 60_000;
 const RATE_LIMIT = 30;
+const orderStore = createOrderStore(DATA_ROOT);
 
 function text(value) {
   return String(value ?? "").trim();
+}
+
+export function isSfAlreadyCancelledError(error) {
+  return /订单已取消|不可更改或再次取消/.test(text(error?.message));
 }
 
 function json(response, status, payload, headers = {}) {
@@ -135,28 +141,13 @@ function orderKey(request, suppliedKey = "") {
   return crypto.createHash("sha256").update(raw).digest("hex");
 }
 
-function orderFile(key) {
-  return path.join(DATA_ROOT, "orders", `${key}.json`);
-}
-
-function readStoredOrder(key) {
-  try {
-    return JSON.parse(fs.readFileSync(orderFile(key), "utf8"));
-  } catch {
-    return null;
-  }
-}
-
-function storeOrder(key, value) {
-  const directory = path.dirname(orderFile(key));
-  fs.mkdirSync(directory, {recursive:true, mode:0o700});
-  const temporary = `${orderFile(key)}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(temporary, JSON.stringify(value), {encoding:"utf8", mode:0o600});
-  fs.renameSync(temporary, orderFile(key));
-}
-
 async function submitOrder(request, key) {
-  const existing = readStoredOrder(key);
+  const existing = orderStore.read(key);
+  if (existing?.cancelled) {
+    const error = new Error("这笔顺丰订单已经取消，原业务单号和运单不能再次使用；请生成新的寄件任务后再下单");
+    error.statusCode = 409;
+    throw error;
+  }
   if (existing) return {...existing, replayed:true};
   if (request.carrier === "sf") {
     const remote = await findSfOrder(request.clientReference);
@@ -168,12 +159,12 @@ async function submitOrder(request, key) {
         replayed:true,
         reconciled:true,
       };
-      storeOrder(key, reconciled);
+      orderStore.write(key, reconciled);
       return reconciled;
     }
     const receipt = await createSfOrder(request);
     const result = {...receipt, carrier:"sf", createdAt:new Date().toISOString(), replayed:false};
-    storeOrder(key, result);
+    orderStore.write(key, result);
     return result;
   }
   throw new Error("菜鸟正式寄件接口尚未完成应用授权，当前不会提交模拟订单");
@@ -207,7 +198,7 @@ async function handleCreate(request, response) {
     const result = await activeOrders.get(key);
     return json(response, 200, {ok:true,...result}, headers);
   } catch (error) {
-    return json(response, 502, {ok:false,error:text(error.message) || "物流平台下单失败"}, headers);
+    return json(response, Number(error.statusCode) || 502, {ok:false,error:text(error.message) || "物流平台下单失败"}, headers);
   }
 }
 
@@ -221,6 +212,10 @@ async function handleSearch(request, response, orderId) {
   }
   const provider = providerStatus().sf;
   if (!provider.configured) return json(response, 503, {ok:false,error:provider.reason}, headers);
+  const stored = orderStore.findByLogisticsOrderId(orderId)?.value;
+  if (stored?.cancelled) {
+    return json(response, 200, {carrier:"sf",...stored,ok:true,replayed:true}, headers);
+  }
   try {
     const result = await searchSfOrder(orderId);
     return json(response, 200, {ok:true,carrier:"sf",...result}, headers);
@@ -241,8 +236,19 @@ async function handleCancel(request, response, orderId) {
   if (!provider.configured) return json(response, 503, {ok:false,error:provider.reason}, headers);
   try {
     const result = await cancelSfOrder(orderId);
+    orderStore.markCancelled(orderId, result);
     return json(response, 200, {ok:true,carrier:"sf",...result}, headers);
   } catch (error) {
+    if (isSfAlreadyCancelledError(error)) {
+      const result = {
+        logisticsOrderId:orderId,
+        providerStatus:"cancelled",
+        cancelled:true,
+        alreadyCancelled:true,
+      };
+      orderStore.markCancelled(orderId, result);
+      return json(response, 200, {ok:true,carrier:"sf",...result}, headers);
+    }
     return json(response, 502, {ok:false,error:text(error.message) || "顺丰订单取消失败"}, headers);
   }
 }

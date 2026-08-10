@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test, {after, before} from "node:test";
-import {createServer} from "../logistics-gateway/server.mjs";
+import {createServer, isSfAlreadyCancelledError} from "../logistics-gateway/server.mjs";
 
 let server;
 let baseUrl;
@@ -52,6 +52,11 @@ test("order query also requires operator authorization", async () => {
 test("order cancellation also requires operator authorization", async () => {
   const response = await fetch(`${baseUrl}/api/logistics/orders/ORDER-001`, {method:"DELETE"});
   assert.equal(response.status, 401);
+});
+
+test("recognizes SF's already-cancelled response without hiding unrelated failures", () => {
+  assert.equal(isSfAlreadyCancelledError(new Error("订单已取消,不可更改或再次取消")), true);
+  assert.equal(isSfAlreadyCancelledError(new Error("系统繁忙，请稍后重试")), false);
 });
 
 test("waybill PDF generation also requires operator authorization", async () => {
