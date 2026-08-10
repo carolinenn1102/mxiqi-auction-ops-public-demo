@@ -1,7 +1,7 @@
 ---
 name: reauction-upload-deduplication
 description: 再次上传拍品表时与拖回再拍库比对，避免库内拍品重复新增
-status: active
+status: completed
 created: 2026-08-10T16:54:29Z
 ---
 
