@@ -6,6 +6,7 @@
     try {
       const url = new URL(sender.url);
       if (url.origin === "https://carolinenn1102.github.io") return url.pathname.startsWith("/mxiqi-auction-ops-public-demo/");
+      if (url.origin === "http://118.31.121.156") return true;
       return url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1");
     } catch {
       return false;

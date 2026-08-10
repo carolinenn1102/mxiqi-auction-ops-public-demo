@@ -2517,8 +2517,8 @@
       const connector = await MxiqiConnector.ping();
       const capabilities = Array.isArray(connector.capabilities) ? connector.capabilities : [];
       state.connection.connectorVersion = connector.version || "";
-      if (!versionAtLeast(connector.version, "1.9.2") || !capabilities.includes("syncAuctionDeals")) {
-        throw new Error("采集助手版本过旧，请重新下载 1.9.2 版并在扩展页面点击重新加载");
+      if (!versionAtLeast(connector.version, "1.9.3") || !capabilities.includes("syncAuctionDeals")) {
+        throw new Error("采集助手版本过旧，请重新下载 1.9.3 版并在扩展页面点击重新加载");
       }
       const orderScopes = ["waitpay", "waitconfirm", "waitexpress", "recent"];
       const orderResults = [];
@@ -4735,7 +4735,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=59", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=60", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";

@@ -17,7 +17,7 @@ test("commission logic uses the current cache-busted asset in the page and servi
 
   assert.equal(htmlVersion, "59");
   assert.equal(workerVersion, htmlVersion);
-  assert.match(serviceWorker, /CACHE_NAME = "mxiqi-ops-demo-v59"/);
+  assert.match(serviceWorker, /CACHE_NAME = "mxiqi-ops-demo-v60"/);
 });
 
 test("normalizes platform order states", () => {
@@ -44,6 +44,7 @@ test("extension is restricted to the public dashboard and mxiqi", () => {
   assert.equal(manifest.manifest_version, 3);
   assert.deepEqual(manifest.host_permissions, ["https://www.mxiqi.com/*"]);
   assert.ok(manifest.externally_connectable.matches.includes("https://carolinenn1102.github.io/mxiqi-auction-ops-public-demo/*"));
+  assert.ok(manifest.externally_connectable.matches.includes("http://118.31.121.156/*"));
   assert.ok(!JSON.stringify(manifest).includes("<all_urls>"));
 });
 
@@ -67,6 +68,7 @@ test("project login is relayed without persistence", () => {
   assert.match(bridge, /login:\s*\(\{mobile,\s*password\}\)/);
   assert.match(background, /loginWithCredentials/);
   assert.match(background, /url\.hostname === "127\.0\.0\.1"/);
+  assert.match(background, /url\.origin === "http:\/\/118\.31\.121\.156"/);
   assert.match(app, /passwordInput\.value\s*=\s*""/);
   assert.doesNotMatch(app, /localStorage\.setItem\([^)]*password/i);
 });
@@ -95,7 +97,7 @@ test("connector supports the Mxiqi wait-pay scope and reports its version", () =
   assert.match(content, /"waitconfirm","waitpay"/);
   assert.match(content, /org\.order\.list\/\$\{safeScope\}/);
   assert.match(background, /chrome\.runtime\.getManifest\(\)\.version/);
-  assert.equal(manifest.version, "1.9.2");
+  assert.equal(manifest.version, "1.9.3");
   assert.match(background, /capabilities:\s*\["login", "syncOrders", "syncOrdersByNumbers", "syncAuctionDeals", "openCarrierPortal"\]/);
 });
 
