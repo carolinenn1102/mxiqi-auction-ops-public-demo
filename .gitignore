@@ -1,3 +1,4 @@
 logistics-gateway/.env
 logistics-gateway/data/
 *.local.env
+.codex-tmp/
