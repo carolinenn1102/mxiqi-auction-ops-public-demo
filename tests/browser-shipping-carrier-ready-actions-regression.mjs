@@ -88,6 +88,11 @@ try {
   assert.equal(await page.locator("#shipping-sf-ready-count").innerText(), "1");
   assert.match(await page.locator("#shipping-next-sf").innerText(), /顺丰检查通过.*点击下单/);
   assert.match(await page.locator("#shipping-sf-card").getAttribute("class"), /ready-to-order/);
+  const sfButtonColor = await page.locator("#shipping-next-sf").evaluate((element) => getComputedStyle(element).backgroundColor);
+  assert.equal(sfButtonColor, "rgb(38, 116, 91)");
+  const sfCardBox = await page.locator("#shipping-sf-card").boundingBox();
+  const cainiaoCardBox = await page.locator("#shipping-cainiao-card").boundingBox();
+  assert.ok(sfCardBox && cainiaoCardBox && sfCardBox.x + sfCardBox.width <= cainiaoCardBox.x, "顺丰和菜鸟卡片应在桌面端分栏显示");
 
   assert.equal(await page.locator("#shipping-cainiao-pending-count").innerText(), "1");
   assert.equal(await page.locator("#shipping-cainiao-ready-count").innerText(), "1");
@@ -116,6 +121,7 @@ try {
   process.stdout.write(JSON.stringify({
     ok:true,
     sfReady:true,
+    sfButtonColor,
     cainiaoBlocked:true,
     addressPendingSeparated:true,
     createOrderCalls,

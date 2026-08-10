@@ -1,7 +1,7 @@
 ---
 name: shipping-carrier-ready-actions
 description: 将发货队列按顺丰和菜鸟拆分，并只在真实下单条件全部通过时显示绿色下单按钮
-status: in-progress
+status: completed
 created: 2026-08-10T17:11:20Z
 ---
 
@@ -50,4 +50,3 @@ created: 2026-08-10T17:11:20Z
 - 不新增菜鸟 API 凭据或改变现有物流网关配置。
 - 不自动提交订单，不批量跳过人工复核。
 - 不修改顺丰/菜鸟的费用、承运商自动判断阈值和取消订单流程。
-

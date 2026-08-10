@@ -1,9 +1,9 @@
 ---
 name: shipping-carrier-ready-actions
-status: in-progress
+status: completed
 created: 2026-08-10T17:11:20Z
-updated: 2026-08-10T17:11:20Z
-progress: 10%
+updated: 2026-08-10T17:28:23Z
+progress: 100%
 prd: .claude/prds/shipping-carrier-ready-actions.md
 github: (not synced)
 ---
@@ -31,3 +31,8 @@ github: (not synced)
 
 - 001：实现承运商拆分、绿色下单门禁、测试和发布。
 
+## Validation
+
+- 单元测试 132/132 通过。
+- 4 组本地浏览器回归通过，真实订单创建请求为 0。
+- 公网回归确认顺丰绿色按钮实际颜色、顺丰/菜鸟分栏、菜鸟未接通禁用状态均正确。
