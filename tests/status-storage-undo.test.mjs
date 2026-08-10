@@ -95,7 +95,9 @@ test("reauction records can be moved to a manually selected auction period", () 
 
 test("manual paid records and uploaded reauction matches are wired into the dashboard", () => {
   assert.match(app, /applyManualPaymentResolution\(record, existing\)/);
-  assert.match(app, /upsert\(records, \{matchReauction:true\}\)/);
+  assert.match(app, /upsert\(records, \{matchReauction:true,skipReauctionReview:compareReauction\}\)/);
+  assert.match(app, /reauctionReviewSkipped/);
+  assert.match(app, /reauction-compare-review/);
   assert.match(app, /suggestReauctionMatch\(/);
   assert.match(app, /reauctionMatchedAt/);
   assert.match(app, /再拍库匹配/);

@@ -165,6 +165,7 @@
   const customerDialog = $("#customer-dialog");
   const customerForm = $("#customer-form");
   let pendingBackupFile = null;
+  let importMode = "default";
   const logisticsRuntime = {checked:false,checking:false,installed:false,version:"",capabilities:[],providers:{},source:"gateway",lastError:""};
   const collectorRuntime = {
     running:false,
@@ -2024,7 +2025,7 @@
     return result;
   }
 
-  function upsert(records, {matchReauction = false} = {}) {
+  function upsert(records, {matchReauction = false, skipReauctionReview = false} = {}) {
     const beforeState = captureMutableState();
     const beforeStorage = captureStorageSnapshot();
     try {
@@ -2036,8 +2037,11 @@
       let conflicts = 0;
       let reauctionMatched = 0;
       let reauctionReview = 0;
+      let reauctionExisting = 0;
+      let reauctionReviewSkipped = 0;
       let accepted = 0;
       const usedReauctionIds = new Set();
+      const reviewSkippedRecords = [];
       for (const incoming of normalized.records) {
         accepted += 1;
         const platformKey = MxiqiWorkflow.platformRecordKey(incoming);
@@ -2057,17 +2061,29 @@
             reauctionCanonical = state.records.find((item) => item.id === reauctionMatch.matchedRecordId) || null;
             if (reauctionCanonical) candidates.push(reauctionCanonical);
           } else if (reauctionMatch.matchStatus === "review" && reauctionMatch.candidateRecordId) {
+            reauctionReview += 1;
+            if (skipReauctionReview) {
+              reviewSkippedRecords.push({
+                record:clone(incoming),
+                candidateRecordId:reauctionMatch.candidateRecordId,
+                similarity:Number(reauctionMatch.similarity || 0),
+                reason:reauctionMatch.matchReason || "存在相似再拍拍品，需人工确认",
+              });
+              reauctionReviewSkipped += 1;
+              skipped += 1;
+              continue;
+            }
             Object.assign(incoming, {
               reauctionMatchStatus:"review",
               reauctionMatchCandidateId:reauctionMatch.candidateRecordId,
               reauctionMatchSimilarity:Number(reauctionMatch.similarity || 0),
               reauctionMatchReason:reauctionMatch.matchReason || "存在相似再拍拍品，需人工确认",
             });
-            reauctionReview += 1;
           }
         }
         if (candidates.length) {
           const canonical = exact[0] || byLot[0] || reauctionCanonical || candidates[0];
+          if (candidates.some((item) => item.returnDisposition === "拖回/再拍")) reauctionExisting += 1;
           const canonicalId = canonical.id || uid();
           const duplicates = candidates.filter((item) => item !== canonical);
           const duplicateSet = new Set(duplicates);
@@ -2121,8 +2137,9 @@
       rematchAssetsAndApply();
       render();
       save();
+      if (reviewSkippedRecords.length) saveRecoveryCopy("reauction-compare-review", {records:reviewSkippedRecords});
       if (normalized.quarantined.length) saveRecoveryCopy("import-quarantine", {quarantined:normalized.quarantined});
-      return {accepted, added, updated, skipped, conflicts, reauctionMatched, reauctionReview};
+      return {accepted, added, updated, skipped, conflicts, reauctionMatched, reauctionReview, reauctionExisting, reauctionReviewSkipped};
     } catch (error) {
       restoreMutableState(beforeState);
       restoreStorageSnapshot(beforeStorage);
@@ -3832,7 +3849,22 @@
     notify(`已完成 ${group.buyerName} 的 ${group.assets.length} 件寄存发货，记录已移到列表底部`);
   });
 
-  $("#open-import").addEventListener("click", () => importDialog.showModal());
+  function openImportDialog(mode = "default") {
+    importMode = mode;
+    const compareReauction = mode === "reauction-compare";
+    $("#import-title").textContent = compareReauction ? "上传新表并与拖回库去重" : "导入拍品数据";
+    $("#import-copy").textContent = compareReauction
+      ? "新表会先和拖回再拍库比对：库内已有拍品更新原记录，不重复新增；疑似重复但无法唯一确认的拍品暂不新增，并保留本地恢复副本。"
+      : "支持送拍跟踪表、麦稀奇 v3.7 .xlsx 和 JSON 数组。寄存与外拍库存请使用左侧“寄存与库存”；“送评”附表暂不导入。体验数据只写入当前浏览器。";
+    $("#import-file-hint").textContent = compareReauction
+      ? "支持送拍跟踪表、麦稀奇模板和 JSON；完成后会分别显示库内已有、新增和疑似重复数量"
+      : "Excel 自动识别两种模板；JSON 可保留付款状态，重复 Lot 会更新";
+    $("#run-import").textContent = compareReauction ? "对比并导入" : "导入并校验";
+    importDialog.showModal();
+  }
+
+  $("#open-import").addEventListener("click", () => openImportDialog("default"));
+  $("#reauction-compare-import").addEventListener("click", () => openImportDialog("reauction-compare"));
   $("#excel-file").addEventListener("change", (event) => { $("#file-name").textContent = event.target.files[0]?.name || "选择 .xlsx / .json 文件"; });
   $("#import-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -3856,13 +3888,16 @@
       const importBatchId = uid();
       const importedAt = new Date().toISOString();
       records.filter((record) => record && typeof record === "object").forEach((record) => Object.assign(record, {importBatchId, importedAt}));
-      const stats = upsert(records, {matchReauction:true});
-      const statsText = `识别 ${stats.accepted} · 新增 ${stats.added} · 更新 ${stats.updated} · 跳过 ${stats.skipped} · 冲突已合并 ${stats.conflicts} · 再拍匹配 ${stats.reauctionMatched} · 再拍待确认 ${stats.reauctionReview}${importMeta.trackerOutcomeBlank ? ` · 成交结果空白 ${importMeta.trackerOutcomeBlank}` : ""}`;
-      audit("导入数据", statsText);
+      const compareReauction = importMode === "reauction-compare";
+      const stats = upsert(records, {matchReauction:true,skipReauctionReview:compareReauction});
+      const statsText = compareReauction
+        ? `识别 ${stats.accepted} · 库内已有 ${stats.reauctionExisting} · 新增 ${stats.added} · 更新原记录 ${stats.updated} · 疑似重复未新增 ${stats.reauctionReviewSkipped} · 其他跳过 ${Math.max(0, stats.skipped - stats.reauctionReviewSkipped)}${importMeta.trackerOutcomeBlank ? ` · 成交结果空白 ${importMeta.trackerOutcomeBlank}` : ""}`
+        : `识别 ${stats.accepted} · 新增 ${stats.added} · 更新 ${stats.updated} · 跳过 ${stats.skipped} · 冲突已合并 ${stats.conflicts} · 再拍匹配 ${stats.reauctionMatched} · 再拍待确认 ${stats.reauctionReview}${importMeta.trackerOutcomeBlank ? ` · 成交结果空白 ${importMeta.trackerOutcomeBlank}` : ""}`;
+      audit(compareReauction ? "拖回库上传对比" : "导入数据", statsText);
       importDialog.close();
       $("#import-form").reset();
       $("#file-name").textContent = "选择 .xlsx / .json 文件";
-      notify(`导入完成：${statsText}`);
+      notify(`${compareReauction ? "对比导入完成" : "导入完成"}：${statsText}`);
     } catch (error) {
       notify(error.message || "导入失败", "error");
     }
@@ -4735,7 +4770,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=60", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=61", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
