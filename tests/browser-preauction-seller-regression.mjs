@@ -20,8 +20,8 @@ try {
     localStorage.setItem("mxiqi-public-demo-schema", "17");
     localStorage.setItem("mxiqi-public-demo-customers-v2", JSON.stringify({"档案送拍人":{phone:"13812345678",birthdayMonth:6}}));
     localStorage.setItem("mxiqi-public-demo-records-v1", JSON.stringify([
-      {id:"missing-1",lot:30,itemName:"拍前核对拍品一",sellerWechat:"",sellerPhone:"",auctionAt:"260809 周日，79期",auctionPeriodOverride:"第79期",finalOutcome:"待拍",buyerName:"同一买家",buyerPhone:"13912345678",mxiqiOrderId:"package-79"},
-      {id:"missing-2",lot:31,itemName:"拍前核对拍品二",sellerWechat:"",sellerPhone:"",auctionAt:"2026-08-09 20:00",auctionPeriodOverride:"第79期",finalOutcome:"待拍",buyerName:"同一买家",buyerPhone:"13912345678",mxiqiOrderId:"package-79"},
+      {id:"missing-1",lot:30,itemName:"拍前核对拍品一",sellerWechat:"",sellerPhone:"",auctionAt:"990809 周日，79期",auctionPeriodOverride:"第79期",finalOutcome:"待拍",buyerName:"同一买家",buyerPhone:"13912345678",mxiqiOrderId:"package-79"},
+      {id:"missing-2",lot:31,itemName:"拍前核对拍品二",sellerWechat:"",sellerPhone:"",auctionAt:"2099-08-09 20:00",auctionPeriodOverride:"第79期",finalOutcome:"待拍",buyerName:"同一买家",buyerPhone:"13912345678",mxiqiOrderId:"package-79"},
     ]));
     globalThis.__checklistText = [];
     const originalFillText = CanvasRenderingContext2D.prototype.fillText;
@@ -41,7 +41,7 @@ try {
 
   await page.click("#open-preauction-check");
   await page.click("#export-preauction-image");
-  await page.waitForFunction(() => globalThis.__checklistText.includes("2026-08-09"));
+  await page.waitForFunction(() => globalThis.__checklistText.includes("2099-08-09"));
   const result = await page.evaluate(() => ({
     records:JSON.parse(localStorage.getItem("mxiqi-public-demo-records-v1") || "[]"),
     checklistText:globalThis.__checklistText,
@@ -51,9 +51,9 @@ try {
   assert.equal(result.records.length, 2);
   assert.ok(result.records.every((record) => record.sellerWechat === "档案送拍人"));
   assert.ok(result.checklistText.includes("拍卖日期"), JSON.stringify(result));
-  assert.ok(result.checklistText.includes("2026-08-09"), JSON.stringify(result));
+  assert.ok(result.checklistText.includes("2099-08-09"), JSON.stringify(result));
   assert.deepEqual(errors, []);
-  process.stdout.write(JSON.stringify({ok:true,assigned:2,checklistDate:"2026-08-09"}));
+  process.stdout.write(JSON.stringify({ok:true,assigned:2,checklistDate:"2099-08-09"}));
 } finally {
   await browser.close();
 }

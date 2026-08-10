@@ -967,6 +967,15 @@
     const notice = $("#shipping-connection-notice");
     const sidebar = $("#logistics-sidebar-status");
     const dot = $("#logistics-sidebar-dot");
+    const connectedCarrier = ["sf", "cainiao"].find((candidate) => logisticsCanCreate(candidate));
+    if (connectedCarrier) {
+      sidebar.textContent = `${carrierLabel(connectedCarrier)}已接入`;
+      dot.className = "status-dot connected";
+    } else {
+      const configuredProvider = ["sf", "cainiao"].some((candidate) => logisticsProviderState(candidate).configured === true);
+      sidebar.textContent = logisticsRuntime.installed && configuredProvider ? "真实物流待授权" : "真实物流待接入";
+      dot.className = "status-dot";
+    }
     if (logisticsRuntime.checking) {
       status.textContent = "正在检查真实物流服务";
       return;
@@ -975,8 +984,6 @@
       status.textContent = `${carrierLabel(carrier)}真实接口已就绪`;
       notice.className = "collector-notice success";
       notice.innerHTML = `<b>${carrierLabel(carrier)}真实下单已接通</b><p>提交后只接受物流平台返回的真实业务单号和运单号，不会生成演示数据。</p>`;
-      sidebar.textContent = "真实物流已接通";
-      dot.className = "status-dot connected";
       return;
     }
     const reason = provider.configured === true && !logisticsOperatorKey()
@@ -985,8 +992,6 @@
     status.textContent = `${carrierLabel(carrier)}接口未就绪`;
     notice.className = "collector-notice";
     notice.innerHTML = `<b>当前只能人工完成真实下单</b><p>${esc(reason)}。请在物流平台下单后，把真实运单号和取件码录入；系统不会生成假单号。</p>`;
-    sidebar.textContent = logisticsRuntime.installed ? "真实物流待授权" : "真实物流待接入";
-    dot.className = "status-dot";
   }
 
   async function checkLogisticsConnection({notifyResult = false} = {}) {

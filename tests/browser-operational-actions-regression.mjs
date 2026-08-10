@@ -26,7 +26,7 @@ try {
       {id:"low-missing",lot:1,itemName:"低价成交拍品",sellerWechat:"",sellerPhone:"",auctionAt:"2026-08-08 20:00",auctionPeriodOverride:"第80期",finalOutcome:"成交",finalPrice:4,paymentStatus:"已付款",buyerName:"买家甲",buyerPhone:"13612345678",recipientRaw:"买家甲 13612345678 上海市浦东新区世纪大道100号",recipientName:"买家甲",recipientPhone:"13612345678",addressProvince:"上海市",addressCity:"上海市",addressDistrict:"浦东新区",addressDetail:"世纪大道100号",addressStatus:"reviewed",mxiqiOrderId:"order-80"},
       {id:"seller-paid",lot:2,itemName:"正常成交拍品",sellerWechat:"测试送拍人",sellerPhone:"13812345678",auctionAt:"2026-08-08 20:00",auctionPeriodOverride:"第80期",finalOutcome:"成交",finalPrice:200,paymentStatus:"已付款",buyerName:"买家甲",buyerPhone:"13612345678",recipientRaw:"买家甲 13612345678 上海市浦东新区世纪大道100号",recipientName:"买家甲",recipientPhone:"13612345678",addressProvince:"上海市",addressCity:"上海市",addressDistrict:"浦东新区",addressDetail:"世纪大道100号",addressStatus:"reviewed",mxiqiOrderId:"order-80"},
       {id:"blocked-shipping",lot:3,itemName:"未付款拍品",sellerWechat:"其他送拍人",sellerPhone:"13912345678",auctionAt:"2026-08-10 20:00",auctionPeriodOverride:"第81期",finalOutcome:"成交",finalPrice:300,paymentStatus:"待付款",buyerName:"买家乙",buyerPhone:"13712345678"},
-      {id:"preauction",lot:4,itemName:"拍前核对日期拍品",sellerWechat:"测试送拍人",sellerPhone:"13812345678",auctionAt:"2026-08-09 20:00",auctionPeriodOverride:"第80期",finalOutcome:"待拍",finalPrice:0},
+      {id:"preauction",lot:4,itemName:"拍前核对日期拍品",sellerWechat:"测试送拍人",sellerPhone:"13812345678",auctionAt:"2099-08-09 20:00",auctionPeriodOverride:"第80期",finalOutcome:"待拍",finalPrice:0},
     ]));
     localStorage.setItem("mxiqi-public-demo-assets-v1", JSON.stringify([]));
     localStorage.setItem("mxiqi-public-demo-history-v1", JSON.stringify([{id:"legacy-heavy",time:"2026-08-07T10:00:00.000Z",action:"旧版记录",detail:"旧版超大撤回记录",pending:false,before:{records:[]},afterFingerprint:"x".repeat(2500000)}]));
@@ -85,10 +85,10 @@ try {
   await page.click("#open-preauction-check");
   await page.selectOption("#filter-auction", "第80期");
   await page.click("#export-preauction-image");
-  await page.waitForFunction(() => globalThis.__checklistText.includes("2026-08-09"));
+  await page.waitForFunction(() => globalThis.__checklistText.includes("2099-08-09"));
   const checklistText = await page.evaluate(() => globalThis.__checklistText);
   assert.ok(checklistText.includes("拍卖日期"));
-  assert.ok(checklistText.includes("2026-08-09"));
+  assert.ok(checklistText.includes("2099-08-09"));
 
   records = await page.evaluate(() => JSON.parse(localStorage.getItem("mxiqi-public-demo-records-v1") || "[]"));
   const storedHistory = await page.evaluate(() => localStorage.getItem("mxiqi-public-demo-history-v1") || "");
@@ -102,7 +102,7 @@ try {
     negativeSettlement:low.settlementAmount,
     blockedShippingExplained:true,
     manualShippingSaved:records.find((record) => record.id === "seller-paid")?.outboundTrackingNumber,
-    checklistDate:"2026-08-09",
+    checklistDate:"2099-08-09",
     historyChars:storedHistory.length,
   }));
 } finally {
