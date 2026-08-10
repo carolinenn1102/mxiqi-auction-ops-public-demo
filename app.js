@@ -1018,6 +1018,9 @@
     } finally {
       logisticsRuntime.checking = false;
       renderLogisticsConnection(shippingForm?.elements?.shippingCarrier?.value || "cainiao");
+      renderShippingSummary();
+      const activeRecord = activeShippingRecords()[0];
+      if (shippingDialog?.open && activeRecord) renderShippingDialog(activeRecord, false);
     }
   }
 
@@ -1372,31 +1375,91 @@
     $("#reauction-settled-count").textContent = records.filter((record) => record.settled).length;
   }
 
-  function nextShippingRecord() {
-    const priority = {mxiqi_pending:0,ready_to_order:1,needs_address:2};
-    return state.records.filter((record) => isShippingCandidate(record) && shippingStage(record) !== "completed").sort((a, b) => (priority[shippingStage(a)] ?? 9) - (priority[shippingStage(b)] ?? 9) || Number(a.lot) - Number(b.lot))[0];
+  function shippingPackageStage(group) {
+    const stages = group.records.map(shippingStage);
+    return stages.includes("needs_address") ? "needs_address"
+      : stages.includes("ready_to_order") ? "ready_to_order"
+        : stages.includes("mxiqi_pending") ? "mxiqi_pending" : "completed";
+  }
+
+  function shippingPackageCarrier(group) {
+    const explicit = group.records.find((record) => ["sf", "cainiao"].includes(record.shippingCarrier))?.shippingCarrier
+      || group.records.find((record) => ["sf", "cainiao"].includes(record.carrier))?.carrier;
+    return explicit || carrierFor(group.records[0] || {});
+  }
+
+  function shippingOrderReadiness(records, carrier) {
+    const members = records.filter(Boolean);
+    if (!members.length || !members.every(isShippingCandidate)) return {ok:false,reason:"包裹内仍有拍品未满足成交和付款条件"};
+    if (!members.every((item) => item.addressStatus === "reviewed")) return {ok:false,reason:"收件地址尚未全部完成二次审核"};
+    const commonWaybill = MxiqiPackages.sameValue(members, "outboundTrackingNumber");
+    const hasAnyWaybill = members.some((item) => item.outboundTrackingNumber);
+    if (hasAnyWaybill && !commonWaybill) return {ok:false,reason:"包裹内已有不同运单号，必须先人工核对"};
+    if (commonWaybill) return {ok:false,reason:"该包裹已经保存真实运单号"};
+    if (!logisticsCanCreate(carrier)) return {ok:false,reason:`${carrierLabel(carrier)}真实接口或本次操作授权尚未就绪`};
+    const validation = MxiqiLogistics.validateRequest(shipmentRequest(members, carrier));
+    if (!validation.ok) return {ok:false,reason:`真实下单资料还缺：${validation.missing.join("、")}`};
+    return {ok:true,reason:`${carrierLabel(carrier)}真实接口、授权、地址和包裹资料均已检查通过`};
+  }
+
+  function shippingCarrierSnapshot(carrier, packages = MxiqiPackages.groupRecords(state.records.filter(isShippingCandidate))) {
+    const groups = packages.filter((group) => shippingPackageCarrier(group) === carrier);
+    const byStage = {needs_address:[],ready_to_order:[],mxiqi_pending:[],completed:[]};
+    groups.forEach((group) => byStage[shippingPackageStage(group)].push(group));
+    const directOrderGroup = byStage.ready_to_order.find((group) => shippingOrderReadiness(group.records, carrier).ok);
+    const actionGroup = directOrderGroup || byStage.mxiqi_pending[0] || byStage.needs_address[0] || byStage.ready_to_order[0] || null;
+    const actionKind = directOrderGroup ? "direct_order"
+      : byStage.mxiqi_pending[0] === actionGroup ? "fill"
+        : byStage.needs_address[0] === actionGroup ? "address"
+          : actionGroup ? "review" : "done";
+    const pending = groups.length - byStage.completed.length;
+    const readiness = directOrderGroup
+      ? shippingOrderReadiness(directOrderGroup.records, carrier)
+      : byStage.ready_to_order[0]
+        ? shippingOrderReadiness(byStage.ready_to_order[0].records, carrier)
+        : {ok:false,reason:""};
+    return {carrier,groups,byStage,pending,actionGroup,actionKind,readiness,canCreate:Boolean(directOrderGroup)};
+  }
+
+  function nextShippingRecord(carrier) {
+    return shippingCarrierSnapshot(carrier).actionGroup?.records?.[0] || null;
   }
 
   function renderShippingSummary() {
     const candidates = state.records.filter(isShippingCandidate);
-    const counts = {needs_address:0,ready_to_order:0,mxiqi_pending:0,completed:0};
     const packages = MxiqiPackages.groupRecords(candidates);
-    packages.forEach((group) => {
-      const stages = group.records.map(shippingStage);
-      const stage = stages.includes("needs_address") ? "needs_address"
-        : stages.includes("ready_to_order") ? "ready_to_order"
-          : stages.includes("mxiqi_pending") ? "mxiqi_pending" : "completed";
-      counts[stage] += 1;
-    });
-    const pending = packages.length - counts.completed;
+    const completed = packages.filter((group) => shippingPackageStage(group) === "completed").length;
+    const pending = packages.length - completed;
     $("#shipping-summary").hidden = state.stage !== "shipping";
     $("#shipping-pending-count").textContent = pending;
-    $("#shipping-address-count").textContent = counts.needs_address;
-    $("#shipping-order-count").textContent = counts.ready_to_order;
-    $("#shipping-fill-count").textContent = counts.mxiqi_pending;
-    $("#shipping-complete-count").textContent = counts.completed;
-    $("#shipping-next").disabled = !pending;
-    $("#shipping-next").textContent = pending ? "处理下一单" : "本批发货已完成";
+    $("#shipping-complete-count").textContent = completed;
+    ["sf", "cainiao"].forEach((carrier) => {
+      const label = carrierLabel(carrier);
+      const snapshot = shippingCarrierSnapshot(carrier, packages);
+      const card = $(`#shipping-${carrier}-card`);
+      const button = $(`#shipping-next-${carrier}`);
+      $(`#shipping-${carrier}-pending-count`).textContent = snapshot.pending;
+      $(`#shipping-${carrier}-address-count`).textContent = snapshot.byStage.needs_address.length;
+      $(`#shipping-${carrier}-ready-count`).textContent = snapshot.byStage.ready_to_order.length;
+      $(`#shipping-${carrier}-fill-count`).textContent = snapshot.byStage.mxiqi_pending.length;
+      card.classList.toggle("ready-to-order", snapshot.canCreate);
+      button.classList.toggle("ready-to-order", snapshot.canCreate);
+      button.classList.toggle("secondary", !snapshot.canCreate);
+      button.disabled = !snapshot.actionGroup;
+      button.textContent = snapshot.actionKind === "direct_order" ? `${label}检查通过 · 点击下单`
+        : snapshot.actionKind === "fill" ? `${label}：处理运单回填`
+          : snapshot.actionKind === "address" ? `${label}：检查收件地址`
+            : snapshot.actionKind === "review" ? `${label}：查看未通过项` : `${label}暂无待处理`;
+      $(`#shipping-${carrier}-status`).textContent = snapshot.canCreate
+        ? `${snapshot.byStage.ready_to_order.length} 个地址已审包裹中已有包裹通过全部真实下单检查。`
+        : snapshot.actionKind === "fill"
+          ? `${snapshot.byStage.mxiqi_pending.length} 个包裹已有真实运单号，等待回填麦稀奇。`
+          : snapshot.actionKind === "address"
+            ? `${snapshot.byStage.needs_address.length} 个包裹需要先核对并二审收件地址。`
+            : snapshot.actionKind === "review"
+              ? snapshot.readiness.reason : `暂无${label}待处理包裹。`;
+      button.title = $(`#shipping-${carrier}-status`).textContent;
+    });
   }
 
   function recordsForPackageKey(key) {
@@ -1824,7 +1887,18 @@
     shippingForm.elements.shippingCarrier.disabled = addressLocked;
     $("#shipping-split-address").disabled = addressLocked;
     $("#shipping-review-address").disabled = addressLocked;
-    $("#shipping-create-order").disabled = !packageReady || !addressReviewed || hasWaybill || waybillConflict || !logisticsCanCreate(shippingForm.elements.shippingCarrier.value);
+    const selectedCarrier = shippingForm.elements.shippingCarrier.value;
+    const previewMembers = members.map((item, index) => index ? item : {...item,
+      shippingGoodsName:shippingForm.elements.shippingGoodsName.value || item.shippingGoodsName,
+      shipmentWeightKg:Number(shippingForm.elements.shipmentWeightKg.value || item.shipmentWeightKg || 0),
+    });
+    const orderReadiness = shippingOrderReadiness(previewMembers, selectedCarrier);
+    const createOrderButton = $("#shipping-create-order");
+    createOrderButton.disabled = !orderReadiness.ok;
+    createOrderButton.classList.toggle("ready-to-order", orderReadiness.ok);
+    createOrderButton.textContent = orderReadiness.ok
+      ? `${carrierLabel(selectedCarrier)}检查通过 · 点击下单`
+      : logisticsRuntime.checking ? `${carrierLabel(selectedCarrier)}连接检查中` : `${carrierLabel(selectedCarrier)}检查未通过`;
     $("#shipping-save-result").disabled = !packageReady || !addressReviewed || filled || waybillConflict;
     $("#shipping-copy-waybill").disabled = !hasWaybill;
     $("#shipping-copy-pickup-code").disabled = !record.pickupCode;
@@ -1836,13 +1910,9 @@
       ? `真实运单号 ${record.outboundTrackingNumber} 已标记为麦稀奇回填完成。`
       : hasWaybill
         ? `已保存真实运单号 ${record.outboundTrackingNumber}。请复制到麦稀奇，粘贴后再确认回填。`
-        : !packageReady
-          ? "包裹内仍有拍品未满足发货条件，暂不能整包发货。"
-          : !addressReviewed
-            ? "未完成地址二审，暂不能下单。"
-            : logisticsCanCreate(shippingForm.elements.shippingCarrier.value)
-              ? `地址已二审，可将 ${members.length} 件拍品合并后向${carrierLabel(shippingForm.elements.shippingCarrier.value)}提交真实下单。`
-              : `地址已二审。${carrierLabel(shippingForm.elements.shippingCarrier.value)}接口尚未配置，请打开物流平台下单后录入真实运单号。`;
+        : orderReadiness.ok
+          ? `全部检查通过：可将 ${members.length} 件拍品合并后向${carrierLabel(selectedCarrier)}提交真实下单。点击绿色按钮后才会创建订单。`
+          : `${orderReadiness.reason}，暂不能直接下单。`;
     renderLogisticsConnection(shippingForm.elements.shippingCarrier.value);
   }
 
@@ -2959,6 +3029,7 @@
     if (state.stage === "preauction") state.filters = {...state.filters,seller:"",status:"",shipping:""};
     state.selected.clear();
     render();
+    if (state.stage === "shipping" && !logisticsRuntime.checked && !logisticsRuntime.checking) void checkLogisticsConnection();
   }));
   $$('[data-close-dialog]').forEach((button) => button.addEventListener("click", () => button.closest("dialog")?.close("cancel")));
   $("#search").addEventListener("input", (event) => { state.query = event.target.value; render(); });
@@ -3238,9 +3309,11 @@
     notify(`已将 ${count} 条记录标记为已结账`);
   });
 
-  $("#shipping-next").addEventListener("click", () => {
-    const record = nextShippingRecord();
-    if (record) openShipping(record.id);
+  ["sf", "cainiao"].forEach((carrier) => {
+    $(`#shipping-next-${carrier}`).addEventListener("click", () => {
+      const record = nextShippingRecord(carrier);
+      if (record) openShipping(record.id);
+    });
   });
 
   $("#shipping-next-package").addEventListener("click", () => {
@@ -4770,7 +4843,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=61", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=62", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";

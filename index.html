@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="theme-color" content="#102735">
   <title>送拍运营工作台 · 公开体验版</title>
-  <link rel="stylesheet" href="styles.css?v=60">
+  <link rel="stylesheet" href="styles.css?v=61">
   <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
@@ -61,14 +61,21 @@
       </section>
 
       <section class="shipping-summary" id="shipping-summary" hidden>
-        <div class="shipping-summary-copy"><p class="eyebrow">出库发货提醒</p><h2><span id="shipping-pending-count">0</span> 个包裹待处理</h2><p>同一订单的拍品按一个包裹处理；先二审地址，再下物流订单并统一回填运单号。</p></div>
-        <div class="shipping-step-grid">
-          <div><small>地址待二审</small><b id="shipping-address-count">0</b></div>
-          <div><small>可以下单</small><b id="shipping-order-count">0</b></div>
-          <div><small>单号待回填</small><b id="shipping-fill-count">0</b></div>
-          <div><small>已完成</small><b id="shipping-complete-count">0</b></div>
+        <div class="shipping-summary-copy"><p class="eyebrow">出库发货提醒</p><h2><span id="shipping-pending-count">0</span> 个包裹待处理</h2><p>顺丰和菜鸟分别处理；绿色按钮只在地址、包裹资料、运单冲突和真实接口全部检查通过后出现。已完成 <strong id="shipping-complete-count">0</strong> 个包裹。</p></div>
+        <div class="shipping-carrier-grid">
+          <article class="shipping-carrier-card" id="shipping-sf-card">
+            <header><div><b>顺丰</b><small>独立发货队列</small></div><strong><span id="shipping-sf-pending-count">0</span> 个待处理</strong></header>
+            <div class="shipping-carrier-steps"><span>地址待审 <b id="shipping-sf-address-count">0</b></span><span>地址已审 <b id="shipping-sf-ready-count">0</b></span><span>单号待回填 <b id="shipping-sf-fill-count">0</b></span></div>
+            <p id="shipping-sf-status">暂无顺丰待处理包裹</p>
+            <button class="btn secondary shipping-carrier-action" type="button" id="shipping-next-sf" data-shipping-carrier="sf">顺丰暂无待处理</button>
+          </article>
+          <article class="shipping-carrier-card" id="shipping-cainiao-card">
+            <header><div><b>菜鸟</b><small>独立发货队列</small></div><strong><span id="shipping-cainiao-pending-count">0</span> 个待处理</strong></header>
+            <div class="shipping-carrier-steps"><span>地址待审 <b id="shipping-cainiao-address-count">0</b></span><span>地址已审 <b id="shipping-cainiao-ready-count">0</b></span><span>单号待回填 <b id="shipping-cainiao-fill-count">0</b></span></div>
+            <p id="shipping-cainiao-status">暂无菜鸟待处理包裹</p>
+            <button class="btn secondary shipping-carrier-action" type="button" id="shipping-next-cainiao" data-shipping-carrier="cainiao">菜鸟暂无待处理</button>
+          </article>
         </div>
-        <button class="btn primary" id="shipping-next">处理下一单</button>
       </section>
 
       <section class="settlement-summary" id="settlement-summary" hidden>
@@ -393,6 +400,6 @@
   <script src="logistics-core.js?v=49"></script>
   <script src="connector-bridge.js?v=49"></script>
   <script src="logistics-gateway.js?v=49"></script>
-  <script src="app.js?v=61"></script>
+  <script src="app.js?v=62"></script>
 </body>
 </html>
