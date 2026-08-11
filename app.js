@@ -2444,6 +2444,7 @@
     $("#collector-refresh").textContent = pendingPeriod && realConnection ? `同步${pendingPeriod}成交结果` : "立即刷新一次";
     $("#collector-refresh").disabled = collectorRuntime.busy || !connected;
     $("#sync-settlement-orders").disabled = collectorRuntime.busy || !realConnection || !state.filters.auction;
+    $("#sync-auction-results").disabled = collectorRuntime.busy || !realConnection;
     $("#sync-unpaid-orders").disabled = collectorRuntime.busy || !realConnection;
     $("#sync-shipping-orders").disabled = collectorRuntime.busy || !realConnection;
     $("#collector-scope").disabled = collectorRuntime.busy || collectorRuntime.running;
@@ -2542,6 +2543,39 @@
       return [preferredPeriod, ...periods.filter((period) => period !== preferredPeriod)];
     }
     return periods;
+  }
+
+  function auctionResultSyncPeriod() {
+    const selected = String(state.filters.auction || "").trim();
+    if (selected && selected !== "期数待补" && state.records.some((record) => auctionPeriod(record) === selected)) return selected;
+
+    const now = Date.now();
+    const periods = new Map();
+    state.records.forEach((record) => {
+      const period = auctionPeriod(record);
+      if (!period || period === "期数待补") return;
+      const entry = periods.get(period) || {period,pending:false,latestPast:NaN,nextFuture:NaN,number:Number(String(period).match(/\d+/)?.[0] || 0)};
+      entry.pending ||= isAuctionResultPending(record);
+      const end = MxiqiWorkflow.auctionDateEnd(record.auctionAt || record.platformAuctionAt);
+      if (Number.isFinite(end)) {
+        if (end <= now) entry.latestPast = Number.isFinite(entry.latestPast) ? Math.max(entry.latestPast, end) : end;
+        else entry.nextFuture = Number.isFinite(entry.nextFuture) ? Math.min(entry.nextFuture, end) : end;
+      }
+      periods.set(period, entry);
+    });
+
+    return [...periods.values()].sort((left, right) => {
+      if (left.pending !== right.pending) return left.pending ? -1 : 1;
+      const leftPast = Number.isFinite(left.latestPast);
+      const rightPast = Number.isFinite(right.latestPast);
+      if (leftPast !== rightPast) return leftPast ? -1 : 1;
+      if (leftPast && rightPast && left.latestPast !== right.latestPast) return right.latestPast - left.latestPast;
+      const leftFuture = Number.isFinite(left.nextFuture);
+      const rightFuture = Number.isFinite(right.nextFuture);
+      if (leftFuture !== rightFuture) return leftFuture ? -1 : 1;
+      if (leftFuture && rightFuture && left.nextFuture !== right.nextFuture) return left.nextFuture - right.nextFuture;
+      return right.number - left.number;
+    })[0]?.period || "";
   }
 
   function scheduleAutomaticSettlementRecovery({delay = 400, preferredPeriod = state.filters.auction} = {}) {
@@ -4025,6 +4059,20 @@
     $("#connection-dialog").close("collector");
     openCollector();
   });
+  $("#sync-auction-results").addEventListener("click", async () => {
+    collectorRuntime.lastActivityAt = Date.now();
+    const period = auctionResultSyncPeriod();
+    if (!period) return notify("当前数据里没有可识别的拍卖期数，请先导入或补充拍卖期数", "error");
+    const synced = await runSettlementSync({period});
+    if (!synced) return;
+    state.stage = "settlement";
+    state.filters.auction = period;
+    state.filters.status = "";
+    state.filters.shipping = "";
+    state.selected.clear();
+    save();
+    render();
+  });
   $("#sync-unpaid-orders").addEventListener("click", async () => {
     collectorRuntime.lastActivityAt = Date.now();
     const synced = await runCollector("payment");
@@ -4869,7 +4917,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=64", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=65", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
