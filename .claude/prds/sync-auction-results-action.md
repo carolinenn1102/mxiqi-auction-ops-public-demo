@@ -19,8 +19,8 @@ Records whose auction result has not been collected show “待拍 / 付款状�
 
 - As an operator, I can click one visible button from the main workbench to synchronize auction results.
   - Acceptance: the button is displayed next to “同步待付款” and “同步待发货”.
-- As an operator, I do not need to manually select a period when the system can infer the relevant period.
-  - Acceptance: an explicitly selected period wins; otherwise the newest result-pending period is used, followed by the nearest scheduled period.
+- As an operator, I do not need to manually select a period when the system can infer the current period.
+  - Acceptance: an explicitly selected period wins; otherwise the newest known auction period is used. The platform lifecycle remains authoritative if that newest period has not ended.
 - As an operator, I am protected from importing bids before the auction has ended.
   - Acceptance: the existing connector lifecycle guard blocks preview/live auctions and only imports a completed catalog.
 - As an operator, I see the synchronized period after completion.
@@ -29,7 +29,7 @@ Records whose auction result has not been collected show “待拍 / 付款状�
 ## Functional Requirements
 
 1. Add the “同步拍卖结果” top action and enable it only for a real Mxiqi connection that is not busy.
-2. Resolve a target period from the selected auction, result-pending records, or nearest auction schedule.
+2. Resolve a target period from the selected auction or the newest known auction period.
 3. Reuse `runSettlementSync` and the connector's `syncAuctionDeals` capability rather than creating a second parser.
 4. Preserve consignor information and merge platform order/buyer/payment details through the existing settlement workflow.
 5. Record the action in the existing collector result and audit history.

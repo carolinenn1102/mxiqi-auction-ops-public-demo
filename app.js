@@ -2549,32 +2549,21 @@
     const selected = String(state.filters.auction || "").trim();
     if (selected && selected !== "期数待补" && state.records.some((record) => auctionPeriod(record) === selected)) return selected;
 
-    const now = Date.now();
     const periods = new Map();
     state.records.forEach((record) => {
       const period = auctionPeriod(record);
       if (!period || period === "期数待补") return;
-      const entry = periods.get(period) || {period,pending:false,latestPast:NaN,nextFuture:NaN,number:Number(String(period).match(/\d+/)?.[0] || 0)};
-      entry.pending ||= isAuctionResultPending(record);
+      const entry = periods.get(period) || {period,latestDate:NaN,number:Number(String(period).match(/\d+/)?.[0] || 0)};
       const end = MxiqiWorkflow.auctionDateEnd(record.auctionAt || record.platformAuctionAt);
-      if (Number.isFinite(end)) {
-        if (end <= now) entry.latestPast = Number.isFinite(entry.latestPast) ? Math.max(entry.latestPast, end) : end;
-        else entry.nextFuture = Number.isFinite(entry.nextFuture) ? Math.min(entry.nextFuture, end) : end;
-      }
+      if (Number.isFinite(end)) entry.latestDate = Number.isFinite(entry.latestDate) ? Math.max(entry.latestDate, end) : end;
       periods.set(period, entry);
     });
 
     return [...periods.values()].sort((left, right) => {
-      if (left.pending !== right.pending) return left.pending ? -1 : 1;
-      const leftPast = Number.isFinite(left.latestPast);
-      const rightPast = Number.isFinite(right.latestPast);
-      if (leftPast !== rightPast) return leftPast ? -1 : 1;
-      if (leftPast && rightPast && left.latestPast !== right.latestPast) return right.latestPast - left.latestPast;
-      const leftFuture = Number.isFinite(left.nextFuture);
-      const rightFuture = Number.isFinite(right.nextFuture);
-      if (leftFuture !== rightFuture) return leftFuture ? -1 : 1;
-      if (leftFuture && rightFuture && left.nextFuture !== right.nextFuture) return left.nextFuture - right.nextFuture;
-      return right.number - left.number;
+      if (left.number !== right.number) return right.number - left.number;
+      const leftDate = Number.isFinite(left.latestDate) ? left.latestDate : 0;
+      const rightDate = Number.isFinite(right.latestDate) ? right.latestDate : 0;
+      return rightDate - leftDate;
     })[0]?.period || "";
   }
 
@@ -4917,7 +4906,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=65", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=66", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";

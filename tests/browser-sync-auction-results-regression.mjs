@@ -50,8 +50,8 @@ try {
     localStorage.setItem("mxiqi-public-demo-schema", "17");
     localStorage.setItem(connectionKey, JSON.stringify({status:"connected",mode:"connector",connectorInstalled:true,connectorVersion:"1.9.3"}));
     localStorage.setItem(recordsKey, JSON.stringify([
-      {id:"current-lot-6",lot:6,itemName:"当前场次待同步拍品",sellerWechat:"测试送拍人",sellerPhone:"13900000006",auctionAt:"2099-08-12",auctionPeriodOverride:"第99期",finalOutcome:"待拍",finalPrice:0},
-      {id:"future-lot-1",lot:1,itemName:"更晚场次拍品",sellerWechat:"未来送拍人",auctionAt:"2099-08-20",auctionPeriodOverride:"第100期",finalOutcome:"待拍",finalPrice:0},
+      {id:"current-lot-6",lot:6,itemName:"当前场次待同步拍品",sellerWechat:"测试送拍人",sellerPhone:"13900000006",auctionPeriodOverride:"第99期",finalOutcome:"待拍",finalPrice:0},
+      {id:"older-lot-1",lot:1,itemName:"较早场次拍品",sellerWechat:"历史送拍人",auctionPeriodOverride:"第98期",finalOutcome:"待拍",finalPrice:0},
     ]));
   }, {recordsKey,connectionKey});
 
@@ -73,10 +73,10 @@ try {
     resultText:document.querySelector("#collector-last-result")?.textContent || "",
   }), recordsKey);
 
-  assert.deepEqual(result.periods, ["第99期"], "nearest relevant period should be selected automatically");
+  assert.deepEqual(result.periods, ["第99期"], "newest known period should be selected automatically");
   assert.deepEqual(result.scopes, ["waitpay","waitconfirm","waitexpress","recent"]);
   const synced = result.records.find((record) => record.id === "current-lot-6");
-  const untouched = result.records.find((record) => record.id === "future-lot-1");
+  const untouched = result.records.find((record) => record.id === "older-lot-1");
   assert.equal(synced.finalOutcome, "成交");
   assert.equal(synced.finalPrice, 860);
   assert.equal(synced.paymentStatus, "已付款");

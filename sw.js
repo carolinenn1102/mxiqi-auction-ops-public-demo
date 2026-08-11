@@ -1,9 +1,9 @@
-const CACHE_NAME = "mxiqi-ops-demo-v65";
+const CACHE_NAME = "mxiqi-ops-demo-v66";
 const APP_ASSETS = [
   "./",
   "./index.html",
   "./styles.css?v=61",
-  "./app.js?v=65",
+  "./app.js?v=66",
   "./matching-core.js?v=49",
   "./package-core.js?v=49",
   "./workflow-core.js?v=50",
