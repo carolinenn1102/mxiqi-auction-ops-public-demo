@@ -2445,6 +2445,7 @@
     $("#collector-refresh").disabled = collectorRuntime.busy || !connected;
     $("#sync-settlement-orders").disabled = collectorRuntime.busy || !realConnection || !state.filters.auction;
     $("#sync-unpaid-orders").disabled = collectorRuntime.busy || !realConnection;
+    $("#sync-shipping-orders").disabled = collectorRuntime.busy || !realConnection;
     $("#collector-scope").disabled = collectorRuntime.busy || collectorRuntime.running;
     $("#collector-interval").disabled = collectorRuntime.busy;
     $("#collector-idle").disabled = collectorRuntime.busy;
@@ -2467,7 +2468,11 @@
     try {
       const now = new Date().toISOString();
       if (state.connection.status === "connected") {
-        const requestedScope = trigger === "payment" ? "waitpay" : trigger === "auto" ? "waitexpress" : state.collector.scope || "waitexpress";
+        const requestedScope = trigger === "payment"
+          ? "waitpay"
+          : ["auto", "shipping"].includes(trigger)
+            ? "waitexpress"
+            : state.collector.scope || "waitexpress";
         if (requestedScope === "waitpay") {
           const connector = await MxiqiConnector.ping();
           state.connection.connectorVersion = connector.version || "";
@@ -2493,7 +2498,7 @@
         state.collector.runCount = Number(state.collector.runCount || 0) + 1;
         const departedText = reconciliation.departed ? `，退出原状态 ${reconciliation.departed} 条` : "";
         state.collector.lastResult = `真实同步完成：读取 ${result.pages || 0} 页、${stats.accepted} 件拍品，新增 ${stats.added} 条，更新 ${stats.updated} 条${departedText}`;
-        audit(trigger === "auto" ? "自动同步麦稀奇" : trigger === "payment" ? "同步麦稀奇待付款" : "手动同步麦稀奇", `${stats.accepted} 件拍品 · 新增 ${stats.added} · 更新 ${stats.updated}${reconciliation.departed ? ` · 退出原状态 ${reconciliation.departed}` : ""}`);
+        audit(trigger === "auto" ? "自动同步麦稀奇" : trigger === "payment" ? "同步麦稀奇待付款" : trigger === "shipping" ? "同步麦稀奇待发货" : "手动同步麦稀奇", `${stats.accepted} 件拍品 · 新增 ${stats.added} · 更新 ${stats.updated}${reconciliation.departed ? ` · 退出原状态 ${reconciliation.departed}` : ""}`);
         save();
         notify(state.collector.lastResult, "success");
         return true;
@@ -4029,6 +4034,16 @@
     state.selected.clear();
     render();
   });
+  $("#sync-shipping-orders").addEventListener("click", async () => {
+    collectorRuntime.lastActivityAt = Date.now();
+    const synced = await runCollector("shipping");
+    if (!synced) return;
+    state.stage = "shipping";
+    state.filters.status = "";
+    state.filters.shipping = "";
+    state.selected.clear();
+    render();
+  });
   $("#sync-settlement-orders").addEventListener("click", () => {
     collectorRuntime.lastActivityAt = Date.now();
     void runSettlementSync();
@@ -4854,7 +4869,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=63", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=64", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";

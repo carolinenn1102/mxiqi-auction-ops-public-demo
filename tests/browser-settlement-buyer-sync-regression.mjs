@@ -30,7 +30,7 @@ try {
         globalThis.__settlementSyncScopes = [];
         globalThis.__settlementDealsCalled = 0;
         globalThis.MxiqiConnector = Object.freeze({
-          ping:async () => ({ok:true,loggedIn:true,version:"1.9.2",capabilities:["syncOrders","syncAuctionDeals"]}),
+          ping:async () => ({ok:true,loggedIn:true,version:"1.9.3",capabilities:["syncOrders","syncAuctionDeals"]}),
           syncOrders:async ({scope}) => {
             globalThis.__settlementSyncScopes.push(scope);
             const allOrders = Array.from({length:31}, (_,index) => {
@@ -62,7 +62,7 @@ try {
   await page.addInitScript(({recordsKey,connectionKey}) => {
     localStorage.clear();
     localStorage.setItem("mxiqi-public-demo-schema", "17");
-    localStorage.setItem(connectionKey, JSON.stringify({status:"connected",mode:"connector",connectorInstalled:true,connectorVersion:"1.9.2"}));
+    localStorage.setItem(connectionKey, JSON.stringify({status:"connected",mode:"connector",connectorInstalled:true,connectorVersion:"1.9.3"}));
     localStorage.setItem(recordsKey, JSON.stringify(Array.from({length:31}, (_,index) => {
       const lot = index + 1;
       return {id:`local-77-lot-${lot}`,lot,itemName:`第77期测试拍品 ${lot}`,sellerWechat:`送拍人${lot}`,sellerPhone:"13845470978",

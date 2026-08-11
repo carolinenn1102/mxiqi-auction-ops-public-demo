@@ -30,7 +30,7 @@ try {
         globalThis.__autoSettlementScopes = [];
         globalThis.__autoSettlementPeriods = [];
         globalThis.MxiqiConnector = Object.freeze({
-          ping:async () => ({ok:true,loggedIn:true,version:"1.9.2",capabilities:["syncOrders","syncAuctionDeals"]}),
+          ping:async () => ({ok:true,loggedIn:true,version:"1.9.3",capabilities:["syncOrders","syncAuctionDeals"]}),
           syncOrders:async ({scope}) => {
             globalThis.__autoSettlementScopes.push(scope);
             return {requiresLogin:false,records:[],pages:1,totalPages:1};
@@ -49,7 +49,7 @@ try {
   await page.addInitScript(({recordsKey,connectionKey}) => {
     localStorage.clear();
     localStorage.setItem("mxiqi-public-demo-schema", "17");
-    localStorage.setItem(connectionKey, JSON.stringify({status:"connected",mode:"connector",connectorInstalled:true,connectorVersion:"1.9.2"}));
+    localStorage.setItem(connectionKey, JSON.stringify({status:"connected",mode:"connector",connectorInstalled:true,connectorVersion:"1.9.3"}));
     localStorage.setItem(recordsKey, JSON.stringify([
       {
         id:"local-78-lot-19",lot:19,itemName:"比利时利奥波德二世1873年5法郎大银币（裸币）",sellerWechat:"弘治十八年",sellerPhone:"15267676688",

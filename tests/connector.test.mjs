@@ -17,7 +17,7 @@ test("commission logic uses the current cache-busted asset in the page and servi
 
   assert.equal(htmlVersion, "59");
   assert.equal(workerVersion, htmlVersion);
-  assert.match(serviceWorker, /CACHE_NAME = "mxiqi-ops-demo-v63"/);
+  assert.match(serviceWorker, /CACHE_NAME = "mxiqi-ops-demo-v64"/);
 });
 
 test("normalizes platform order states", () => {
@@ -260,13 +260,16 @@ test("settlement actions are gated until period unpaid and return work is comple
   assert.match(workflow, /"拆单待付款"/);
 });
 
-test("dashboard exposes wait-pay sync and a dedicated reauction library", () => {
+test("dashboard exposes wait-pay and wait-shipping sync with a dedicated reauction library", () => {
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
   assert.match(html, /id="sync-unpaid-orders"/);
+  assert.match(html, /id="sync-shipping-orders"/);
   assert.match(html, /value="waitpay"/);
   assert.match(html, /data-stage="reauction"/);
   assert.match(html, /<th>拍品状态<\/th>/);
-  assert.match(app, /trigger === "payment" \? "waitpay"/);
+  assert.match(app, /trigger === "payment"\s*\?\s*"waitpay"/);
+  assert.match(app, /\["auto", "shipping"\]\.includes\(trigger\)/);
+  assert.match(app, /runCollector\("shipping"\)/);
   assert.match(app, /record\.returnDisposition === "拖回\/再拍"/);
 });
