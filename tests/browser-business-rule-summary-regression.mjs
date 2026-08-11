@@ -75,7 +75,7 @@ try {
 
   const records = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "[]"), recordsKey);
   const byId = Object.fromEntries(records.map((record) => [record.id, record]));
-  assert.equal(localStorageSchema(await page.evaluate(() => localStorage.getItem("mxiqi-public-demo-schema"))), "19");
+  assert.equal(localStorageSchema(await page.evaluate(() => localStorage.getItem("mxiqi-public-demo-schema"))), "20");
   assert.equal(byId["np-under-threshold-a"].commissionAmount, -14.28);
   assert.match(byId["np-under-threshold-a"].promotion, /NP优惠/);
   assert.equal(byId["np-under-threshold-b"].commissionAmount, -14.7);

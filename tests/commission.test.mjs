@@ -117,9 +117,12 @@ test("an unpaid return stays at minus eight in the settlement bill after later h
   });
 });
 
-test("stored items bypass return commission and settlement", () => {
-  const record = {unpaidReturn:true,returnDisposition:"寄存",finalOutcome:"待拍",finalPrice:49288};
-  assert.equal(workflow.isReturnRecord(record), false);
-  assert.equal(workflow.settlementGross(record), 0);
-  assert.equal(workflow.isSettlementEligible(record), false);
+test("stored items settle by payment state without blocking seller settlement", () => {
+  const unpaid = {unpaidReturn:true,returnDisposition:"寄存",finalOutcome:"待拍",finalPrice:49288,paymentStatus:"待付款"};
+  const paid = {...unpaid,unpaidReturn:false,finalOutcome:"成交",paymentStatus:"已付款"};
+  assert.equal(workflow.isReturnRecord(unpaid), false);
+  assert.equal(workflow.settlementGross(unpaid), 0);
+  assert.equal(workflow.isSettlementEligible(unpaid), true);
+  assert.equal(workflow.settlementGross(paid), 49288);
+  assert.equal(workflow.isSettlementEligible(paid), true);
 });

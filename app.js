@@ -564,7 +564,7 @@
     const repaired = MxiqiWorkflow.restoreConsignorIdentities(state.records, snapshots, state.customers);
     if (!repaired.restored) return repaired;
     state.records = repaired.records;
-    state.records.filter((record) => !record.settled).forEach((record) => recalculateRecord(record, isStorageRecord(record)));
+    state.records.filter((record) => !record.settled).forEach((record) => recalculateRecord(record));
     syncCustomerDirectory();
     return repaired;
   }
@@ -586,7 +586,7 @@
       record.sellerPhone = normalizeCustomerPhone(profile.phone) || record.sellerPhone || "";
       record.birthdayMonth = Number(profile.birthdayMonth || record.birthdayMonth || 0);
       if (record.birthdayMonth) record.birthdayPending = false;
-      if (!record.settled) recalculateRecord(record, isStorageRecord(record));
+      if (!record.settled) recalculateRecord(record);
     });
   }
 
@@ -896,14 +896,11 @@
 
   function recalculateRecord(record, force = false) {
     const gross = settlementGross(record);
-    if (isStorageRecord(record)) {
+    if (isStorageRecord(record) && gross <= 0) {
       record.commissionAmount = 0;
       record.settlementAmount = 0;
       record.profit = 0;
-      record.promotion = "";
-      record.settled = false;
-      record.settledAt = "";
-      record.settlementOrder = 0;
+      record.promotion = "未付款寄存 · 结算金额为零";
       return record;
     }
     if (record.settled && !force) return record;
@@ -4101,7 +4098,7 @@
       else sessionStorage.removeItem(LOGISTICS_OPERATOR_KEY);
     } catch {}
     logisticsRuntime.checked = false;
-    state.records.filter((record) => !record.settled || isStorageRecord(record)).forEach((record) => recalculateRecord(record, isStorageRecord(record)));
+    state.records.filter((record) => !record.settled).forEach((record) => recalculateRecord(record));
     const tiers = MxiqiCommission.rebateTiers(state.settings);
     audit("更新佣金规则", `默认 ${formatRule(state.settings.defaultCommissionType, state.settings.defaultCommissionValue)}；低价 ${currency.format(state.settings.lowPriceFee)}；生日 满 ${currency.format(state.settings.birthdayThreshold)} 且含 ${state.settings.birthdayKeywords} 时 ${formatRule(state.settings.birthdayCommissionType, state.settings.birthdayCommissionValue)}；NP优惠 ${tiers.length ? tiers.map((tier) => `${currency.format(tier.threshold)}/${tier.value}%`).join("、") : "未启用"}`);
     save();
@@ -4412,7 +4409,7 @@
     const payable = sold.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0);
     const unpaidReturns = sold.filter((record) => record.unpaidReturn);
     context.font = 'bold 22px "Microsoft YaHei", sans-serif';
-    context.fillText(`${sold.length} 笔　成交 ${currency.format(gross)}　佣金 ${currency.format(commission)}　应结 ${currency.format(payable)}　未付款拖回 ${unpaidReturns.length} 笔`, 50, 204);
+    context.fillText(`${sold.length} 笔　成交 ${currency.format(gross)}　${settlementAdjustmentSummaryLabel(commission)} ${formatSettlementAdjustment(commission)}　应结 ${currency.format(payable)}　未付款拖回 ${unpaidReturns.length} 笔`, 50, 204);
 
     const columns = [
       {label:"Lot",x:50,width:80},
@@ -4420,7 +4417,7 @@
       {label:"送拍人 / 手机号",x:450,width:260},
       {label:"拍卖时间",x:710,width:180},
       {label:"成交价",x:890,width:130},
-      {label:"佣金",x:1020,width:150},
+      {label:"佣金 / 返佣",x:1020,width:150},
       {label:"加减款",x:1170,width:130},
       {label:"应结金额",x:1300,width:160},
       {label:"处理状态",x:1460,width:190},
@@ -4747,7 +4744,7 @@
     return repaired;
   }
 
-  if (localStorage.getItem(MIGRATION_KEY) !== "19") {
+  if (Number(localStorage.getItem(MIGRATION_KEY) || 0) < 19) {
     state.settings = {...defaultSettings, ...state.settings};
     repairEmbeddedConsignorLabels();
     if (Number(state.settings.birthdayCommissionValue) === 5 && state.settings.birthdayLabel === "生日月优惠") {
@@ -4806,7 +4803,7 @@
       record.addressStatus ||= "";
       record.mxiqiShippingStatus ||= "";
     });
-    state.records.filter((record) => !record.settled || isStorageRecord(record)).forEach((record) => recalculateRecord(record, isStorageRecord(record)));
+    state.records.filter((record) => !record.settled).forEach((record) => recalculateRecord(record));
     const demoPhones = {d101:"13900001001",d102:"13900001002",d103:"13900001003",d104:"13900001004"};
     state.records.forEach((record) => {
       record.sellerPhone ||= state.customers[record.sellerWechat]?.phone || demoPhones[record.id] || "";
@@ -4821,6 +4818,20 @@
     if (!["disconnected","demo_connected","connected"].includes(state.connection.status)) state.connection = clone(defaultConnection);
     localStorage.setItem(MIGRATION_KEY, "19");
     if (normalizedPendingFlow) audit("待付款恢复正常流程", `${normalizedPendingFlow} 件拍品等待人工选择特殊处理`, {undoable:false});
+    save();
+  }
+
+  if (Number(localStorage.getItem(MIGRATION_KEY) || 0) < 20) {
+    let repairedStorageSettlements = 0;
+    state.records.forEach((record) => {
+      if (!isStorageRecord(record) || Number(record.finalPrice || 0) <= 0) return;
+      recalculateRecord(record, true);
+      repairedStorageSettlements += 1;
+    });
+    localStorage.setItem(MIGRATION_KEY, "20");
+    if (repairedStorageSettlements) {
+      audit("修复寄存拍品结算", `${repairedStorageSettlements} 件寄存拍品已按付款状态恢复结账金额`, {undoable:false});
+    }
     save();
   }
 
@@ -4843,7 +4854,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=62", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=63", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";

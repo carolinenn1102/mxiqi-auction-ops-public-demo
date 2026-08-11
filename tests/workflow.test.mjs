@@ -23,6 +23,7 @@ test("manual auction period overrides platform text for a relisted item", () => 
 test("normalizes tracker special outcomes without losing the exact disposition", () => {
   assert.deepEqual(workflow.trackerOutcome("拖回/再拍", 0), {finalOutcome:"拖回",returnDisposition:"拖回/再拍"});
   assert.deepEqual(workflow.trackerOutcome("寄存", 0), {finalOutcome:"待拍",returnDisposition:"寄存"});
+  assert.deepEqual(workflow.trackerOutcome("寄存", 100), {finalOutcome:"待拍",returnDisposition:"寄存"});
   assert.deepEqual(workflow.trackerOutcome("", 0), {finalOutcome:"待拍",returnDisposition:""});
 });
 
@@ -415,11 +416,12 @@ test("unpaid return remains a return after choosing any later disposition", () =
   ["拖回/发回","拖回/再拍","拖回/等待"].forEach((returnDisposition) => {
     assert.equal(workflow.isReturnRecord({unpaidReturn:true,returnDisposition,finalOutcome:"成交",finalPrice:100}), true);
   });
-  const stored = {unpaidReturn:true,returnDisposition:"寄存",finalOutcome:"待拍",finalPrice:100};
+  const stored = {unpaidReturn:true,returnDisposition:"寄存",finalOutcome:"待拍",finalPrice:100,paymentStatus:"待付款"};
   assert.equal(workflow.isStorageRecord(stored), true);
   assert.equal(workflow.isReturnRecord(stored), false);
   assert.equal(workflow.settlementGross(stored), 0);
-  assert.equal(workflow.isSettlementEligible(stored), false);
+  assert.equal(workflow.isSettlementEligible(stored), true);
+  assert.equal(workflow.settlementGross({...stored,unpaidReturn:false,finalOutcome:"成交",paymentStatus:"已付款"}), 100);
 });
 
 test("period settlement waits for unpaid and unresolved returns", () => {

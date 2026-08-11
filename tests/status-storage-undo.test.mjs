@@ -17,8 +17,10 @@ test("dashboard exposes pending-auction and storage states", () => {
   assert.match(app, /function syncStoredAssetsFromRecords\(/);
   assert.match(app, /recordStorageId/);
   assert.match(app, /record\.returnDisposition !== "寄存"/);
-  assert.match(app, /if \(isStorageRecord\(record\)\)[\s\S]*?record\.commissionAmount = 0;[\s\S]*?record\.settlementAmount = 0;/);
-  assert.match(app, /!record\.settled \|\| isStorageRecord\(record\)/);
+  assert.match(app, /if \(isStorageRecord\(record\) && gross <= 0\)[\s\S]*?record\.commissionAmount = 0;[\s\S]*?record\.settlementAmount = 0;[\s\S]*?未付款寄存 · 结算金额为零/);
+  const storageRecalculation = app.slice(app.indexOf("if (isStorageRecord(record) && gross <= 0)"), app.indexOf("if (record.settled && !force)"));
+  assert.doesNotMatch(storageRecalculation, /record\.settled/);
+  assert.match(app, /修复寄存拍品结算/);
 });
 
 test("closed auctions expose an explicit result-sync action instead of looking pending", () => {

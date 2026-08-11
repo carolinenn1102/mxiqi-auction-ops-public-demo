@@ -172,12 +172,12 @@
   }
 
   function settlementGross(record = {}) {
-    if (isStorageRecord(record)) return 0;
+    if (isStorageRecord(record) && record.paymentStatus !== "已付款") return 0;
     return isReturnRecord(record) ? 0 : Math.max(0, Number(record.finalPrice) || 0);
   }
 
   function isSettlementEligible(record = {}) {
-    if (isStorageRecord(record)) return false;
+    if (isStorageRecord(record)) return true;
     return isReturnRecord(record) || settlementGross(record) > 0;
   }
 
