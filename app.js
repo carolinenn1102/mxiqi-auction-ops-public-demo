@@ -1885,6 +1885,10 @@
     $("#shipping-split-address").disabled = addressLocked;
     $("#shipping-review-address").disabled = addressLocked;
     const selectedCarrier = shippingForm.elements.shippingCarrier.value;
+    const provider = logisticsProviderState(selectedCarrier);
+    $("#shipping-order-policy").textContent = selectedCarrier === "sf"
+      ? `顺丰：默认章牌 0.8kg；寄方付；${provider.productName || "账号协议产品"}；按下单后至少 5 小时的下一整点预约，最晚当日 18:00，之后预约次日 10:00；不保价、不购买包装。`
+      : "菜鸟：默认章牌 0.8kg；使用“申请快递”；不设置预约取件时间；寄方付；不保价、不购买包装。";
     const previewMembers = members.map((item, index) => index ? item : {...item,
       shippingGoodsName:shippingForm.elements.shippingGoodsName.value || item.shippingGoodsName,
       shipmentWeightKg:Number(shippingForm.elements.shipmentWeightKg.value || item.shipmentWeightKg || 0),
@@ -3454,7 +3458,7 @@
     const carrier = shippingForm.elements.shippingCarrier.value || "cainiao";
     try {
       const result = await MxiqiConnector.openCarrierPortal({carrier});
-      if (result.requiresMiniProgram) notify("菜鸟商家寄件当前需要在微信小程序中操作；下单后请回填真实运单号和取件码", "info");
+      if (result.requiresMiniProgram) notify("菜鸟使用“申请快递”，不设置预约取件时间；下单后请回填真实运单号和取件码", "info");
       else notify(`${carrierLabel(carrier)}寄件页面已打开`);
     } catch (error) {
       if (carrier === "sf") window.open(MxiqiLogistics.CARRIERS.sf.portal, "_blank", "noopener");
@@ -4906,7 +4910,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=66", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=67", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";

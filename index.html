@@ -362,6 +362,7 @@
         <label class="field"><span>取件码（如有）</span><input name="pickupCode" autocomplete="off" placeholder="菜鸟取件后回填"></label>
         <label class="field wide"><span>物流平台业务单号（如有）</span><input name="logisticsOrderId" autocomplete="off"></label>
       </div>
+      <p class="rule-preview" id="shipping-order-policy">默认章牌 0.8kg；寄方付；不保价、不购买包装服务。</p>
       <p class="rule-preview" id="shipping-order-note">未完成地址二审，暂不能下单。</p>
       <div class="shipping-inline-actions shipping-order-actions"><button class="btn secondary" type="button" id="shipping-check-logistics">检查物流连接</button><button class="btn secondary" type="button" id="shipping-open-carrier">打开物流平台</button><button class="btn primary" type="button" id="shipping-create-order">提交真实物流下单</button><button class="btn secondary" type="button" id="shipping-save-result">保存真实物流结果</button><button class="btn secondary" type="button" id="shipping-copy-waybill">复制运单号</button><button class="btn secondary" type="button" id="shipping-copy-pickup-code">复制取件码</button><button class="btn primary" type="button" id="shipping-confirm-fill">确认麦稀奇已回填</button></div>
       </section>
@@ -399,9 +400,9 @@
   <script src="package-core.js?v=49"></script>
   <script src="workflow-core.js?v=50"></script>
   <script src="commission-core.js?v=59"></script>
-  <script src="logistics-core.js?v=49"></script>
+  <script src="logistics-core.js?v=50"></script>
   <script src="connector-bridge.js?v=49"></script>
   <script src="logistics-gateway.js?v=49"></script>
-  <script src="app.js?v=66"></script>
+  <script src="app.js?v=67"></script>
 </body>
 </html>

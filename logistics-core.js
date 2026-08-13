@@ -50,12 +50,23 @@
       carrier,
       clientReference:text(first.mxiqiOrderId || `LOT-${first.lot || ""}`),
       orderNumber:text(first.mxiqiOrderId),
+      billing:{payer:"sender"},
+      service:{
+        insurance:false,
+        packaging:false,
+        orderMode:carrier === "cainiao" ? "apply_express" : "contract_product",
+      },
+      pickup:carrier === "sf"
+        ? {mode:"scheduled", policy:"five_hours_next_whole_hour"}
+        : {mode:"carrier_default"},
       sender,
       receiver,
       parcel:{
         count:1,
         weightKg:Number(first.shipmentWeightKg || settings.defaultPackageWeightKg || 0.8),
         goodsName:text(first.shippingGoodsName || settings.defaultGoodsName || "章牌"),
+        insured:false,
+        packagingService:false,
         itemCount:records.length,
         lots:records.map((item) => text(item.lot)).filter(Boolean),
       },

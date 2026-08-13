@@ -70,6 +70,9 @@ function providerStatus() {
     sf:{
       configured:sf.configured,
       environment:sf.environment,
+      liveOrdersAllowed:sf.liveOrdersAllowed,
+      productName:sf.productName,
+      billing:"寄方付",
       reason:sf.configured
         ? `顺丰${sf.environment === "production" ? "生产" : "沙箱"}接口已配置`
         : `还缺：${sf.missing.join("、")}`,
@@ -343,7 +346,7 @@ export function createServer() {
       return json(response, 200, {
         ok:true,
         online:true,
-        version:"1.1.0",
+        version:"1.2.0",
         capabilities:["createLogisticsOrder","queryLogisticsOrder","cancelLogisticsOrder","createWaybillPdf"],
         providers:providerStatus(),
       }, corsHeaders(request));

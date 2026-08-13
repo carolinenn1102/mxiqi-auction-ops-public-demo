@@ -22,6 +22,11 @@ test("builds a package request without exposing credentials", () => {
   assert.equal(request.clientReference, "20260001");
   assert.equal("monthlyAccount" in request.sender, false);
   assert.equal(request.parcel.itemCount, 1);
+  assert.deepEqual(request.billing, {payer:"sender"});
+  assert.deepEqual(request.service, {insurance:false,packaging:false,orderMode:"contract_product"});
+  assert.deepEqual(request.pickup, {mode:"scheduled",policy:"five_hours_next_whole_hour"});
+  assert.equal(request.parcel.insured, false);
+  assert.equal(request.parcel.packagingService, false);
   assert.deepEqual(logistics.validateRequest(request), {ok:true,missing:[]});
   assert.equal("secretKey" in request, false);
 });
@@ -35,6 +40,18 @@ test("uses the agreed parcel defaults when the page has no override", () => {
   }]});
   assert.equal(request.parcel.goodsName, "章牌");
   assert.equal(request.parcel.weightKg, 0.8);
+});
+
+test("uses Cainiao apply-express mode without a pickup appointment", () => {
+  const request = logistics.buildRequest({carrier:"cainiao",settings:{
+    cainiaoSenderName:"甄先生",cainiaoSenderPhone:"15200000000",cainiaoSenderAddress:"北京市测试地址",
+  },records:[{
+    lot:2,recipientName:"李四",recipientPhone:"13800000001",
+    addressProvince:"上海市",addressCity:"上海市",addressDistrict:"浦东新区",addressDetail:"测试路2号",
+  }]});
+  assert.equal(request.service.orderMode, "apply_express");
+  assert.deepEqual(request.pickup, {mode:"carrier_default"});
+  assert.equal("startTime" in request.pickup, false);
 });
 
 test("rejects incomplete shipment requests", () => {

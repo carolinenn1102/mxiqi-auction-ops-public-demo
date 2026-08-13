@@ -25,7 +25,7 @@ try {
       version:"test-ready-actions",
       capabilities:["createLogisticsOrder"],
       providers:{
-        sf:{configured:true},
+        sf:{configured:true,productName:"contract-test-product"},
         cainiao:{configured:false,reason:"菜鸟真实接口未配置"},
       },
     }),
@@ -107,6 +107,11 @@ try {
   assert.match(await page.locator("#shipping-create-order").getAttribute("class"), /ready-to-order/);
   assert.match(await page.locator("#shipping-create-order").innerText(), /顺丰检查通过.*点击下单/);
   assert.match(await page.locator("#shipping-order-note").innerText(), /点击绿色按钮后才会创建订单/);
+  const sfPolicy = await page.locator("#shipping-order-policy").innerText();
+  assert.match(sfPolicy, /contract-test-product/);
+  assert.match(sfPolicy, /0\.8kg/);
+  assert.match(sfPolicy, /18:00/);
+  assert.match(sfPolicy, /10:00/);
   await page.click("#shipping-dialog [data-close-dialog]");
 
   await page.click("#shipping-next-cainiao");
@@ -122,6 +127,7 @@ try {
     ok:true,
     sfReady:true,
     sfButtonColor,
+    sfPolicyVisible:true,
     cainiaoBlocked:true,
     addressPendingSeparated:true,
     createOrderCalls,

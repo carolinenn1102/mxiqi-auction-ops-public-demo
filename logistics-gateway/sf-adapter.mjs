@@ -51,9 +51,12 @@ function shanghaiDate(value) {
 
 export function nextPickupTime(now = new Date(), options = {}) {
   const leadHours = Math.max(0, Number(options.leadHours ?? 5));
-  const latestHour = Math.min(23, Math.max(0, Number(options.latestHour ?? 22)));
+  const latestHour = Math.min(23, Math.max(0, Number(options.latestHour ?? 19)));
   const nextDayHour = Math.min(23, Math.max(0, Number(options.nextDayHour ?? 10)));
-  const candidate = new Date(now.getTime() + leadHours * 60 * 60 * 1000);
+  const hourMs = 60 * 60 * 1000;
+  const earliest = now.getTime() + leadHours * hourMs;
+  // 顺丰按整点预约；业务示例要求 12:00 下单落到 18:00，而不是 17:00。
+  const candidate = new Date((Math.floor(earliest / hourMs) + 1) * hourMs);
   const hour = Number(new Intl.DateTimeFormat("en-GB", {
     timeZone:"Asia/Shanghai",
     hour:"2-digit",
@@ -74,6 +77,7 @@ export function sfConfiguration(env = process.env) {
   const monthlyCard = text(env.SF_MONTHLY_CARD) || (environment === "sandbox" ? SANDBOX_MONTHLY_CARD : "");
   const expressTypeId = Number(env.SF_EXPRESS_TYPE_ID || 0);
   const payMethod = Number(env.SF_PAY_METHOD || 1);
+  const productName = text(env.SF_EXPRESS_PRODUCT_NAME) || "账号协议产品";
   const liveOrdersAllowed = text(env.SF_ALLOW_LIVE_ORDERS).toLowerCase() === "true";
   const required = [
     ["SF_CLIENT_CODE", "顾客编码"],
@@ -81,7 +85,7 @@ export function sfConfiguration(env = process.env) {
   ];
   const missing = required.filter(([name]) => !text(env[name])).map(([, label]) => label);
   if (!monthlyCard) missing.push("月结卡号");
-  if (![1, 2, 3].includes(payMethod)) missing.push("有效的运费付款方式");
+  if (payMethod !== 1) missing.push("运费付款方式必须为寄方付（1）");
   if (environment === "production" && !(expressTypeId > 0)) missing.push("顺丰小件协议产品编码");
   if (environment === "production" && !liveOrdersAllowed) missing.push("生产下单确认开关");
   return {
@@ -94,10 +98,11 @@ export function sfConfiguration(env = process.env) {
     checkWord:text(env.SF_CHECK_WORD),
     monthlyCard,
     expressTypeId:expressTypeId > 0 ? expressTypeId : 0,
-    payMethod,
+    productName,
+    payMethod:1,
     signatureMode,
     pickupLeadHours:Number(env.SF_PICKUP_LEAD_HOURS || 5),
-    pickupLatestHour:Number(env.SF_PICKUP_LATEST_HOUR || 22),
+    pickupLatestHour:Number(env.SF_PICKUP_LATEST_HOUR || 19),
     nextDayPickupHour:Number(env.SF_NEXT_DAY_PICKUP_HOUR || 10),
   };
 }
@@ -111,7 +116,7 @@ export function buildSfOrder(request, configuration, now = new Date()) {
     language:"zh_CN",
     orderId,
     monthlyCard:configuration.monthlyCard,
-    payMethod:configuration.payMethod,
+    payMethod:1,
     parcelQty:Math.max(1, Number(parcel.count || 1)),
     totalWeight:Number(parcel.weightKg),
     cargoDesc:text(parcel.goodsName) || "章牌",
@@ -153,6 +158,7 @@ export function buildSfOrder(request, configuration, now = new Date()) {
     custReferenceNo:text(request.orderNumber || request.clientReference).slice(0, 64),
     remark:text(request.remark).slice(0, 100),
   };
+  // 不购买保价或包装服务：不发送 serviceList，也不发送声明价值。
   if (configuration.expressTypeId > 0) order.expressTypeId = configuration.expressTypeId;
   return order;
 }

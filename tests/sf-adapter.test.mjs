@@ -50,9 +50,9 @@ test("production refuses live orders until contract fields and explicit confirma
   assert.ok(status.missing.includes("生产下单确认开关"));
 });
 
-test("pickup uses current time plus five hours or next-day 10:00", () => {
-  assert.equal(nextPickupTime(new Date("2026-08-01T00:00:00.000Z")), "2026-08-01 13:00:00");
-  assert.equal(nextPickupTime(new Date("2026-08-01T12:00:00.000Z")), "2026-08-02 10:00:00");
+test("pickup follows the agreed whole-hour examples", () => {
+  assert.equal(nextPickupTime(new Date("2026-08-01T04:00:00.000Z")), "2026-08-01 18:00:00");
+  assert.equal(nextPickupTime(new Date("2026-08-01T10:00:00.000Z")), "2026-08-02 10:00:00");
 });
 
 test("builds the contracted SF order without browser-held account fields", () => {
@@ -64,6 +64,9 @@ test("builds the contracted SF order without browser-held account fields", () =>
   assert.equal(order.totalWeight, 0.8);
   assert.equal(order.cargoDesc, "章牌");
   assert.equal(order.contactInfoList[1].country, "CN");
+  assert.equal(order.sendStartTm, "2026-08-01 14:00:00");
+  assert.equal("serviceList" in order, false);
+  assert.equal("declaredValue" in order, false);
 });
 
 test("submits the official form and returns the real waybill", async () => {
