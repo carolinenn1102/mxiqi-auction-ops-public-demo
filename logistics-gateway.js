@@ -14,7 +14,7 @@
   }
 
   async function requestJson(url, options = {}, timeoutMs = DEFAULT_TIMEOUT) {
-    const response = await fetch(url, {...options, signal:AbortSignal.timeout(timeoutMs)});
+    const response = await fetch(url, {credentials:"include", ...options, signal:AbortSignal.timeout(timeoutMs)});
     let payload = {};
     try {
       payload = await response.json();
@@ -27,6 +27,14 @@
 
   async function health({baseUrl = ""} = {}) {
     return requestJson(endpoint(baseUrl, "/api/logistics/health"), {method:"GET"}, 10_000);
+  }
+
+  async function authorize({baseUrl = "", operatorKey = ""} = {}) {
+    return requestJson(endpoint(baseUrl, "/api/logistics/session"), {
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({operatorKey:String(operatorKey || "").trim()}),
+    }, 10_000);
   }
 
   async function createOrder({baseUrl = "", operatorKey = "", request} = {}) {
@@ -73,5 +81,5 @@
     }, 45_000);
   }
 
-  globalThis.MxiqiLogisticsGateway = Object.freeze({health,createOrder,queryOrder,cancelOrder,createWaybillPdf});
+  globalThis.MxiqiLogisticsGateway = Object.freeze({health,authorize,createOrder,queryOrder,cancelOrder,createWaybillPdf});
 })();

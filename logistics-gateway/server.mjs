@@ -16,6 +16,8 @@ const activeOrders = new Map();
 const requestWindows = new Map();
 const RATE_WINDOW_MS = 60_000;
 const RATE_LIMIT = 30;
+const AUTH_COOKIE = "mxiqi_logistics_session";
+const AUTH_TTL_SECONDS = 7 * 24 * 60 * 60;
 const orderStore = createOrderStore(DATA_ROOT);
 
 function text(value) {
@@ -41,6 +43,42 @@ function safeEqual(left, right) {
   const a = Buffer.from(text(left));
   const b = Buffer.from(text(right));
   return a.length === b.length && a.length > 0 && crypto.timingSafeEqual(a, b);
+}
+
+function cookies(request) {
+  return Object.fromEntries(text(request.headers.cookie).split(";").map((part) => {
+    const separator = part.indexOf("=");
+    if (separator < 0) return ["", ""];
+    return [part.slice(0, separator).trim(), decodeURIComponent(part.slice(separator + 1).trim())];
+  }).filter(([name]) => name));
+}
+
+function sessionSignature(payload) {
+  return crypto.createHmac("sha256", text(process.env.LOGISTICS_OPERATOR_KEY)).update(payload).digest("base64url");
+}
+
+function createSessionToken(now = Date.now()) {
+  const expiresAt = Math.floor(now / 1000) + AUTH_TTL_SECONDS;
+  const payload = `${expiresAt}.${crypto.randomBytes(18).toString("base64url")}`;
+  return {token:`${payload}.${sessionSignature(payload)}`, expiresAt};
+}
+
+function validSessionToken(token, now = Date.now()) {
+  const parts = text(token).split(".");
+  if (parts.length !== 3) return false;
+  const [expiresAt, nonce, suppliedSignature] = parts;
+  if (!/^\d+$/.test(expiresAt) || Number(expiresAt) <= Math.floor(now / 1000) || !nonce) return false;
+  return safeEqual(suppliedSignature, sessionSignature(`${expiresAt}.${nonce}`));
+}
+
+function requestAuthorized(request) {
+  return safeEqual(request.headers["x-logistics-operator-key"], process.env.LOGISTICS_OPERATOR_KEY)
+    || validSessionToken(cookies(request)[AUTH_COOKIE]);
+}
+
+function sessionCookie(request, token, maxAge = AUTH_TTL_SECONDS) {
+  const secure = request.socket?.encrypted || text(request.headers["x-forwarded-proto"]).toLowerCase() === "https";
+  return `${AUTH_COOKIE}=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/api/logistics; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
 }
 
 function clientAddress(request) {
@@ -100,6 +138,7 @@ function corsHeaders(request) {
     "access-control-allow-origin":origin,
     "access-control-allow-headers":"content-type,x-logistics-operator-key,x-idempotency-key",
     "access-control-allow-methods":"GET,POST,DELETE,OPTIONS",
+    "access-control-allow-credentials":"true",
     vary:"Origin",
   } : {};
 }
@@ -178,7 +217,7 @@ async function handleCreate(request, response) {
   if (exceedsRateLimit(request)) {
     return json(response, 429, {ok:false,error:"操作过于频繁，请稍后重试"}, {...headers,"retry-after":"60"});
   }
-  if (!safeEqual(request.headers["x-logistics-operator-key"], process.env.LOGISTICS_OPERATOR_KEY)) {
+  if (!requestAuthorized(request)) {
     return json(response, 401, {ok:false,error:"物流操作授权码无效"}, headers);
   }
   let payload;
@@ -210,7 +249,7 @@ async function handleSearch(request, response, orderId) {
   if (exceedsRateLimit(request)) {
     return json(response, 429, {ok:false,error:"操作过于频繁，请稍后重试"}, {...headers,"retry-after":"60"});
   }
-  if (!safeEqual(request.headers["x-logistics-operator-key"], process.env.LOGISTICS_OPERATOR_KEY)) {
+  if (!requestAuthorized(request)) {
     return json(response, 401, {ok:false,error:"物流操作授权码无效"}, headers);
   }
   const provider = providerStatus().sf;
@@ -232,7 +271,7 @@ async function handleCancel(request, response, orderId) {
   if (exceedsRateLimit(request)) {
     return json(response, 429, {ok:false,error:"操作过于频繁，请稍后重试"}, {...headers,"retry-after":"60"});
   }
-  if (!safeEqual(request.headers["x-logistics-operator-key"], process.env.LOGISTICS_OPERATOR_KEY)) {
+  if (!requestAuthorized(request)) {
     return json(response, 401, {ok:false,error:"物流操作授权码无效"}, headers);
   }
   const provider = providerStatus().sf;
@@ -256,12 +295,33 @@ async function handleCancel(request, response, orderId) {
   }
 }
 
+async function handleAuthorize(request, response) {
+  const headers = corsHeaders(request);
+  if (exceedsRateLimit(request)) {
+    return json(response, 429, {ok:false,error:"操作过于频繁，请稍后重试"}, {...headers,"retry-after":"60"});
+  }
+  let payload;
+  try {
+    payload = await readJson(request);
+  } catch (error) {
+    return json(response, 400, {ok:false,error:error.message}, headers);
+  }
+  if (!safeEqual(payload.operatorKey, process.env.LOGISTICS_OPERATOR_KEY)) {
+    return json(response, 401, {ok:false,error:"物流操作授权码无效"}, headers);
+  }
+  const session = createSessionToken();
+  return json(response, 200, {ok:true,authorized:true,expiresAt:new Date(session.expiresAt * 1000).toISOString()}, {
+    ...headers,
+    "set-cookie":sessionCookie(request, session.token),
+  });
+}
+
 async function handleCreateLabel(request, response) {
   const headers = corsHeaders(request);
   if (exceedsRateLimit(request)) {
     return json(response, 429, {ok:false,error:"操作过于频繁，请稍后重试"}, {...headers,"retry-after":"60"});
   }
-  if (!safeEqual(request.headers["x-logistics-operator-key"], process.env.LOGISTICS_OPERATOR_KEY)) {
+  if (!requestAuthorized(request)) {
     return json(response, 401, {ok:false,error:"物流操作授权码无效"}, headers);
   }
   const provider = providerStatus().sf;
@@ -346,10 +406,14 @@ export function createServer() {
       return json(response, 200, {
         ok:true,
         online:true,
-        version:"1.2.0",
+        version:"1.3.0",
+        authorized:requestAuthorized(request),
         capabilities:["createLogisticsOrder","queryLogisticsOrder","cancelLogisticsOrder","createWaybillPdf"],
         providers:providerStatus(),
       }, corsHeaders(request));
+    }
+    if (url.pathname === "/api/logistics/session" && request.method === "POST") {
+      return handleAuthorize(request, response);
     }
     if (url.pathname === "/api/logistics/orders" && request.method === "POST") {
       return handleCreate(request, response);

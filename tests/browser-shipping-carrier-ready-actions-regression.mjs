@@ -22,6 +22,7 @@ try {
     body:JSON.stringify({
       ok:true,
       online:true,
+      authorized:true,
       version:"test-ready-actions",
       capabilities:["createLogisticsOrder"],
       providers:{
@@ -38,7 +39,6 @@ try {
     localStorage.clear();
     sessionStorage.clear();
     localStorage.setItem("mxiqi-public-demo-schema", "19");
-    sessionStorage.setItem("mxiqi-logistics-operator-key", "regression-test-operator");
     localStorage.setItem("mxiqi-public-demo-settings-v2", JSON.stringify({
       sfThreshold:2000,
       defaultGoodsName:"章牌",
@@ -98,7 +98,7 @@ try {
   assert.equal(await page.locator("#shipping-cainiao-ready-count").innerText(), "1");
   assert.doesNotMatch(await page.locator("#shipping-next-cainiao").getAttribute("class"), /ready-to-order/);
   assert.match(await page.locator("#shipping-next-cainiao").innerText(), /查看未通过项/);
-  assert.match(await page.locator("#shipping-cainiao-status").innerText(), /接口.*授权.*未就绪/);
+  assert.match(await page.locator("#shipping-cainiao-status").innerText(), /菜鸟真实接口未配置/);
 
   await page.click("#shipping-next-sf");
   assert.equal(await page.locator("#shipping-dialog").getAttribute("open"), "");
@@ -119,7 +119,7 @@ try {
   assert.match(await page.locator("#shipping-title").innerText(), /菜鸟接口未接通拍品/);
   assert.equal(await page.locator("#shipping-create-order").isDisabled(), true);
   assert.doesNotMatch(await page.locator("#shipping-create-order").getAttribute("class"), /ready-to-order/);
-  assert.match(await page.locator("#shipping-order-note").innerText(), /接口.*授权.*未就绪/);
+  assert.match(await page.locator("#shipping-order-note").innerText(), /菜鸟真实接口未配置/);
 
   assert.equal(createOrderCalls, 0, "浏览器回归不得提交真实物流订单");
   assert.deepEqual(errors, []);

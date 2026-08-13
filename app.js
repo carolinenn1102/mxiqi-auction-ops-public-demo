@@ -166,7 +166,7 @@
   const customerForm = $("#customer-form");
   let pendingBackupFile = null;
   let importMode = "default";
-  const logisticsRuntime = {checked:false,checking:false,installed:false,version:"",capabilities:[],providers:{},source:"gateway",lastError:""};
+  const logisticsRuntime = {checked:false,checking:false,installed:false,authorized:false,version:"",capabilities:[],providers:{},source:"gateway",lastError:""};
   const collectorRuntime = {
     running:false,
     busy:false,
@@ -952,7 +952,7 @@
     return logisticsRuntime.installed
       && logisticsRuntime.capabilities.includes("createLogisticsOrder")
       && logisticsProviderState(carrier).configured === true
-      && Boolean(logisticsOperatorKey());
+      && logisticsRuntime.authorized === true;
   }
 
   function shipmentRequest(records, carrier) {
@@ -965,6 +965,7 @@
     const notice = $("#shipping-connection-notice");
     const sidebar = $("#logistics-sidebar-status");
     const dot = $("#logistics-sidebar-dot");
+    const authorizationButton = $("#shipping-open-authorization");
     const connectedCarrier = ["sf", "cainiao"].find((candidate) => logisticsCanCreate(candidate));
     if (connectedCarrier) {
       sidebar.textContent = `${carrierLabel(connectedCarrier)}已接入`;
@@ -976,29 +977,44 @@
     }
     if (logisticsRuntime.checking) {
       status.textContent = "正在检查真实物流服务";
+      authorizationButton.hidden = true;
       return;
     }
+    const awaitingAuthorization = logisticsRuntime.installed && provider.configured === true && !logisticsRuntime.authorized;
+    authorizationButton.hidden = !awaitingAuthorization;
+    authorizationButton.textContent = `填写${carrierLabel(carrier)}操作授权码`;
     if (logisticsCanCreate(carrier)) {
       status.textContent = `${carrierLabel(carrier)}真实接口已就绪`;
       notice.className = "collector-notice success";
       notice.innerHTML = `<b>${carrierLabel(carrier)}真实下单已接通</b><p>提交后只接受物流平台返回的真实业务单号和运单号，不会生成演示数据。</p>`;
       return;
     }
-    const reason = provider.configured === true && !logisticsOperatorKey()
-      ? "真实接口已配置，但还未填写本次操作授权码"
+    const reason = awaitingAuthorization
+      ? `${carrierLabel(carrier)}服务已连接，但本设备尚未完成操作授权`
       : provider.reason || logisticsRuntime.lastError || "未连接到真实物流后台";
-    status.textContent = `${carrierLabel(carrier)}接口未就绪`;
+    status.textContent = awaitingAuthorization
+      ? `${carrierLabel(carrier)}服务已连接 · 待本机授权`
+      : `${carrierLabel(carrier)}接口未就绪`;
     notice.className = "collector-notice";
-    notice.innerHTML = `<b>当前只能人工完成真实下单</b><p>${esc(reason)}。请在物流平台下单后，把真实运单号和取件码录入；系统不会生成假单号。</p>`;
+    notice.innerHTML = awaitingAuthorization
+      ? `<b>${carrierLabel(carrier)}后台已接通</b><p>${esc(reason)}。点击“填写${carrierLabel(carrier)}操作授权码”完成一次验证，登录状态可保留 7 天。</p>`
+      : `<b>当前只能人工完成真实下单</b><p>${esc(reason)}。请在物流平台下单后，把真实运单号和取件码录入；系统不会生成假单号。</p>`;
   }
 
   async function checkLogisticsConnection({notifyResult = false} = {}) {
     logisticsRuntime.checking = true;
     renderLogisticsConnection(shippingForm?.elements?.shippingCarrier?.value || "cainiao");
     try {
-      const result = await MxiqiLogisticsGateway.health({baseUrl:logisticsGatewayUrl()});
+      let result = await MxiqiLogisticsGateway.health({baseUrl:logisticsGatewayUrl()});
+      const pendingOperatorKey = logisticsOperatorKey();
+      if (result.online && result.authorized !== true && pendingOperatorKey) {
+        await MxiqiLogisticsGateway.authorize({baseUrl:logisticsGatewayUrl(),operatorKey:pendingOperatorKey});
+        sessionStorage.removeItem(LOGISTICS_OPERATOR_KEY);
+        result = await MxiqiLogisticsGateway.health({baseUrl:logisticsGatewayUrl()});
+      }
       logisticsRuntime.checked = true;
       logisticsRuntime.installed = Boolean(result.online);
+      logisticsRuntime.authorized = result.authorized === true;
       logisticsRuntime.version = result.version || "";
       logisticsRuntime.capabilities = Array.isArray(result.capabilities) ? result.capabilities : [];
       logisticsRuntime.providers = result.providers || {};
@@ -1008,6 +1024,7 @@
     } catch (error) {
       logisticsRuntime.checked = true;
       logisticsRuntime.installed = false;
+      logisticsRuntime.authorized = false;
       logisticsRuntime.capabilities = [];
       logisticsRuntime.providers = {};
       logisticsRuntime.lastError = error.message || "未连接到真实物流后台";
@@ -1085,17 +1102,22 @@
     const phoneMatch = source.match(/(?:\+?86[ -]?)?(1[3-9]\d{9})/);
     const recipientPhone = phoneMatch?.[1] || "";
     const withoutPhone = source.replace(phoneMatch?.[0] || "", " ").replace(/\s+/g, " ").trim();
+    const trailingNameMatch = withoutPhone.match(/(?:^|\s)([\u3400-\u9fff·]{1,8}(?:先生|女士|小姐|师傅|老师))$/);
+    const trailingRecipientName = trailingNameMatch?.[1] || "";
+    const addressText = trailingNameMatch
+      ? withoutPhone.slice(0, Number(trailingNameMatch.index)).trim()
+      : withoutPhone;
     const provincePattern = /(北京市|上海市|天津市|重庆市|河北省|山西省|辽宁省|吉林省|黑龙江省|江苏省|浙江省|安徽省|福建省|江西省|山东省|河南省|湖北省|湖南省|广东省|海南省|四川省|贵州省|云南省|陕西省|甘肃省|青海省|台湾省|内蒙古自治区|广西壮族自治区|西藏自治区|宁夏回族自治区|新疆维吾尔自治区|香港特别行政区|澳门特别行政区)/;
-    const provinceMatch = withoutPhone.match(provincePattern);
+    const provinceMatch = addressText.match(provincePattern);
     let recipientName = "";
     let addressProvince = "";
     let addressCity = "";
     let addressDistrict = "";
     let addressDetail = "";
     if (provinceMatch) {
-      recipientName = withoutPhone.slice(0, provinceMatch.index).trim().replace(/\s+/g, "");
+      recipientName = addressText.slice(0, provinceMatch.index).trim().replace(/\s+/g, "") || trailingRecipientName;
       addressProvince = provinceMatch[1];
-      let remaining = withoutPhone.slice(Number(provinceMatch.index) + addressProvince.length).replace(/\s+/g, "");
+      let remaining = addressText.slice(Number(provinceMatch.index) + addressProvince.length).replace(/\s+/g, "");
       if (["北京市","上海市","天津市","重庆市"].includes(addressProvince)) addressCity = addressProvince;
       else {
         const cityMatch = remaining.match(/^(.{2,10}?(?:市|自治州|地区|盟))/);
@@ -1106,8 +1128,9 @@
       addressDistrict = districtMatch?.[1] || "";
       addressDetail = remaining.slice(addressDistrict.length).trim();
     } else {
-      const tokens = withoutPhone.split(" ").filter(Boolean);
-      if (tokens[0] && tokens[0].length <= 8) recipientName = tokens.shift();
+      const tokens = addressText.split(" ").filter(Boolean);
+      recipientName = trailingRecipientName;
+      if (!recipientName && tokens[0] && tokens[0].length <= 8) recipientName = tokens.shift();
       addressDetail = tokens.join("");
     }
     const values = {recipientRaw:source,recipientName,recipientPhone,addressProvince,addressCity,addressDistrict,addressDetail};
@@ -1393,7 +1416,9 @@
     const hasAnyWaybill = members.some((item) => item.outboundTrackingNumber);
     if (hasAnyWaybill && !commonWaybill) return {ok:false,reason:"包裹内已有不同运单号，必须先人工核对"};
     if (commonWaybill) return {ok:false,reason:"该包裹已经保存真实运单号"};
-    if (!logisticsCanCreate(carrier)) return {ok:false,reason:`${carrierLabel(carrier)}真实接口或本次操作授权尚未就绪`};
+    if (!logisticsRuntime.installed) return {ok:false,reason:"真实物流后台尚未连接"};
+    if (logisticsProviderState(carrier).configured !== true) return {ok:false,reason:logisticsProviderState(carrier).reason || `${carrierLabel(carrier)}真实接口尚未配置`};
+    if (!logisticsRuntime.authorized) return {ok:false,reason:`${carrierLabel(carrier)}服务已连接，但本设备尚未完成操作授权`};
     const validation = MxiqiLogistics.validateRequest(shipmentRequest(members, carrier));
     if (!validation.ok) return {ok:false,reason:`真实下单资料还缺：${validation.missing.join("、")}`};
     return {ok:true,reason:`${carrierLabel(carrier)}真实接口、授权、地址和包裹资料均已检查通过`};
@@ -1899,7 +1924,11 @@
     createOrderButton.classList.toggle("ready-to-order", orderReadiness.ok);
     createOrderButton.textContent = orderReadiness.ok
       ? `${carrierLabel(selectedCarrier)}检查通过 · 点击下单`
-      : logisticsRuntime.checking ? `${carrierLabel(selectedCarrier)}连接检查中` : `${carrierLabel(selectedCarrier)}检查未通过`;
+      : logisticsRuntime.checking
+        ? `${carrierLabel(selectedCarrier)}连接检查中`
+        : logisticsRuntime.installed && provider.configured === true && !logisticsRuntime.authorized
+          ? `${carrierLabel(selectedCarrier)}服务已连接 · 待授权`
+          : `${carrierLabel(selectedCarrier)}检查未通过`;
     $("#shipping-save-result").disabled = !packageReady || !addressReviewed || filled || waybillConflict;
     $("#shipping-copy-waybill").disabled = !hasWaybill;
     $("#shipping-copy-pickup-code").disabled = !record.pickupCode;
@@ -3454,6 +3483,11 @@
 
   $("#shipping-check-logistics").addEventListener("click", () => checkLogisticsConnection({notifyResult:true}));
 
+  $("#shipping-open-authorization").addEventListener("click", () => {
+    openSettings();
+    setTimeout(() => settingsForm.elements.logisticsOperatorKey?.focus(), 0);
+  });
+
   $("#shipping-open-carrier").addEventListener("click", async () => {
     const carrier = shippingForm.elements.shippingCarrier.value || "cainiao";
     try {
@@ -4910,7 +4944,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=67", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=68", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";

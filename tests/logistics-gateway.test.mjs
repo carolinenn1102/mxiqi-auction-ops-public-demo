@@ -35,6 +35,7 @@ test("health reports provider readiness without exposing credentials", async () 
   assert.equal(response.status, 200);
   const payload = await response.json();
   assert.equal(payload.online, true);
+  assert.equal(payload.authorized, false);
   assert.ok(payload.capabilities.includes("queryLogisticsOrder"));
   assert.ok(payload.capabilities.includes("cancelLogisticsOrder"));
   assert.ok(payload.capabilities.includes("createWaybillPdf"));
@@ -42,6 +43,37 @@ test("health reports provider readiness without exposing credentials", async () 
   assert.equal(payload.providers.sf.environment, "sandbox");
   assert.equal("operatorKey" in payload, false);
   assert.equal(JSON.stringify(payload).includes("test-operator-key"), false);
+});
+
+test("a valid operator key creates an HttpOnly seven-day browser session", async () => {
+  const authorizeResponse = await fetch(`${baseUrl}/api/logistics/session`, {
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({operatorKey:"test-operator-key"}),
+  });
+  assert.equal(authorizeResponse.status, 200);
+  const cookie = authorizeResponse.headers.get("set-cookie");
+  assert.match(cookie, /mxiqi_logistics_session=/);
+  assert.match(cookie, /HttpOnly/i);
+  assert.match(cookie, /SameSite=Strict/i);
+  assert.match(cookie, /Max-Age=604800/i);
+
+  const healthResponse = await fetch(`${baseUrl}/api/logistics/health`, {
+    headers:{cookie:cookie.split(";")[0]},
+  });
+  const health = await healthResponse.json();
+  assert.equal(health.authorized, true);
+  assert.equal(JSON.stringify(health).includes("test-operator-key"), false);
+});
+
+test("an invalid operator key cannot create a browser session", async () => {
+  const response = await fetch(`${baseUrl}/api/logistics/session`, {
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({operatorKey:"wrong-key"}),
+  });
+  assert.equal(response.status, 401);
+  assert.equal(response.headers.get("set-cookie"), null);
 });
 
 test("order query also requires operator authorization", async () => {
