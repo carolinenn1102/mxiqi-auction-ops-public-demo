@@ -1403,9 +1403,10 @@
   }
 
   function shippingPackageCarrier(group) {
-    const explicit = group.records.find((record) => ["sf", "cainiao"].includes(record.shippingCarrier))?.shippingCarrier
-      || group.records.find((record) => ["sf", "cainiao"].includes(record.carrier))?.carrier;
-    return explicit || carrierFor(group.records[0] || {});
+    const manual = group.records.find((record) => ["sf", "cainiao"].includes(record.carrierOverride))?.carrierOverride;
+    if (manual) return manual;
+    const shipped = group.records.find((record) => record.outboundTrackingNumber && ["sf", "cainiao"].includes(record.shippingCarrier));
+    return shipped?.shippingCarrier || carrierFor(group.records[0] || {});
   }
 
   function shippingOrderReadiness(records, carrier) {
@@ -1843,7 +1844,7 @@
     [...PACKAGE_SHARED_FIELDS, ...PACKAGE_ADDRESS_FIELDS, "outboundTrackingNumber", "pickupCode", "logisticsOrderId"].forEach((name) => {
       shippingForm.elements[name].value = record[name] || "";
     });
-    shippingForm.elements.shippingCarrier.value = record.shippingCarrier || record.carrier || carrierFor(record);
+    shippingForm.elements.shippingCarrier.value = shippingPackageCarrier({records:members.length ? members : [record]});
     if (members.length > 1) {
       [...PACKAGE_SHARED_FIELDS, ...PACKAGE_ADDRESS_FIELDS].forEach((name) => {
         const commonValue = MxiqiPackages.sameValue(members, name);
@@ -1907,6 +1908,12 @@
     const addressLocked = hasWaybill || waybillConflict;
     ["recipientRaw","recipientName","recipientPhone","addressProvince","addressCity","addressDistrict","addressDetail"].forEach((name) => { shippingForm.elements[name].disabled = addressLocked; });
     shippingForm.elements.shippingCarrier.disabled = addressLocked;
+    const manualCarrier = MxiqiPackages.sameValue(members, "carrierOverride");
+    const threshold = Number(state.settings.sfThreshold || 2000);
+    $("#shipping-carrier-note").textContent = manualCarrier
+      ? `已人工指定${carrierLabel(manualCarrier)}，关闭弹窗或刷新页面后仍保留，不再受 ${currency.format(threshold)} 默认分流影响。`
+      : `当前按成交价自动判断：未满 ${currency.format(threshold)} 默认菜鸟，达到后默认顺丰；修改上方承运商后会保存为人工指定。`;
+    $("#shipping-reset-carrier").disabled = addressLocked || !manualCarrier;
     $("#shipping-split-address").disabled = addressLocked;
     $("#shipping-review-address").disabled = addressLocked;
     const selectedCarrier = shippingForm.elements.shippingCarrier.value;
@@ -3475,7 +3482,9 @@
     const records = activeShippingRecords();
     const record = records[0];
     if (!record || records.some((item) => item.outboundTrackingNumber)) return;
-    records.forEach((item) => { item.shippingCarrier = event.target.value; });
+    const carrier = event.target.value;
+    records.forEach((item) => Object.assign(item, {carrierOverride:carrier,shippingCarrier:carrier,carrier}));
+    audit("人工指定整包承运商", `${records.length} 件 · ${carrierLabel(carrier)}`);
     save();
     renderShippingDialog(record, false);
     render();
@@ -3486,6 +3495,22 @@
   $("#shipping-open-authorization").addEventListener("click", () => {
     openSettings();
     setTimeout(() => settingsForm.elements.logisticsOperatorKey?.focus(), 0);
+  });
+
+  $("#shipping-reset-carrier").addEventListener("click", () => {
+    const records = activeShippingRecords();
+    const record = records[0];
+    if (!record || records.some((item) => item.outboundTrackingNumber)) return;
+    records.forEach((item) => {
+      item.carrierOverride = "";
+      const carrier = carrierFor(item);
+      item.shippingCarrier = carrier;
+      item.carrier = carrier;
+    });
+    audit("恢复整包承运商自动判断", `${records.length} 件 · ${carrierLabel(carrierFor(record))}`);
+    save();
+    renderShippingDialog(record);
+    render();
   });
 
   $("#shipping-open-carrier").addEventListener("click", async () => {
@@ -4925,6 +4950,27 @@
     save();
   }
 
+  if (Number(localStorage.getItem(MIGRATION_KEY) || 0) < 21) {
+    let preservedManualCarriers = 0;
+    state.records.forEach((record) => {
+      const automaticCarrier = carrierFor({...record,carrierOverride:""});
+      const storedCarrier = ["sf", "cainiao"].includes(record.shippingCarrier)
+        ? record.shippingCarrier
+        : ["sf", "cainiao"].includes(record.carrier) ? record.carrier : "";
+      if (!record.carrierOverride && storedCarrier && storedCarrier !== automaticCarrier) {
+        record.carrierOverride = storedCarrier;
+        preservedManualCarriers += 1;
+      }
+      if (record.carrierOverride) {
+        record.shippingCarrier = record.carrierOverride;
+        record.carrier = record.carrierOverride;
+      }
+    });
+    localStorage.setItem(MIGRATION_KEY, "21");
+    if (preservedManualCarriers) audit("保留既有人工承运商", `${preservedManualCarriers} 件拍品已转为人工指定`, {undoable:false});
+    save();
+  }
+
   const startupDuplicateRepair = deduplicateCurrentRecords();
   if (startupDuplicateRepair.removed) {
     syncStoredAssetsFromRecords();
@@ -4944,7 +4990,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=68", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=69", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
