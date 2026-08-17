@@ -51,6 +51,7 @@ try {
   const primaryAction = page.locator("#export-settlement");
   assert.equal(await primaryAction.isEnabled(), true);
   assert.equal(await primaryAction.innerText(), "查看 2 条未结账");
+  assert.equal(await page.locator("#settlement-unsettled-payable").innerText(), "¥2,760.00");
 
   await primaryAction.click();
   assert.equal(await primaryAction.innerText(), "显示全部结算记录");
@@ -80,9 +81,13 @@ try {
   await page.selectOption("#filter-auction", "第88期");
   await primaryAction.click();
   await page.click('[data-settlement-settle="phone:13900000001"]');
+  await page.waitForFunction(() => document.querySelector("#settlement-unsettled-payable")?.textContent === "¥1,840.00");
   assert.equal(await page.locator("#result-count").innerText(), "未结账：1 位送拍人 · 1 件拍品");
+  assert.equal(await page.locator("#settlement-unsettled-payable").innerText(), "¥1,840.00");
   await page.click('[data-settlement-settle="phone:13900000002"]');
+  await page.waitForFunction(() => document.querySelector("#settlement-unsettled-payable")?.textContent === "¥0.00");
   assert.equal(await primaryAction.innerText(), "导出本期结算表");
+  assert.equal(await page.locator("#settlement-unsettled-payable").innerText(), "¥0.00");
   assert.equal(await page.locator("#result-count").innerText(), "3 位送拍人 · 3 件拍品");
   const completeLabels = page.locator("#records-body .settlement-queue-complete small");
   assert.equal(await completeLabels.count(), 3);

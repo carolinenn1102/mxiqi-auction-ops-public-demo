@@ -14,10 +14,14 @@ test("commission logic uses the current cache-busted asset in the page and servi
   const serviceWorker = fs.readFileSync(path.join(root, "sw.js"), "utf8");
   const htmlVersion = html.match(/commission-core\.js\?v=(\d+)/)?.[1];
   const workerVersion = serviceWorker.match(/commission-core\.js\?v=(\d+)/)?.[1];
+  const workflowHtmlVersion = html.match(/workflow-core\.js\?v=(\d+)/)?.[1];
+  const workflowWorkerVersion = serviceWorker.match(/workflow-core\.js\?v=(\d+)/)?.[1];
 
   assert.equal(htmlVersion, "59");
   assert.equal(workerVersion, htmlVersion);
-  assert.match(serviceWorker, /CACHE_NAME = "mxiqi-ops-demo-v70"/);
+  assert.equal(workflowHtmlVersion, "51");
+  assert.equal(workflowWorkerVersion, workflowHtmlVersion);
+  assert.match(serviceWorker, /CACHE_NAME = "mxiqi-ops-demo-v71"/);
 });
 
 test("normalizes platform order states", () => {

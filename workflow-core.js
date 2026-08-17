@@ -178,7 +178,7 @@
 
   function isSettlementEligible(record = {}) {
     if (isStorageRecord(record)) return true;
-    return isReturnRecord(record) || settlementGross(record) > 0;
+    return isReturnRecord(record) || record.finalOutcome === "流拍" || settlementGross(record) > 0;
   }
 
   function settlementBlocker(record = {}) {

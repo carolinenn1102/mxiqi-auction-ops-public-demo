@@ -51,6 +51,13 @@ test("return records remain settlement eligible with zero transaction gross", ()
   assert.equal(workflow.isSettlementEligible(record), true);
 });
 
+test("explicit unsold records remain settlement eligible with zero transaction gross", () => {
+  const record = {finalOutcome:"流拍",finalPrice:0,returnDisposition:""};
+  assert.equal(workflow.settlementGross(record), 0);
+  assert.equal(workflow.isSettlementEligible(record), true);
+  assert.equal(workflow.isSettlementEligible({finalOutcome:"待拍",finalPrice:0}), false);
+});
+
 test("relisting preserves the previous return settlement and resets the new auction round", () => {
   const relisted = workflow.relistRecord({finalOutcome:"成交",returnDisposition:"拖回/再拍",finalPrice:1160,paymentStatus:"已付款",settled:true,commissionAmount:8,settlementAmount:-8,settlementNote:"已扣拖回费"}, "2026-07-29T10:00:00.000Z");
   assert.deepEqual(relisted.priorReturnSettlement, {finalOutcome:"成交",returnDisposition:"拖回/再拍",finalPrice:1160,settled:true,settledAt:"",commissionAmount:8,settlementAmount:-8,promotion:"",settlementNote:"已扣拖回费",unpaidReturn:false,unpaidReturnDetectedAt:"",buyerName:"",buyerPhone:"",recipientName:"",recipientPhone:"",recipientRaw:"",mxiqiOrderId:"",outboundTrackingNumber:""});

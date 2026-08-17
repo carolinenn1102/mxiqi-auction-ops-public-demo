@@ -1356,6 +1356,7 @@
     $("#settlement-commission-label").textContent = settlementAdjustmentSummaryLabel(adjustmentTotal);
     $("#settlement-commission").textContent = formatSettlementAdjustment(adjustmentTotal);
     $("#settlement-payable").textContent = currency.format(sold.reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0));
+    $("#settlement-unsettled-payable").textContent = currency.format(sold.filter((record) => !record.settled).reduce((sum, record) => sum + Number(record.settlementAmount || 0), 0));
     const unpaidReturns = sold.filter((record) => record.unpaidReturn);
     $("#settlement-unpaid-return").textContent = `${unpaidReturns.length} 笔 / ${currency.format(unpaidReturns.reduce((sum, record) => sum + Number(record.commissionAmount || 0), 0))}`;
     const blockerBox = $("#settlement-blockers");
@@ -4987,6 +4988,18 @@
     save();
   }
 
+  if (Number(localStorage.getItem(MIGRATION_KEY) || 0) < 22) {
+    let repairedUnsoldSettlements = 0;
+    state.records.forEach((record) => {
+      if (record.settled || record.finalOutcome !== "流拍") return;
+      recalculateRecord(record, true);
+      repairedUnsoldSettlements += 1;
+    });
+    localStorage.setItem(MIGRATION_KEY, "22");
+    if (repairedUnsoldSettlements) audit("修复流拍结算", `${repairedUnsoldSettlements} 件流拍拍品已按低价固定佣金进入结算`, {undoable:false});
+    save();
+  }
+
   const startupDuplicateRepair = deduplicateCurrentRecords();
   if (startupDuplicateRepair.removed) {
     syncStoredAssetsFromRecords();
@@ -5006,7 +5019,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=70", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=71", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";

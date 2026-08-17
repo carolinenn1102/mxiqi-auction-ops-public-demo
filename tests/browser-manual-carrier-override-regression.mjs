@@ -134,7 +134,7 @@ try {
   assert.deepEqual(await page.evaluate(() => {
     const [record] = JSON.parse(localStorage.getItem("mxiqi-public-demo-records-v1"));
     return {schema:localStorage.getItem("mxiqi-public-demo-schema"),carrierOverride:record.carrierOverride,shippingCarrier:record.shippingCarrier,carrier:record.carrier};
-  }), {schema:"21",carrierOverride:"sf",shippingCarrier:"sf",carrier:"sf"});
+  }), {schema:"22",carrierOverride:"sf",shippingCarrier:"sf",carrier:"sf"});
 
   assert.equal(createOrderCalls, 0, "浏览器回归不得提交真实物流订单");
   assert.deepEqual(errors, []);

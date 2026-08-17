@@ -74,7 +74,7 @@ try {
 
   let records = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "[]"), recordsKey);
   let stored = records.find((record) => record.id === "stored-unsettled");
-  assert.equal(await page.evaluate(() => localStorage.getItem("mxiqi-public-demo-schema")), "21");
+  assert.equal(await page.evaluate(() => localStorage.getItem("mxiqi-public-demo-schema")), "22");
   assert.equal(stored.commissionAmount, 56);
   assert.equal(stored.settlementAmount, 644);
   assert.equal(stored.settled, false);

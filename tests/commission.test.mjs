@@ -126,3 +126,10 @@ test("stored items settle by payment state without blocking seller settlement", 
   assert.equal(workflow.settlementGross(paid), 49288);
   assert.equal(workflow.isSettlementEligible(paid), true);
 });
+
+test("an unsold zero-gross lot receives the configured fixed fee", () => {
+  const plan = commission.calculate({gross:0,birthdayMonth:0,auctionMonth:7,settings});
+  assert.equal(plan.amount, 5);
+  assert.equal(plan.isLowPrice, true);
+  assert.equal(0 - plan.amount, -5);
+});
