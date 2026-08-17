@@ -921,7 +921,8 @@
   }
 
   function carrierFor(record) {
-    return record.carrierOverride || (Number(record.finalPrice) >= Number(state.settings.sfThreshold || 1000) ? "sf" : "cainiao");
+    const manual = ["sf", "cainiao"].includes(record.carrierOverride) ? record.carrierOverride : "";
+    return manual || (Number(record.finalPrice) >= Number(state.settings.sfThreshold || 1000) ? "sf" : "cainiao");
   }
 
   function carrierLabel(value) {
@@ -1407,7 +1408,9 @@
     const manual = group.records.find((record) => ["sf", "cainiao"].includes(record.carrierOverride))?.carrierOverride;
     if (manual) return manual;
     const shipped = group.records.find((record) => record.outboundTrackingNumber && ["sf", "cainiao"].includes(record.shippingCarrier));
-    return shipped?.shippingCarrier || carrierFor(group.records[0] || {});
+    if (shipped) return shipped.shippingCarrier;
+    const packageTotal = group.records.reduce((sum, record) => sum + Math.max(0, Number(record.finalPrice) || 0), 0);
+    return carrierFor({finalPrice:packageTotal});
   }
 
   function shippingOrderReadiness(records, carrier) {
@@ -1519,7 +1522,7 @@
 
   function renderRecordRow(record, child = false) {
     const gaps = missing(record);
-    const carrier = record.carrier || carrierFor(record);
+    const carrier = shippingPackageCarrier({records:[record]});
     const buyerName = record.buyerName || record.recipientName || "";
     const buyerPhone = record.buyerPhone || record.recipientPhone || "";
     const recipientDetail = record.recipientName && record.recipientName !== buyerName ? `收件人：${record.recipientName}` : (record.recipientPhone && record.recipientPhone !== buyerPhone ? `收件手机：${record.recipientPhone}` : "");
@@ -1570,8 +1573,7 @@
     });
     const sellers = [...sellerMap.values()];
     const sellerSummary = sellers.length === 1 ? sellers[0].wechat : sellers.length ? `${sellers.length} 位送拍人` : "送拍人待匹配";
-    const carrierValues = [...new Set(records.map((record) => record.carrier || carrierFor(record)))];
-    const carrier = carrierValues.length === 1 ? carrierValues[0] : "pending";
+    const carrier = shippingPackageCarrier(group);
     const stageValues = [...new Set(records.map(shippingStageLabel))];
     const statusValues = [...new Set(records.map(recordStatus))];
     const paymentValues = [...new Set(records.map((record) => record.paymentStatus).filter(Boolean))];
@@ -1589,7 +1591,7 @@
       <td><b>${esc(project)}</b><small>${orderId ? `订单 ${esc(orderId)}` : "同一出库运单"}</small></td>
       <td><b class="money">${currency.format(total)}</b><small>合计 ${records.length} 件 · 均价 ${currency.format(total / records.length)}</small></td>
       <td>${gapCount ? `<button type="button" class="chip warning" data-package-edit="${esc(group.key)}" title="打开整包补资料；公共资料同步到 ${records.length} 件拍品">共缺 ${gapCount} 项 · 整包补资料</button>` : '<span class="chip success">全部完整</span>'}</td>
-      <td><span class="carrier ${carrier}">${carrierValues.length === 1 ? carrierLabel(carrier) : "混合"}</span><small>${esc(stageValues.length === 1 ? stageValues[0] : `${stageValues.length} 种发货状态`)}</small></td>
+      <td><span class="carrier ${carrier}">${carrierLabel(carrier)}</span><small>${esc(stageValues.length === 1 ? stageValues[0] : `${stageValues.length} 种发货状态`)}</small></td>
       <td>${deliveryCode ? `<code>${esc(deliveryCode)}</code>` : '<span class="muted">—</span>'}<small>${deliveryCode ? "整包共用单号" : "等待整包下单"}</small></td>
       <td>${settledCount === records.length ? '<span class="chip success">整包已结账</span>' : `<span class="chip neutral">${settledCount}/${records.length} 已结账</span>`}<small>${currency.format(totalSettlement)} · ${totalCommission < 0 ? "返佣" : "佣金"} ${formatSettlementAdjustment(totalCommission)}</small></td>
       <td><div class="row-actions package-actions"><button data-package-toggle="${esc(group.key)}">${expanded ? "收起" : "展开"}</button><button data-package-shipping="${esc(group.key)}" title="${esc(canShipPackage ? "打开整包发货复核" : shippingBlockedMessage(records.find((record) => !isShippingCandidate(record)) || records[0]))}">整包发货</button></div></td>
@@ -1911,9 +1913,10 @@
     shippingForm.elements.shippingCarrier.disabled = addressLocked;
     const manualCarrier = MxiqiPackages.sameValue(members, "carrierOverride");
     const threshold = Number(state.settings.sfThreshold || 2000);
+    const packageTotal = members.reduce((sum, item) => sum + Math.max(0, Number(item.finalPrice) || 0), 0);
     $("#shipping-carrier-note").textContent = manualCarrier
       ? `已人工指定${carrierLabel(manualCarrier)}，关闭弹窗或刷新页面后仍保留，不再受 ${currency.format(threshold)} 默认分流影响。`
-      : `当前按成交价自动判断：未满 ${currency.format(threshold)} 默认菜鸟，达到后默认顺丰；修改上方承运商后会保存为人工指定。`;
+      : `当前按${members.length > 1 ? `整包成交总额自动判断（本包 ${currency.format(packageTotal)}）` : `成交价自动判断（本件 ${currency.format(packageTotal)}）`}：未满 ${currency.format(threshold)} 默认菜鸟，达到后默认顺丰；修改上方承运商后会保存为人工指定。`;
     $("#shipping-reset-carrier").disabled = addressLocked || !manualCarrier;
     $("#shipping-split-address").disabled = addressLocked;
     $("#shipping-review-address").disabled = addressLocked;
@@ -5019,7 +5022,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=71", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=72", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
