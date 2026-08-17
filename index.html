@@ -229,7 +229,7 @@
         <div class="asset-import-actions"><button class="btn secondary" type="button" id="asset-sync-orders">按寄存单号回补麦稀奇订单</button><button class="btn secondary" type="button" id="asset-rematch">重新自动匹配</button><span>寄存资料按送拍人手机号或寄存单号关联；麦稀奇订单中的买家手机号只用于发货，不参与送拍人匹配。</span><p class="asset-sync-status" id="asset-sync-status" aria-live="polite">点击回补后会在这里显示搜索进度和结果。</p></div>
       </section>
       <section class="asset-metrics" aria-label="匹配汇总">
-        <button type="button" data-asset-filter="all"><span>全部</span><b id="asset-total">0</b></button>
+        <button type="button" data-asset-filter="all"><span>当前库存</span><b id="asset-total">0</b></button>
         <button type="button" data-asset-filter="auto"><span>自动匹配</span><b id="asset-auto">0</b></button>
         <button type="button" data-asset-filter="manual"><span>人工匹配</span><b id="asset-manual">0</b></button>
         <button type="button" data-asset-filter="review"><span>待确认</span><b id="asset-review">0</b></button>
@@ -397,13 +397,13 @@
   <datalist id="auction-period-options"></datalist>
   <div id="toast" class="toast" role="status" hidden></div>
   <script src="vendor/exceljs.min.js?v=49"></script>
-  <script src="matching-core.js?v=49"></script>
+  <script src="matching-core.js?v=50"></script>
   <script src="package-core.js?v=49"></script>
   <script src="workflow-core.js?v=50"></script>
   <script src="commission-core.js?v=59"></script>
   <script src="logistics-core.js?v=50"></script>
   <script src="connector-bridge.js?v=49"></script>
   <script src="logistics-gateway.js?v=50"></script>
-  <script src="app.js?v=69"></script>
+  <script src="app.js?v=70"></script>
 </body>
 </html>

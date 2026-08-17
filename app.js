@@ -2828,6 +2828,18 @@
     return `${MxiqiAssets.TYPE_LABELS[asset.assetType] || "资料"} · ${asset.sourceSheet || "工作表"}`;
   }
 
+  function assetShippingLabel(asset) {
+    const matchedRecord = MxiqiAssets.matchedRecordForAsset(asset, state.records);
+    if (!MxiqiAssets.assetShippingCompleted(asset, matchedRecord)) return "待处理";
+    const matchedShipment = asset.storageShippingStatus !== "completed";
+    const timestamp = matchedShipment
+      ? matchedRecord?.mxiqiFilledAt || matchedRecord?.shippingOrderedAt || matchedRecord?.sourceUpdatedAt || ""
+      : asset.storageShippedAt || "";
+    const dateValue = timestamp ? new Date(timestamp) : null;
+    const date = dateValue && !Number.isNaN(dateValue.getTime()) ? ` ${dateValue.toLocaleDateString("zh-CN")}` : "";
+    return `${matchedShipment ? "已匹配发货" : "已手动处理发货"}${date}`;
+  }
+
   function assetVisibleRows() {
     const query = state.assetQuery.trim().toLowerCase();
     return state.assets.filter((asset) => {
@@ -2842,9 +2854,11 @@
     [...state.selectedAssets].forEach((assetId) => {
       if (!currentAssetIds.has(assetId)) state.selectedAssets.delete(assetId);
     });
+    const inventoryAssets = MxiqiAssets.currentInventoryAssets(state.assets, state.records);
+    const completedAssetCount = state.assets.length - inventoryAssets.length;
     const counts = {auto:0,manual:0,review:0,unmatched:0};
-    state.assets.forEach((asset) => { counts[asset.matchStatus] = (counts[asset.matchStatus] || 0) + 1; });
-    $("#asset-total").textContent = state.assets.length;
+    inventoryAssets.forEach((asset) => { counts[asset.matchStatus] = (counts[asset.matchStatus] || 0) + 1; });
+    $("#asset-total").textContent = inventoryAssets.length;
     $("#asset-auto").textContent = counts.auto;
     $("#asset-manual").textContent = counts.manual;
     $("#asset-review").textContent = counts.review;
@@ -2852,7 +2866,8 @@
     $$('[data-asset-filter]').forEach((button) => button.classList.toggle("active", button.dataset.assetFilter === state.assetFilter));
     $("#asset-search").value = state.assetQuery;
     const visible = assetVisibleRows();
-    const groups = MxiqiAssets.groupAssetsByBuyer(visible);
+    const groups = MxiqiAssets.groupAssetsByBuyer(visible, state.records);
+    const inventoryGroupCount = MxiqiAssets.groupAssetsByBuyer(inventoryAssets, state.records).length;
     const visibleSelected = visible.filter((asset) => state.selectedAssets.has(asset.id));
     const selectAll = $("#asset-select-all");
     selectAll.checked = visible.length > 0 && visibleSelected.length === visible.length;
@@ -2867,7 +2882,7 @@
     $("#asset-sync-orders").disabled = !consignmentOrderCount;
     $("#asset-sync-orders").title = !consignmentOrderCount ? "请先导入含寄存单号的第一张“寄存”工作表" : state.connection.status !== "connected" ? "请先连接麦稀奇" : `搜索 ${consignmentOrderCount} 个寄存单号`;
     $("#asset-footer-note").textContent = state.assets.length
-      ? `显示 ${groups.length} 位买家 / ${visible.length} 件资料 · ${counts.review + counts.unmatched} 件需要人工处理`
+      ? `当前库存 ${inventoryAssets.length} 件 / ${inventoryGroupCount} 位买家 · 已发货记录 ${completedAssetCount} 件（不计库存） · ${counts.review + counts.unmatched} 件需要人工处理`
       : "等待导入";
     const body = $("#asset-body");
     if (!visible.length) {
@@ -2880,11 +2895,12 @@
     body.innerHTML = groups.map((group) => {
       const expanded = state.expandedAssetGroups.has(group.key);
       const allSelected = group.assets.length > 0 && group.assets.every((asset) => state.selectedAssets.has(asset.id));
-      const matchedCount = group.assets.filter((asset) => ["auto","manual"].includes(asset.matchStatus)).length;
+      const matchedCount = group.currentAssets.filter((asset) => ["auto","manual"].includes(asset.matchStatus)).length;
       const orderNumbers = [...new Set(group.assets.map((asset) => asset.consignmentOrderNo).filter(Boolean))];
-      const periods = [...new Set(group.assets.map((asset) => asset.auctionNumber).filter(Boolean))];
-      const dates = [...new Set(group.assets.map((asset) => asset.auctionAt).filter(Boolean))];
-      const lots = group.assets.map((asset) => asset.lot).filter(Boolean);
+      const summaryAssets = group.currentAssets.length ? group.currentAssets : group.assets;
+      const periods = [...new Set(summaryAssets.map((asset) => asset.auctionNumber).filter(Boolean))];
+      const dates = [...new Set(summaryAssets.map((asset) => asset.auctionAt).filter(Boolean))];
+      const lots = summaryAssets.map((asset) => asset.lot).filter(Boolean);
       const children = expanded ? group.assets.map((asset) => {
         const orderDetail = asset.consignmentOrderNo ? `寄存单 ${asset.consignmentOrderNo}`
           : asset.gradingOrderNo ? `送评单 ${asset.gradingOrderNo}`
@@ -2898,18 +2914,18 @@
           <td><span class="match-badge ${esc(asset.matchStatus)}">${esc(assetStatusLabel(asset.matchStatus))}</span><small>${esc(asset.matchReason || "")}</small></td>
           <td><span class="asset-type ${esc(asset.assetType)}">${esc(assetSourceLabel(asset))}</span><small>${esc(orderDetail)} · ${esc(amountDetail)}</small></td>
           <td><select class="asset-match-select" data-asset-match="${esc(asset.id)}"><option value="">不匹配 / 稍后处理</option>${recordOptions}</select></td>
-          <td><small>${asset.storageShippingStatus === "completed" ? `已发货 ${new Date(asset.storageShippedAt).toLocaleDateString("zh-CN")}` : "待处理"}</small></td>
+          <td><small>${esc(assetShippingLabel(asset))}</small></td>
         </tr>`;
       }).join("") : "";
       return `<tr class="asset-group-row ${group.completed ? "completed" : ""} ${allSelected ? "selected-row" : ""}">
         <td class="select-column"><input type="checkbox" data-asset-group-select="${esc(group.key)}" aria-label="选择 ${esc(group.buyerName)} 的寄存资料" ${allSelected ? "checked" : ""}></td>
         <td class="asset-buyer-cell"><b>${esc(group.buyerName)}</b><small>${esc(group.buyerPhone || "买家手机号待补")}</small><small class="asset-address">${esc(group.recipientRaw || "收货地址待回补")}</small></td>
-        <td><b>${group.assets.length} 件寄存${lots.length ? ` · Lot ${esc(lots.join("、"))}` : ""}</b><small>${esc(group.assets.map((asset) => asset.itemName).join("；"))}</small></td>
+        <td><b>${group.currentCount} 件当前库存${group.completedCount ? ` · ${group.completedCount} 件已发货` : ""}${lots.length ? ` · Lot ${esc(lots.join("、"))}` : ""}</b><small>${esc(group.assets.map((asset) => asset.itemName).join("；"))}</small></td>
         <td><b>${esc(periods.join("、") || "期数待补")}</b><small>${esc(dates.join("、") || "拍卖时间待补")}</small></td>
-        <td><span class="match-badge ${matchedCount === group.assets.length ? "auto" : "review"}">${matchedCount}/${group.assets.length} 已匹配</span><small>${group.completed ? "寄存发货已完成" : "寄存处理中"}</small></td>
+        <td><span class="match-badge ${group.currentCount === 0 || matchedCount === group.currentCount ? "auto" : "review"}">${group.currentCount ? `${matchedCount}/${group.currentCount} 库存已匹配` : "无在库拍品"}</span><small>${group.completed ? "寄存发货已完成 · 不计库存" : group.completedCount ? `寄存处理中 · ${group.completedCount} 件已发货不计库存` : "寄存处理中"}</small></td>
         <td><b>${orderNumbers.length ? `${orderNumbers.length} 个寄存单` : assetSourceLabel(group.assets[0])}</b><small>${esc(orderNumbers.join("、") || group.assets[0]?.sourceFile || "")}</small></td>
         <td><small>展开后可逐件调整关联</small></td>
-        <td><div class="row-actions"><button type="button" data-asset-group-toggle="${esc(group.key)}">${expanded ? "收起" : "展开"}</button><button type="button" data-asset-group-ship="${esc(group.key)}" ${group.completed || group.assetType !== "consignment" ? "disabled" : ""}>${group.completed ? "已发货" : "整组发货"}</button></div></td>
+        <td><div class="row-actions"><button type="button" data-asset-group-toggle="${esc(group.key)}">${expanded ? "收起" : "展开"}</button><button type="button" data-asset-group-ship="${esc(group.key)}" ${group.completed || group.assetType !== "consignment" ? "disabled" : ""}>${group.completed ? "已发货" : `整组发货（${group.currentCount} 件）`}</button></div></td>
       </tr>${children}`;
     }).join("");
     visible.forEach((asset) => {
@@ -3994,20 +4010,20 @@
     }
     const ship = event.target.closest("[data-asset-group-ship]");
     if (!ship) return;
-    const group = MxiqiAssets.groupAssetsByBuyer(state.assets).find((item) => item.key === ship.dataset.assetGroupShip);
+    const group = MxiqiAssets.groupAssetsByBuyer(state.assets, state.records).find((item) => item.key === ship.dataset.assetGroupShip);
     if (!group || group.assetType !== "consignment" || group.completed) return;
-    if (!confirm(`确认将 ${group.buyerName} 的 ${group.assets.length} 件寄存商品标记为已发货吗？\n\n记录会保留并移动到列表底部。`)) return;
+    if (!confirm(`确认将 ${group.buyerName} 当前库存中的 ${group.currentCount} 件寄存商品标记为已发货吗？\n\n记录会保留并从库存数字中扣除。`)) return;
     const shippedAt = new Date().toISOString();
-    group.assets.forEach((asset) => {
+    group.currentAssets.forEach((asset) => {
       asset.storageShippingStatus = "completed";
       asset.storageShippedAt = shippedAt;
     });
     state.expandedAssetGroups.delete(group.key);
-    audit("寄存整组发货", `${group.buyerName} · ${group.assets.length} 件`);
+    audit("寄存整组发货", `${group.buyerName} · ${group.currentCount} 件`);
     save();
     renderAssetPanel();
     updateBackupSummary();
-    notify(`已完成 ${group.buyerName} 的 ${group.assets.length} 件寄存发货，记录已移到列表底部`);
+    notify(`已完成 ${group.buyerName} 的 ${group.currentCount} 件寄存发货，已从当前库存中扣除`);
   });
 
   function openImportDialog(mode = "default") {
@@ -4990,7 +5006,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=69", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=70", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";

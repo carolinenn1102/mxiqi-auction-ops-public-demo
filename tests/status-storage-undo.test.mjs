@@ -55,12 +55,16 @@ test("consignment backfill reports progress inside its dialog", () => {
 });
 
 test("consignment inventory is buyer-first, expandable, and supports group shipment", () => {
+  assert.match(html, /data-asset-filter="all"><span>当前库存<\/span>/);
   assert.match(html, /<th>买家 \/ 收件地址<\/th>/);
   assert.match(html, /<th>拍场期数与时间<\/th>/);
-  assert.match(app, /groupAssetsByBuyer\(visible\)/);
+  assert.match(app, /groupAssetsByBuyer\(visible, state\.records\)/);
   assert.match(app, /data-asset-group-toggle/);
   assert.match(app, /data-asset-group-ship/);
   assert.match(app, /storageShippingStatus = "completed"/);
+  assert.match(app, /MxiqiAssets\.currentInventoryAssets\(state\.assets, state\.records\)/);
+  assert.match(app, /已匹配发货/);
+  assert.match(app, /已手动处理发货/);
   assert.match(styles, /\.asset-group-row\.completed/);
 });
 

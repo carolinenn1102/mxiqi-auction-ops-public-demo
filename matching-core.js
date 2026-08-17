@@ -506,7 +506,30 @@
     return `asset:${asset.id || asset.assetKey || "unknown"}`;
   }
 
-  function groupAssetsByBuyer(assets = []) {
+  function matchedRecordForAsset(asset = {}, records = []) {
+    const matchedId = ["auto", "manual"].includes(asset.matchStatus) ? asset.matchedRecordId : "";
+    if (matchedId) {
+      const matched = records.find((record) => record.id === matchedId);
+      if (matched) return matched;
+    }
+    if (!asset.consignmentOrderNo) return null;
+    return records.find((record) => String(record.mxiqiOrderId || "") === String(asset.consignmentOrderNo)) || null;
+  }
+
+  function assetShippingCompleted(asset = {}, matchedRecord = null) {
+    if (asset.storageShippingStatus === "completed") return true;
+    return Boolean(matchedRecord && (matchedRecord.mxiqiShippingStatus === "filled" || matchedRecord.outboundTrackingNumber));
+  }
+
+  function isCurrentInventoryAsset(asset = {}, records = []) {
+    return !assetShippingCompleted(asset, matchedRecordForAsset(asset, records));
+  }
+
+  function currentInventoryAssets(assets = [], records = []) {
+    return assets.filter((asset) => isCurrentInventoryAsset(asset, records));
+  }
+
+  function groupAssetsByBuyer(assets = [], records = []) {
     const groups = new Map();
     const storageOrder = new Map(assets.map((asset, index) => [
       asset,
@@ -523,8 +546,23 @@
       const buyerName = items.map(assetBuyerName).find(Boolean) || "买家待补";
       const buyerPhone = items.map(assetBuyerPhone).find(Boolean) || "";
       const recipientRaw = items.map((asset) => String(asset.recipientRaw || asset.address || "").trim()).find(Boolean) || "";
-      const completed = items.length > 0 && items.every((asset) => asset.storageShippingStatus === "completed");
-      return {key,assets:items,buyerName,buyerPhone,recipientRaw,completed,storageOrder:storageOrder.get(first),assetType:first.assetType || "inventory"};
+      const currentAssets = currentInventoryAssets(items, records);
+      const completedAssets = items.filter((asset) => !currentAssets.includes(asset));
+      const completed = items.length > 0 && currentAssets.length === 0;
+      return {
+        key,
+        assets:items,
+        currentAssets,
+        completedAssets,
+        currentCount:currentAssets.length,
+        completedCount:completedAssets.length,
+        buyerName,
+        buyerPhone,
+        recipientRaw,
+        completed,
+        storageOrder:storageOrder.get(first),
+        assetType:first.assetType || "inventory",
+      };
     }).sort((left, right) => Number(left.completed) - Number(right.completed)
       || left.storageOrder - right.storageOrder
       || left.key.localeCompare(right.key));
@@ -544,6 +582,10 @@
     assetBuyerName,
     assetBuyerPhone,
     assetBuyerKey,
+    matchedRecordForAsset,
+    assetShippingCompleted,
+    isCurrentInventoryAsset,
+    currentInventoryAssets,
     groupAssetsByBuyer,
     parseAssetWorkbook,
   };

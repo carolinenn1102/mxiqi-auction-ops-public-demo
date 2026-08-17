@@ -12,7 +12,7 @@ const ExcelJS = excelContext.ExcelJS;
 const excelRow = (values) => vm.runInContext(`JSON.parse(${JSON.stringify(JSON.stringify(values))})`, excelContext);
 await import("../matching-core.js");
 
-const { parseAssetWorkbook, rematchAssets, groupAssetsByBuyer, parseConsignorLabel, mergeAssets, suggestReauctionMatch } = globalThis.MxiqiAssets;
+const { parseAssetWorkbook, rematchAssets, groupAssetsByBuyer, parseConsignorLabel, mergeAssets, suggestReauctionMatch, currentInventoryAssets } = globalThis.MxiqiAssets;
 
 test("a bare birthday marker is missing information and never infers the auction month", () => {
   const parsed = parseConsignorLabel("测试昵称，生日，13900000001", "", "260803 周一，77期");
@@ -81,6 +81,29 @@ test("completed consignment groups move behind pending groups", () => {
   ]);
   assert.equal(groups[0].buyerName, "乙");
   assert.equal(groups[1].completed, true);
+});
+
+test("current inventory excludes manual completions and matched shipped records", () => {
+  const assets = [
+    {id:"pending",assetType:"consignment",buyerName:"同组买家",buyerPhone:"13900000001",matchStatus:"unmatched"},
+    {id:"manual-done",assetType:"consignment",buyerName:"同组买家",buyerPhone:"13900000001",matchStatus:"manual",matchedRecordId:"pending-record",storageShippingStatus:"completed"},
+    {id:"platform-done",assetType:"consignment",buyerName:"自动发货买家",buyerPhone:"13900000002",matchStatus:"auto",matchedRecordId:"filled-record"},
+    {id:"waybill-done",assetType:"consignment",buyerName:"运单买家",buyerPhone:"13900000003",matchStatus:"manual",matchedRecordId:"waybill-record"},
+  ];
+  const records = [
+    {id:"pending-record",mxiqiShippingStatus:"pending",outboundTrackingNumber:""},
+    {id:"filled-record",mxiqiShippingStatus:"filled",outboundTrackingNumber:""},
+    {id:"waybill-record",mxiqiShippingStatus:"pending",outboundTrackingNumber:"SF123456789"},
+  ];
+
+  assert.deepEqual(currentInventoryAssets(assets, records).map((asset) => asset.id), ["pending"]);
+  const groups = groupAssetsByBuyer(assets, records);
+  const mixed = groups.find((group) => group.buyerName === "同组买家");
+  assert.equal(mixed.currentCount, 1);
+  assert.equal(mixed.completedCount, 1);
+  assert.equal(mixed.completed, false);
+  assert.equal(groups.find((group) => group.buyerName === "自动发货买家").completed, true);
+  assert.equal(groups.find((group) => group.buyerName === "运单买家").currentCount, 0);
 });
 
 test("consignment groups keep their first storage order across repeated imports", () => {
