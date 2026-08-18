@@ -100,6 +100,22 @@ try {
   assert.match(await page.locator("#shipping-next-cainiao").innerText(), /查看未通过项/);
   assert.match(await page.locator("#shipping-cainiao-status").innerText(), /菜鸟真实接口未配置/);
 
+  await page.locator("#shipping-sf-card").click({position:{x:20,y:20}});
+  assert.match(await page.locator("#shipping-sf-card").getAttribute("class"), /selected/);
+  assert.equal(await page.locator("#shipping-sf-card").getAttribute("aria-pressed"), "true");
+  assert.match(await page.locator("#panel-title").innerText(), /顺丰待发货包裹/);
+  assert.match(await page.locator("#result-count").innerText(), /2 个包裹/);
+  assert.doesNotMatch(await page.locator("#records-body").innerText(), /菜鸟接口未接通拍品/);
+
+  await page.locator("#shipping-cainiao-card").click({position:{x:20,y:20}});
+  assert.equal(await page.locator("#shipping-cainiao-card").getAttribute("aria-pressed"), "true");
+  assert.match(await page.locator("#panel-title").innerText(), /菜鸟待发货包裹/);
+  assert.match(await page.locator("#result-count").innerText(), /1 条结果|1 个包裹/);
+  assert.match(await page.locator("#records-body").innerText(), /菜鸟接口未接通拍品/);
+  assert.doesNotMatch(await page.locator("#records-body").innerText(), /顺丰检查通过拍品/);
+
+  await page.locator("#shipping-sf-card").click({position:{x:20,y:20}});
+
   await page.click("#shipping-next-sf");
   assert.equal(await page.locator("#shipping-dialog").getAttribute("open"), "");
   assert.match(await page.locator("#shipping-title").innerText(), /顺丰检查通过拍品/);
@@ -129,6 +145,7 @@ try {
     sfButtonColor,
     sfPolicyVisible:true,
     cainiaoBlocked:true,
+    carrierCardsFilterLists:true,
     addressPendingSeparated:true,
     createOrderCalls,
   }));

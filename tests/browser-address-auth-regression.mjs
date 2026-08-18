@@ -60,9 +60,9 @@ try {
       paymentStatus:"已付款",
       buyerName:"测试买家",
       buyerPhone:"13900000000",
-      recipientRaw:"广东省 广州市 越秀区 白云街道 东湖路136号1207 梁小姐 13602820666",
+      recipientRaw:"黑龙江省 佳木斯市 前进区 永安街道 唐人中心小区F栋楼1单元613室 刘野 13845470978",
       recipientName:"",
-      recipientPhone:"13602820666",
+      recipientPhone:"13845470978",
       addressStatus:"needs_correction",
       shippingCarrier:"sf",
       shippingGoodsName:"章牌",
@@ -79,12 +79,12 @@ try {
   await page.waitForFunction(() => document.querySelector("#shipping-logistics-status")?.textContent.includes("待本机授权"));
 
   await page.click("#shipping-split-address");
-  assert.equal(await page.locator('#shipping-form [name="recipientName"]').inputValue(), "梁小姐");
-  assert.equal(await page.locator('#shipping-form [name="recipientPhone"]').inputValue(), "13602820666");
-  assert.equal(await page.locator('#shipping-form [name="addressProvince"]').inputValue(), "广东省");
-  assert.equal(await page.locator('#shipping-form [name="addressCity"]').inputValue(), "广州市");
-  assert.equal(await page.locator('#shipping-form [name="addressDistrict"]').inputValue(), "越秀区");
-  assert.equal(await page.locator('#shipping-form [name="addressDetail"]').inputValue(), "白云街道东湖路136号1207");
+  assert.equal(await page.locator('#shipping-form [name="recipientName"]').inputValue(), "刘野");
+  assert.equal(await page.locator('#shipping-form [name="recipientPhone"]').inputValue(), "13845470978");
+  assert.equal(await page.locator('#shipping-form [name="addressProvince"]').inputValue(), "黑龙江省");
+  assert.equal(await page.locator('#shipping-form [name="addressCity"]').inputValue(), "佳木斯市");
+  assert.equal(await page.locator('#shipping-form [name="addressDistrict"]').inputValue(), "前进区");
+  assert.equal(await page.locator('#shipping-form [name="addressDetail"]').inputValue(), "永安街道唐人中心小区F栋楼1单元613室");
 
   await page.click("#shipping-review-address");
   assert.match(await page.locator("#shipping-logistics-status").innerText(), /顺丰服务已连接.*待本机授权/);

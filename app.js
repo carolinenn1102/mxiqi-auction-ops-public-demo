@@ -104,6 +104,7 @@
     stage: "all",
     query: "",
     filters: {seller:"",auction:"",status:"",shipping:""},
+    shippingCarrierFilter: "",
     settlementScope: {seller:"",from:"",to:""},
     settlementView: "all",
     selected: new Set(),
@@ -1103,7 +1104,11 @@
     const phoneMatch = source.match(/(?:\+?86[ -]?)?(1[3-9]\d{9})/);
     const recipientPhone = phoneMatch?.[1] || "";
     const withoutPhone = source.replace(phoneMatch?.[0] || "", " ").replace(/\s+/g, " ").trim();
-    const trailingNameMatch = withoutPhone.match(/(?:^|\s)([\u3400-\u9fff·]{1,8}(?:先生|女士|小姐|师傅|老师))$/);
+    const titledTrailingNameMatch = withoutPhone.match(/(?:^|\s)([\u3400-\u9fff·]{1,8}(?:先生|女士|小姐|师傅|老师))$/);
+    const plainTrailingNameMatch = withoutPhone.match(/(?:^|\s)([\u3400-\u9fff·]{2,6})$/);
+    const plainTrailingName = plainTrailingNameMatch?.[1] || "";
+    const looksLikeAddressTail = /(省|市|区|县|旗|街道|道|路|街|巷|弄|村|镇|乡|号|室|楼|栋|单元|院|座|层|小区|中心|大厦|广场|花园|公寓|学校|公司|商店|门店)$/;
+    const trailingNameMatch = titledTrailingNameMatch || (plainTrailingName && !looksLikeAddressTail.test(plainTrailingName) ? plainTrailingNameMatch : null);
     const trailingRecipientName = trailingNameMatch?.[1] || "";
     const addressText = trailingNameMatch
       ? withoutPhone.slice(0, Number(trailingNameMatch.index)).trim()
@@ -1226,13 +1231,21 @@
 
   function visibleRecords() {
     const query = state.query.trim().toLowerCase();
+    const shippingCarrierByRecord = new Map();
+    if (state.stage === "shipping" && state.shippingCarrierFilter) {
+      MxiqiPackages.groupRecords(state.records.filter(isShippingCandidate)).forEach((group) => {
+        const carrier = shippingPackageCarrier(group);
+        group.records.forEach((record) => shippingCarrierByRecord.set(record.id, carrier));
+      });
+    }
     return state.records.filter((record) => {
       const search = !query || [record.lot,record.itemName,record.projectName,record.sellerWechat,record.sellerPhone,record.buyerName,record.buyerPhone,record.auctionHouse,record.trackingNumber,record.pickupCode,record.outboundTrackingNumber,record.recipientName,record.recipientPhone,record.recipientRaw,record.promotion].join(" ").toLowerCase().includes(query);
       const sellerMatches = recordMatchesConsignor(record, state.filters.seller);
       const filters = sellerMatches
         && (!state.filters.auction || auctionPeriod(record) === state.filters.auction)
         && (!state.filters.status || recordStatus(record) === state.filters.status)
-        && (!state.filters.shipping || (["shipped","unshipped"].includes(state.filters.shipping) ? MxiqiWorkflow.shippingBucket(record) === state.filters.shipping : shippingStage(record) === state.filters.shipping));
+        && (!state.filters.shipping || (["shipped","unshipped"].includes(state.filters.shipping) ? MxiqiWorkflow.shippingBucket(record) === state.filters.shipping : shippingStage(record) === state.filters.shipping))
+        && (!state.shippingCarrierFilter || state.stage !== "shipping" || shippingCarrierByRecord.get(record.id) === state.shippingCarrierFilter);
       const stage = state.stage === "all"
         || (state.stage === "unpaid" && record.paymentStatus === "待付款")
         || (state.stage === "missing" && missing(record).length)
@@ -1470,6 +1483,8 @@
       $(`#shipping-${carrier}-ready-count`).textContent = snapshot.byStage.ready_to_order.length;
       $(`#shipping-${carrier}-fill-count`).textContent = snapshot.byStage.mxiqi_pending.length;
       card.classList.toggle("ready-to-order", snapshot.canCreate);
+      card.classList.toggle("selected", state.shippingCarrierFilter === carrier);
+      card.setAttribute("aria-pressed", String(state.shippingCarrierFilter === carrier));
       button.classList.toggle("ready-to-order", snapshot.canCreate);
       button.classList.toggle("secondary", !snapshot.canCreate);
       button.disabled = !snapshot.actionGroup;
@@ -1719,7 +1734,9 @@
           ? state.settlementView === "unsettled"
             ? ["未结账送拍人", "仅显示仍需结账的送拍人和拍品；可展开查看 Lot，并直接整组结账"]
             : ["结算复核", "按送拍人汇总本期成交拍品、佣金和应结金额"]
-        : ["拍品明细", "平台字段、送拍资料、物流与结算状态集中复核"];
+        : state.stage === "shipping" && state.shippingCarrierFilter
+          ? [`${carrierLabel(state.shippingCarrierFilter)}待发货包裹`, `当前仅显示${carrierLabel(state.shippingCarrierFilter)}队列；每个整包仍由你单独核对和处理`]
+          : ["拍品明细", "平台字段、送拍资料、物流与结算状态集中复核"];
     $("#panel-title").textContent = panelCopy[0];
     $("#panel-subtitle").textContent = panelCopy[1];
 
@@ -1732,6 +1749,7 @@
       ? `${state.settlementView === "unsettled" ? "未结账：" : ""}${settlementList.length} 位送拍人 · ${visible.length} 件拍品`
       : state.stage === "preauction" ? `${consignorCount(visible)} 位送拍人 · ${visible.length} 件待核对`
       : state.stage === "reauction" ? `${visible.length} 件待重新上拍`
+      : state.stage === "shipping" && state.shippingCarrierFilter ? `${packageGroups.length} 个包裹 · ${visible.length} 件拍品`
       : mergedCount ? `${packageGroups.length} 个包裹 · ${visible.length} 件拍品` : `${visible.length} 条结果`;
     const selectable = visible;
     if ($("#select-all")) $("#select-all").checked = selectable.length > 0 && selectable.every((item) => state.selected.has(item.id));
@@ -3109,6 +3127,7 @@
   $$('[data-stage]').forEach((button) => button.addEventListener("click", () => {
     const nextStage = button.dataset.stage;
     if (state.stage === "settlement" && nextStage !== "settlement") state.settlementView = "all";
+    if (nextStage !== "shipping") state.shippingCarrierFilter = "";
     state.stage = nextStage;
     if (["reauction","unpaid"].includes(state.stage)) state.filters.status = "";
     if (state.stage === "preauction") state.filters = {...state.filters,seller:"",status:"",shipping:""};
@@ -3128,6 +3147,7 @@
   });
   $("#clear-filters").addEventListener("click", () => {
     state.filters = {seller:"",auction:"",status:"",shipping:""};
+    state.shippingCarrierFilter = "";
     state.query = "";
     $("#search").value = "";
     state.selected.clear();
@@ -3395,6 +3415,23 @@
   });
 
   ["sf", "cainiao"].forEach((carrier) => {
+    const card = $(`#shipping-${carrier}-card`);
+    const showCarrierPackages = () => {
+      state.shippingCarrierFilter = state.shippingCarrierFilter === carrier ? "" : carrier;
+      state.selected.clear();
+      render();
+      document.querySelector(".data-panel")?.scrollIntoView({behavior:"smooth",block:"start"});
+      notify(state.shippingCarrierFilter ? `已显示${carrierLabel(carrier)}待处理包裹，可逐包打开处理` : "已恢复显示全部待发货包裹", "info");
+    };
+    card.addEventListener("click", (event) => {
+      if (event.target.closest("button")) return;
+      showCarrierPackages();
+    });
+    card.addEventListener("keydown", (event) => {
+      if (!["Enter", " "].includes(event.key)) return;
+      event.preventDefault();
+      showCarrierPackages();
+    });
     $(`#shipping-next-${carrier}`).addEventListener("click", () => {
       const record = nextShippingRecord(carrier);
       if (record) openShipping(record.id);
@@ -5022,7 +5059,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=72", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=73", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
