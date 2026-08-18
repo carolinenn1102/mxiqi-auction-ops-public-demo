@@ -66,7 +66,7 @@ try {
     settings:JSON.parse(localStorage.getItem(settingsKey) || "{}"),
   }), {recordsKey, settingsKey});
   const byId = Object.fromEntries(result.records.map((record) => [record.id, record]));
-  assert.equal(result.schema, "19");
+  assert.equal(result.schema, "22");
   assert.equal(result.settings.birthdayThreshold, 2000);
   assert.equal(result.settings.birthdayKeywords, "NGC,PCGS");
 

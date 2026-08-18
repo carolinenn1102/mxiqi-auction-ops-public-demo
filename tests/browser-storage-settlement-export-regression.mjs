@@ -78,6 +78,8 @@ try {
   assert.equal(stored.commissionAmount, 56);
   assert.equal(stored.settlementAmount, 644);
   assert.equal(stored.settled, false);
+  let storedAsset = await page.evaluate(() => JSON.parse(localStorage.getItem("mxiqi-public-demo-assets-v1") || "[]").find((asset) => asset.recordStorageId === "stored-unsettled"));
+  assert.equal(storedAsset.status, "寄存");
 
   await page.click('button.nav-item[data-stage="settlement"]');
   await page.selectOption("#filter-auction", "第82期");
@@ -103,6 +105,8 @@ try {
   assert.equal(manuallyStored.returnDisposition, "寄存");
   assert.equal(manuallyStored.commissionAmount, 40);
   assert.equal(manuallyStored.settlementAmount, 460);
+  storedAsset = await page.evaluate(() => JSON.parse(localStorage.getItem("mxiqi-public-demo-assets-v1") || "[]").find((asset) => asset.recordStorageId === "manual-storage"));
+  assert.equal(storedAsset.status, "寄存");
 
   await page.click('button.nav-item[data-stage="settlement"]');
   await page.selectOption("#filter-auction", "第84期");
@@ -123,6 +127,17 @@ try {
   assert.match(summary, /应结 ¥1,454\.40/);
   assert.doesNotMatch(summary, /佣金 -¥14\.40/);
   assert.ok(imageText.includes("佣金 / 返佣"));
+
+  await page.evaluate(() => { globalThis.__settlementImageText = []; });
+  await page.selectOption("#filter-auction", "第82期");
+  await page.click("#export-settlement-image");
+  await page.waitForFunction(() => globalThis.__settlementImageText.includes("已结账"));
+  const storageImageText = await page.evaluate(() => globalThis.__settlementImageText);
+  assert.ok(storageImageText.includes("已结账"));
+  assert.ok(storageImageText.includes("结账状态"));
+  assert.ok(!storageImageText.includes("处理状态"));
+  assert.ok(!storageImageText.includes("未结账"));
+  assert.ok(!storageImageText.includes("寄存"));
   assert.deepEqual(pageErrors, []);
 
   process.stdout.write(JSON.stringify({
@@ -131,6 +146,8 @@ try {
     manualStorageSelectionSettled:true,
     rebateSummary:summary,
     settlementColumn:"佣金 / 返佣",
+    storageSettlementStatus:"已结账",
+    storedLotsEnteredInventory:true,
   }));
 } finally {
   await browser.close();

@@ -4592,7 +4592,7 @@
       {label:"佣金 / 返佣",x:1020,width:150},
       {label:"加减款",x:1170,width:130},
       {label:"应结金额",x:1300,width:160},
-      {label:"处理状态",x:1460,width:190},
+      {label:"结账状态",x:1460,width:190},
     ];
     const tableTop = headerHeight;
     context.fillStyle = "#e8e5dd";
@@ -4608,7 +4608,7 @@
       context.fillStyle = "#213944";
       context.font = '15px "Microsoft YaHei", sans-serif';
       const identity = consignorDirectoryEntry(record);
-      const values = [record.lot,truncate(record.itemName,19),truncate(`${identity.wechat || "待补"} / ${identity.phone || "手机号待补"}`,20),truncate(record.auctionAt,14),currency.format(settlementGross(record)),formatSettlementAdjustment(record.commissionAmount || 0),currency.format(record.settlementAdjustment || 0),currency.format(record.settlementAmount || 0),truncate(record.unpaidReturn ? "未付款拖回扣费" : record.returnDisposition || "已结账",10)];
+      const values = [record.lot,truncate(record.itemName,19),truncate(`${identity.wechat || "待补"} / ${identity.phone || "手机号待补"}`,20),truncate(record.auctionAt,14),currency.format(settlementGross(record)),formatSettlementAdjustment(record.commissionAmount || 0),currency.format(record.settlementAdjustment || 0),currency.format(record.settlementAmount || 0),record.settled ? "已结账" : "未结账"];
       values.forEach((value, columnIndex) => context.fillText(String(value), columns[columnIndex].x + 8, y + 29));
     });
     context.fillStyle = "#7b898f";
@@ -5037,6 +5037,14 @@
     });
     localStorage.setItem(MIGRATION_KEY, "22");
     if (repairedUnsoldSettlements) audit("修复流拍结算", `${repairedUnsoldSettlements} 件流拍拍品已按低价固定佣金进入结算`, {undoable:false});
+    save();
+  }
+
+  const startupStoredAssetsSnapshot = JSON.stringify(state.assets);
+  syncStoredAssetsFromRecords();
+  if (JSON.stringify(state.assets) !== startupStoredAssetsSnapshot) {
+    state.assets = MxiqiAssets.rematchAssets(state.assets, state.records);
+    audit("补齐寄存库存", "已把拍品工作台中的寄存记录同步到当前库存", {undoable:false});
     save();
   }
 
