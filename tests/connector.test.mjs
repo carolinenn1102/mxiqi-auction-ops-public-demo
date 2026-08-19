@@ -22,8 +22,8 @@ test("commission logic uses the current cache-busted asset in the page and servi
   assert.equal(workerVersion, htmlVersion);
   assert.equal(workflowHtmlVersion, "51");
   assert.equal(workflowWorkerVersion, workflowHtmlVersion);
-  assert.match(app, /navigator\.serviceWorker\.register\("sw\.js\?v=74"/);
-  assert.match(serviceWorker, /CACHE_NAME = "mxiqi-ops-demo-v74"/);
+  assert.match(app, /navigator\.serviceWorker\.register\("sw\.js\?v=75"/);
+  assert.match(serviceWorker, /CACHE_NAME = "mxiqi-ops-demo-v75"/);
 });
 
 test("normalizes platform order states", () => {

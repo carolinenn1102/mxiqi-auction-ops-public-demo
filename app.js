@@ -818,11 +818,28 @@
   }
 
   function notify(text, tone = "success") {
-    $("#toast").textContent = text;
-    $("#toast").className = `toast ${tone}`;
-    $("#toast").hidden = false;
+    const toast = $("#toast");
+    const openDialogs = [...document.querySelectorAll("dialog[open]")];
+    const toastHost = openDialogs.at(-1) || document.body;
+    if (toast.parentElement !== toastHost) toastHost.appendChild(toast);
+    toast.textContent = text;
+    toast.className = `toast ${tone}`;
+    if (typeof toast.showPopover === "function") {
+      try {
+        if (toast.matches(":popover-open")) toast.hidePopover();
+        toast.hidden = false;
+        toast.showPopover();
+      } catch {
+        toast.hidden = false;
+      }
+    } else {
+      toast.hidden = false;
+    }
     clearTimeout(notify.timer);
-    notify.timer = setTimeout(() => { $("#toast").hidden = true; }, 4000);
+    notify.timer = setTimeout(() => {
+      if (typeof toast.hidePopover === "function" && toast.matches(":popover-open")) toast.hidePopover();
+      toast.hidden = true;
+    }, 4000);
   }
 
   function missing(record) {
@@ -5067,7 +5084,7 @@
           reloadingForUpdate = true;
           window.location.reload();
         });
-      const registration = await navigator.serviceWorker.register("sw.js?v=74", {updateViaCache:"none"});
+      const registration = await navigator.serviceWorker.register("sw.js?v=75", {updateViaCache:"none"});
         await registration.update();
         await navigator.serviceWorker.ready;
         $("#offline-status").textContent = "离线访问已准备";
